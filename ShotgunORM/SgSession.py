@@ -300,7 +300,7 @@ class SgSession(object):
     sgData = self._flattenFilters(sgData)
 
     if numberOfEntities == 1:
-      newEntity = self._createEntity(self, sgEntityType, sgData)
+      newEntity = self._createEntity(sgEntityType, sgData)
 
       if sgCommit:
         newEntity.commit()
@@ -310,7 +310,7 @@ class SgSession(object):
       result = []
 
       for n in range(0, numberOfEntities):
-        newEntity = self._createEntity(self, sgEntityType, sgData)
+        newEntity = self._createEntity(sgEntityType, sgData)
 
         result.append(newEntity)
 
