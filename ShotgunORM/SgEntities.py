@@ -332,7 +332,7 @@ class SgVersion(SgEntity):
         ]
       )
 
-    return self.session().findOne('Version', searchFilters, ['code', 'project'])
+    return self.session().findOne('Version', searchFilters, ['default', 'code', 'project'])
 
   def isSubVersioned(self):
     '''
@@ -431,7 +431,7 @@ class SgVersion(SgEntity):
     if self.exists():
       searchFilters.append(['id', 'is_not', self['id']])
 
-    return self.session().find('Version', searchFilters, ['code', 'project'])
+    return self.session().find('Version', searchFilters, ['default', 'code', 'project'])
 
   def otherVersions(self, ignoreProject=False):
     '''
@@ -466,7 +466,7 @@ class SgVersion(SgEntity):
     if self.exists():
       searchFilters.append(['id', 'is_not', self['id']])
 
-    return self.session().find('Version', searchFilters, ['code', 'project'])
+    return self.session().find('Version', searchFilters, ['default', 'code', 'project'])
 
   def subVersion(self, subVersion, ignoreProject=False):
     '''
@@ -522,7 +522,7 @@ class SgVersion(SgEntity):
         ]
       )
 
-    return self.session().find('Version', searchFilters, ['code', 'project'])
+    return self.session().find('Version', searchFilters, ['default', 'code', 'project'])
 
   def version(self, version, ignoreProject=False):
     '''
@@ -581,4 +581,4 @@ class SgVersion(SgEntity):
         ]
       )
 
-    return self.session().find('Version', searchFilters, ['code', 'project'])
+    return self.session().find('Version', searchFilters, ['default', 'code', 'project'])
