@@ -1,0 +1,20 @@
+
+=======
+Credits
+=======
+
+Core developers
+===============
+
+As of this writing, core development team consists of the following
+developers:
+
+* **Nathan Dunsworth** <nathandunsworth@gmail.com> Project creator and developer
+
+Special thanks
+==============
+
+The ShotgunORM project is also very grateful to:
+
+* **Scott Ballard** <scott@scottballard.net> Consultant and beta tester.
+* **Eli Rarey** Beta tester
