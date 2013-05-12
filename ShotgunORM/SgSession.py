@@ -406,9 +406,7 @@ class SgSession(object):
 
         fields.update(connection.defaultEntityQueryFields(entity_type))
 
-        fields = list(fields)
-      else:
-        fields = list(fields)
+      fields = list(fields)
 
     ShotgunORM.LoggerSession.debug('%(sgSession)s.find(...)', {'sgSession': self.__repr__()})
     ShotgunORM.LoggerSession.debug('    * entity_type: %(entityType)s', {'entityType': entity_type})
@@ -471,6 +469,8 @@ class SgSession(object):
         fields.discard('default')
 
         fields.update(connection.defaultEntityQueryFields(entity_type))
+
+      fields = list(fields)
 
     ShotgunORM.LoggerSession.debug('%(sgSession)s.findOne(...)', {'sgSession': self.__repr__()})
     ShotgunORM.LoggerSession.debug('    * entity_type: %(entityType)s', {'entityType': entity_type})
