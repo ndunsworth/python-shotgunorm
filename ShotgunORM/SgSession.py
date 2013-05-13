@@ -629,12 +629,17 @@ class SgSession(object):
 
     return searchResult
 
-  def searchOne(self, sgEntityType, sgSearchExp, sgFields=None, sgSearchArgs=[], order=None, retired_only=False, page=0, ):
+  def searchOne(self, sgEntityType, sgSearchExp, sgFields=None, sgSearchArgs=[], order=None, retired_only=False, page=0):
     '''
     Same as search(...) but only returns a single Entity.
     '''
 
-    return self.search(sgEntityType, sgSearchExp, sgFields, sgSearchArgs, order=order, retired_only=retired_only, page=page, onlyOne=True)
+    result = self.search(sgEntityType, sgSearchExp, sgFields, sgSearchArgs, order=order, limit=1, retired_only=retired_only, page=page)
+
+    if len(result) >= 1:
+      return result[0]
+
+    return None
 
 class SgSessionCached(SgSession):
   '''
@@ -743,7 +748,7 @@ class SgSessionCached(SgSession):
             if len(queryFields) >= 1:
               ShotgunORM.LoggerSession.debug('    * pulled: %(sgFields)s', {'sgFields': sgFields})
 
-              sgSearch = self.connection().connection().find_one(sgEntityType, [['id', 'is', sgData['id']]], sgFields)
+              sgSearch = self.connection().connection().find_one(sgEntityType, [['id', 'is', result.id]], sgFields)
 
               if sgSearch == None:
                 raise RuntimError('unable to locate Entity in Shotgun')
@@ -904,10 +909,11 @@ class SgSessionCached(SgSession):
     if isinstance(filters, int):
       entity_type = self.connection().schema().entityApiName(entity_type)
 
-      try:
-        return self._entityCache[entity_type][filters]
-      except:
-        pass
+      if self._entityCache.has_key(entity_type):
+        iD = filters
+
+        if self._entityCache[entity_type].has_key(iD):
+          return self._createEntity(entity_type, {'id': iD}, fields)
 
     return super(SgSessionCached, self).findOne(
       entity_type,
