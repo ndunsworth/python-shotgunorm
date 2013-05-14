@@ -25,9 +25,105 @@
 #
 
 __all__ = [
+  'formatSerializable',
   'mkEntityString',
-  'mkEntityFieldString'
+  'mkEntityFieldString',
+  'printSerializable'
 ]
+
+def formatDict(obj, indent=0, indentSize=2, indentChar=' '):
+  if len(obj) <= 0:
+    return '%s{}' % mkIndent(indent, indentSize, indentChar)
+
+  result = '%s{\n' % mkIndent(indent, indentSize, indentChar)
+
+  keys = []
+
+  #result.append('{')
+
+  for key, value in obj.items():
+    s = '%s%s: ' % (mkIndent(indent + 1, indentSize, indentChar), key)
+
+    o = formatSerializable(value, indent + 1, indentSize, indentChar)
+
+    indentSpan = (indentChar * indentSize)
+
+    while o.startswith(indentSpan):
+      o = o[len(indentSpan):]
+
+    s += o
+
+    keys.append(s)
+
+  result += ',\n'.join(keys)
+
+  result += '\n%s}' % mkIndent(indent, indentSize, indentChar)
+
+  return result
+
+def formatList(obj, indent=0, indentSize=2, indentChar=' '):
+  if len(obj) <= 0:
+    return '%s[]' % mkIndent(indent, indentSize, indentChar)
+
+  result = '%s[\n' % mkIndent(indent, indentSize, indentChar)
+
+  items = []
+
+  for i in obj:
+    s = formatSerializable(i, indent + 1, indentSize, indentChar)
+
+    indentSpan = (indentChar * indentSize)
+
+    while s.startswith(indentSpan):
+      s = s[len(indentSpan):]
+
+    s = '%s%s' % (mkIndent(indent + 1, indentSize, indentChar), s)
+
+    items.append(s)
+
+  result += ',\n'.join(items)
+
+  result += '\n%s]' % mkIndent(indent, indentSize, indentChar)
+
+  return result
+
+def formatSerializable(obj, indent=0, indentSize=2, indentChar=' '):
+  '''
+  Converts the serializeble list/dict into a user friendly string better than
+  pretty print.
+  '''
+
+  result = ''
+
+  if isinstance(obj, dict):
+    result = formatDict(obj, indent, indentSize, indentChar)
+  elif isinstance(obj, (list, set, tuple)):
+    result = formatList(obj, indent, indentSize, indentChar)
+  else:
+    result = repr(obj)
+
+  return result
+
+################################################################################
+#
+# Example
+#
+################################################################################
+
+#logicalOp = {'conditions': [{'conditions': [{'path': 'id',
+#     'relation': 'is_not',
+#     'values': [10]},
+#    {'path': 'code', 'relation': 'contains', 'values': ['building']}],
+#   'logical_operator': 'and'},
+#  {'conditions': [{'path': 'id', 'relation': 'between', 'values': [100, 200]},
+#    {'path': 'code', 'relation': 'contains', 'values': ['misc']}],
+#   'logical_operator': 'and'},
+#  {'path': 'project',
+#   'relation': 'is',
+#   'values': [{'id': 65, 'type': 'Project'}]}],
+# 'logical_operator': 'or'}
+#
+#print formatSerializable(logicalOp)
 
 def mkEntityString(sgEntity):
   '''
@@ -61,3 +157,16 @@ def mkEntityFieldString(sgEntityField):
   result += '.Field("%s")' % sgEntityField.name()
 
   return result
+
+def mkIndent(indent, indentSize, indentChar):
+  return (indentChar * indentSize) * indent
+
+def printSerializable(obj, indent=0, indentSize=2, indentChar=' '):
+  '''
+  Prints the serializable list/dict as a user friendly string better than pretty
+  print.
+
+  Useful for debuging logical operator search filters.
+  '''
+
+  print formatSerializable(obj)
