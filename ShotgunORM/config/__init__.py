@@ -90,7 +90,7 @@ ShotgunORM.SgEntity.registerDefaultEntityClass(
 
 ShotgunORM.SgEntity.registerDefaultEntityClass(
   sgEntityCls=ShotgunORM.SgAppWelcome,
-  sgEntityTypes=['SgAppWelcome'],
+  sgEntityTypes=['AppWelcome'],
 )
 
 ShotgunORM.SgEntity.registerDefaultEntityClass(
