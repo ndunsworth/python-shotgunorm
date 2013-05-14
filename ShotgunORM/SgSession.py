@@ -810,8 +810,6 @@ class SgSessionCached(SgSession):
 
             for field in entities[t]['fields']:
               if not eObj.field(field).isValid():
-                ids.append(iD)
-
                 noPull = False
 
                 break
@@ -819,15 +817,17 @@ class SgSessionCached(SgSession):
             if noPull:
               result[index] = eObj
             else:
-              entities[t]['indices'][iD] = index
+              ids.append(iD)
+
+              indices[iD] = index
           else:
             ids.append(iD)
 
-            entities[t]['indices'][iD] = index
+            indices[iD] = index
         else:
           ids.append(iD)
 
-          entities[t]['indices'][iD] = index
+          indices[iD] = index
 
         index += 1
 
@@ -835,11 +835,21 @@ class SgSessionCached(SgSession):
       ShotgunORM.LoggerSession.debug('    * Entities: %(entities)s', {'entities': sgEntities})
 
       for key, value in entities.items():
-        ShotgunORM.LoggerSession.debug('        * Entity: %(entityName)s', {'entityName': key})
-        ShotgunORM.LoggerSession.debug('        * ids: %(ids)s', {'ids': value['ids']})
-
         if len(value['ids']) <= 0:
           continue
+
+        if key in ['AppWelcome', 'Banner']:
+          for n in value['ids']:
+            entity = self._createEntity(key, {'id': n})
+
+            index = indices[entity.id]
+
+            result[index] = entity
+
+          continue
+
+        ShotgunORM.LoggerSession.debug('        * Entity: %(entityName)s', {'entityName': key})
+        ShotgunORM.LoggerSession.debug('        * ids: %(ids)s', {'ids': value['ids']})
 
         sgSearch = sgconnection.find(
           key,
