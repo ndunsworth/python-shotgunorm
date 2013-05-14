@@ -670,6 +670,53 @@ class SgFieldSelectionList(ShotgunORM.SgField):
   def _toFieldData(self):
     return self._value
 
+class SgFieldSerializable(ShotgunORM.SgField):
+  '''
+  Entity field that stores serializable data.
+  '''
+
+  def _setValue(self, sgData):
+    if sgData != None:
+      if not isinstance(sgData, dict):
+        raise TypeError('%s invalid value type "%s", expected a dict' % (self.__repr__(), type(sgData).__name__))
+
+      sgData = copy.deepcopy(sgData)
+
+    if sgData == self._value:
+      return False
+
+    self._value = sgData
+
+    return True
+
+  def _fromFieldData(self, sgData):
+    if sgData != None:
+      if not isinstance(sgData, dict):
+        raise ValueError('%s invalid data from Shotgun "%s", expected a dict' % (self.__repr__(), sgData))
+
+      sgData = copy.deepcopy(sgData)
+
+    if sgData == self._value:
+      return False
+
+    self._value = sgData
+
+    return True
+
+  def _toFieldData(self):
+    if self._value == None:
+      return None
+
+    return copy.deepcopy(self._value)
+
+  def value(self):
+    result = super(SgFieldSerializable, self).value()
+
+    if result == None:
+      return None
+
+    return copy.deepcopy(result)
+
 class SgFieldSummary(ShotgunORM.SgField):
   '''
   Entity field that returns an Entity or list of Entities based on a search
@@ -1390,6 +1437,7 @@ ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_IMAGE, SgFi
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_INT, SgFieldInt)
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_LIST, SgFieldSelectionList)
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_MULTI_ENTITY, SgFieldEntityMulti)
+ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_SERIALIZABLE, SgFieldSerializable)
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_STATUS_LIST, SgFieldSelectionList)
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_SUMMARY, SgFieldSummary)
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_TAG_LIST, SgFieldTagList)
