@@ -204,7 +204,7 @@ class SgSchema(object):
     try:
       return self.__querytemplates__[sgQueryFieldTemplate][sgEntityType]
     except:
-      if fallBackTo:
+      if fallBackTo != None:
         try:
           return self.__querytemplates__[fallBackTo][sgEntityType]
         except:
