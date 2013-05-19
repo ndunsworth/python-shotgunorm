@@ -378,8 +378,6 @@ class SgVersion(SgEntity):
           ]
         )
 
-    project = self.toFieldData(['project'])['project']
-
     searchFilters = [
       ['code', 'is', newVersion],
     ]
@@ -389,7 +387,7 @@ class SgVersion(SgEntity):
         [
           'project',
           'is',
-          self.toFieldData(['project'])['project']
+          self.field('project').toFieldData()
         ]
       )
 
@@ -485,7 +483,7 @@ class SgVersion(SgEntity):
         [
           'project',
           'is',
-          self.toFieldData(['project'])['project']
+          self.field('project').toFieldData()
         ]
       )
 
@@ -509,8 +507,6 @@ class SgVersion(SgEntity):
     if search == None:
       return []
 
-    project = self.toFieldData(['project'])['project']
-
     searchFilters = [
       ['code', 'starts_with', name[:search.span()[0] + 2]],
     ]
@@ -520,7 +516,7 @@ class SgVersion(SgEntity):
         [
           'project',
           'is',
-          self.toFieldData(['project'])['project']
+          self.field('project').toFieldData()
         ]
       )
 
@@ -568,8 +564,6 @@ class SgVersion(SgEntity):
     if search == None or search.groups()[3] == None:
       return []
 
-    project = self.toFieldData(['project'])['project']
-
     searchFilters = [
       ['code', 'starts_with', name[:search.spans()[3][0]]],
     ]
@@ -579,7 +573,7 @@ class SgVersion(SgEntity):
         [
           'project',
           'is',
-          self.toFieldData(['project'])['project']
+          self.field('project').toFieldData()
         ]
       )
 
@@ -627,8 +621,6 @@ class SgVersion(SgEntity):
     if search == None:
       return []
 
-    project = self.toFieldData(['project'])['project']
-
     searchFilters = [
       ['code', 'starts_with', name[:search.span()[0] + 2]],
     ]
@@ -638,7 +630,7 @@ class SgVersion(SgEntity):
         [
           'project',
           'is',
-          self.toFieldData(['project'])['project']
+          self.field('project').toFieldData()
         ]
       )
 
