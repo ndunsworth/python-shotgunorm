@@ -201,8 +201,6 @@ class SgEntity(object):
   Base class that represents a Shotgun Entity.
   '''
 
-  __lock__ = threading.RLock()
-
   # Set by the SgEntityClassFactory
   __classinfo__ = None
 
@@ -221,22 +219,17 @@ class SgEntity(object):
         List of Entity type names that will use the class.
     '''
 
-    self.__lock__.acquire()
+    if not issubclass(sgEntityCls, SgEntity):
+      raise TypeError('entity class must be a sub-class of SgEntity, got %s' % sgEntityCls)
 
-    try:
-      if not issubclass(sgEntityCls, SgEntity):
-        raise TypeError('entity class must be a sub-class of SgEntity, got %s' % sgEntityCls)
+    if isinstance(sgEntityTypes, str):
+      sgEntityTypes = [sgEntityTypes]
 
-      if isinstance(sgEntityTypes, str):
-        sgEntityTypes = [sgEntityTypes]
+    for e in sgEntityTypes:
+      if not isinstance(e, str):
+        raise TypeError('expected a str in entity type list, got %s' % e)
 
-      for e in sgEntityTypes:
-        if not isinstance(e, str):
-          raise TypeError('expected a str in entity type list, got %s' % e)
-
-        self.__defaultentityclasses__[e] = sgEntityCls
-    finally:
-      self.__lock__.release()
+      self.__defaultentityclasses__[e] = sgEntityCls
 
   def __getattribute__(self, item):
     try:
