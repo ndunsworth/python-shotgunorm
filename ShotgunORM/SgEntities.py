@@ -102,7 +102,7 @@ class SgHumanUser(SgEntity):
 
       ccEmail = i['email']
 
-      if ccEmail == '' or ccEmail.isspace():
+      if ccEmail == None or ccEmail == '' or ccEmail.isspace():
         raise RuntimeError('HumanUser %s\'s email field is emtpy' % i['name'])
 
       ccEmails.append(ccEmail)
