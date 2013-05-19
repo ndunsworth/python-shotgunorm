@@ -38,7 +38,7 @@ from xml.etree import ElementTree as ET
 # This module imports
 import ShotgunORM
 
-def _entityFix():
+def _entityFix(schemaData):
   '''
   Returns Entities that dont exist in the API but fields return them as values.
 
@@ -123,10 +123,8 @@ def _entityFix():
 
   AppWelcomeEntity = ShotgunORM.SgEntityInfo('AppWelcome', 'AppWelcome', bannerFieldInfos)
 
-  return {
-    'AppWelcome': AppWelcomeEntity,
-    'Banner': BannerEntity
-  }
+  schemaData['AppWelcome'] = AppWelcomeEntity
+  schemaData['Banner'] = BannerEntity
 
 SCHEMA_CACHE_DIR = os.path.dirname(__file__).replace('\\', '/') + '/config/schema_caches'
 
@@ -436,7 +434,7 @@ class SgSchema(object):
       if loadedCache == False:
         newSchema = self._fromSG(sgConnection)
 
-      newSchema.update(_entityFix())
+      _entityFix(newSchema)
 
       self._schema = newSchema
 
