@@ -75,7 +75,7 @@ class SgSession(object):
     else:
       return factory.createEntity(self, sgEntityType, sgData)
 
-  def _createEntities(self, sgEntities):
+  def _createEntities(self, sgEntities, sgFields=None):
     '''
     Internal function!
 
@@ -119,10 +119,22 @@ class SgSession(object):
       ShotgunORM.LoggerSession.debug('        * Entity: %(entityName)s', {'entityName': key})
       ShotgunORM.LoggerSession.debug('        * ids: %(ids)s', {'ids': value['ids']})
 
+      defaultFields = ['id']
+
+      if sgFields == None:
+        defaultFields = list(connection.defaultEntityQueryFields(key))
+      else:
+        if sgFields.has_key(key):
+          defaultFields = sgFields[key]
+        else:
+          defaultFields = list(connection.defaultEntityQueryFields(key))
+
+      ShotgunORM.LoggerSession.debug('        * sgFields: %(sgFields)s', {'sgFields': defaultFields})
+
       sgSearch = sgconnection.find(
         key,
         [['id', 'in', value['ids']]],
-        list(connection.defaultEntityQueryFields(key)),
+        defaultFields
       )
 
       if len(sgSearch) != len(value['ids']):
@@ -764,7 +776,7 @@ class SgSessionCached(SgSession):
 
     return result
 
-  def _createEntities(self, sgEntities):
+  def _createEntities(self, sgEntities, sgFields=None):
     '''
     Internal function!
 
@@ -791,10 +803,20 @@ class SgSessionCached(SgSession):
         t = e['type']
 
         if not entities.has_key(t):
+          defaultFields = ['id']
+
+          if sgFields == None:
+            defaultFields = list(connection.defaultEntityQueryFields(t))
+          else:
+            if sgFields.has_key(t):
+              defaultFields = sgFields[t]
+            else:
+              defaultFields = list(connection.defaultEntityQueryFields(t))
+
           entities[t] = {
             'ids': [],
             'indices': {},
-            'fields': list(connection.defaultEntityQueryFields(t))
+            'fields': defaultFields
           }
 
         iD = e['id']
@@ -850,11 +872,12 @@ class SgSessionCached(SgSession):
 
         ShotgunORM.LoggerSession.debug('        * Entity: %(entityName)s', {'entityName': key})
         ShotgunORM.LoggerSession.debug('        * ids: %(ids)s', {'ids': value['ids']})
+        ShotgunORM.LoggerSession.debug('        * sgFields: %(sgFields)s', {'sgFields': value['fields']})
 
         sgSearch = sgconnection.find(
           key,
           [['id', 'in', value['ids']]],
-          list(connection.defaultEntityQueryFields(key)),
+          value['fields'],
         )
 
         if len(sgSearch) != len(value['ids']):

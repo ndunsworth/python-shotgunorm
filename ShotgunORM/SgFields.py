@@ -179,10 +179,12 @@ class SgFieldColor2(ShotgunORM.SgField):
         return None
 
       if self._value == self._linkString:
-        try:
-          return self.parentEntity()[self._linkField]['color']
-        except:
+        fieldObj = self.parentEntity().field(self._linkField)
+
+        if fieldObj == None:
           return None
+
+        return fieldObj.value(sgFields=['color'])
       else:
         s = self._value.split(',')
 
@@ -334,7 +336,7 @@ class SgFieldEntity(ShotgunORM.SgField):
   Entity field that stores a link to another Entity.
   '''
 
-  def value(self):
+  def value(self, sgFields=None):
     result = super(SgFieldEntity, self).value()
 
     if result == None:
@@ -342,11 +344,18 @@ class SgFieldEntity(ShotgunORM.SgField):
 
     session = self.parentEntity().session()
 
-    return session._createEntity(
-      result['type'],
-      result,
-      list(session.connection().defaultEntityQueryFields(result['type']))
-    )
+    if sgFields == None:
+      return session._createEntity(
+        result['type'],
+        result,
+        list(session.connection().defaultEntityQueryFields(result['type']))
+      )
+    else:
+      return session._createEntity(
+        result['type'],
+        result,
+        sgFields
+      )
 
   def _setValue(self, sgData):
     if sgData == None:
@@ -428,7 +437,7 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
   Example: [Entity01, Entity02, ...]
   '''
 
-  def value(self):
+  def value(self, sgFields=None):
     value = super(SgFieldEntityMulti, self).value()
 
     if value == None:
@@ -436,7 +445,7 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
 
     session = self.parentEntity().session()
 
-    result = session._createEntities(value)
+    result = session._createEntities(value, sgFields=sgFields)
 
     return result
 
