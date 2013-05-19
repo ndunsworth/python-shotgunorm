@@ -356,7 +356,7 @@ class SgFieldEntity(ShotgunORM.SgField):
 
       return result
 
-    if not isinstance(sgData, SgEntity):
+    if not isinstance(sgData, ShotgunORM.SgEntity):
       raise TypeError('%s invalid value type "%s", expected a SgEntity' % (self.__repr__(), type(sgData).__name__))
 
     valueTypes = self.valueTypes()
@@ -448,13 +448,13 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
 
       return result
 
-    if isinstance(sgData, SgEntity):
+    if isinstance(sgData, ShotgunORM.SgEntity):
       sgData = [sgData]
     elif not isinstance(sgData, list):
       raise TypeError('%s invalid value type "%s", expected a SgEntity or list' % (self.__repr__(), type(sgData).__name__))
     else:
       for i in sgData:
-        if not isinstance(i, SgEntity):
+        if not isinstance(i, ShotgunORM.SgEntity):
           raise TypeError('%s invalid value type "%s", expected a SgEntity' % (self.__repr__(), type(i).__name__))
 
     valueTypes = self.valueTypes()
