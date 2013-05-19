@@ -119,6 +119,16 @@ ShotgunORM.SgEntity.registerDefaultEntityClass(
 )
 
 ShotgunORM.SgEntity.registerDefaultEntityClass(
+  sgEntityCls=ShotgunORM.SgPhase,
+  sgEntityTypes=['Phase']
+)
+
+ShotgunORM.SgEntity.registerDefaultEntityClass(
+  sgEntityCls=ShotgunORM.SgTask,
+  sgEntityTypes=['Task']
+)
+
+ShotgunORM.SgEntity.registerDefaultEntityClass(
   sgEntityCls=ShotgunORM.SgTicket,
   sgEntityTypes=['Ticket']
 )

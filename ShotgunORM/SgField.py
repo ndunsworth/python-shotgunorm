@@ -114,10 +114,8 @@ class SgFieldInfo(object):
     self._valueTypes = sgFieldAttribs['value_types']
     self._validValues = sgFieldAttribs['valid_values']
 
-    self._constructor = SgField.__fieldclasses__.get(self._returnType, None)
-
   @classmethod
-  def fromSg(self, sgFieldName, sgSchema):
+  def fromSg(self, sgEntityName, sgEntityLabel, sgFieldName, sgSchema):
     '''
     Returns a new SgFieldInfo that is constructed from the arg "sgSchema".
     '''
@@ -170,7 +168,7 @@ class SgFieldInfo(object):
     return self(data)
 
   @classmethod
-  def fromXML(self, sgXmlElement):
+  def fromXML(self, sgEntityName, sgEntityLabel, sgXmlElement):
     '''
     Returns a new SgFieldInfo that is constructed from the arg "sgXmlElement".
     '''
@@ -204,20 +202,6 @@ class SgFieldInfo(object):
       data['valid_values'] = data['valid_values'].split(',')
 
     return self(data)
-
-  def constructor(self):
-    '''
-    Return the fields constructor.
-    '''
-
-    return self._constructor
-
-  def create(self, parentEntity):
-    '''
-    Creates a new SgField based off the info obj.
-    '''
-
-    return self.constructor()(parentEntity, self)
 
   def defaultValue(self):
     '''
@@ -386,7 +370,10 @@ class SgField(object):
   RETURN_TYPE_URL = 16
 
   __fieldclasses__ = {
-    RETURN_TYPE_UNSUPPORTED: None
+    'default': {
+      RETURN_TYPE_UNSUPPORTED: None
+    },
+    'entities': {}
   }
 
   __profiler__ = SgFieldQueryProfiler()

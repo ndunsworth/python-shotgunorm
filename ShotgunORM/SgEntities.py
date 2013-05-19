@@ -31,6 +31,8 @@ __all__ = [
   'SgBanner',
   'SgHumanUser',
   'SgNote',
+  'SgPhase',
+  'SgTask',
   'SgTicket',
   'SgVersion'
 ]
@@ -44,6 +46,7 @@ import smtplib
 
 # This module imports
 from SgEntity import SgEntity
+from SgField import SgField
 
 class SgApiUser(SgEntity):
   '''
@@ -160,6 +163,64 @@ class SgNote(SgEntity):
   '''
 
   pass
+
+# Fix for the lame ass return type "color2".  See ShotgunORM.SgFieldColor2 for more
+# information on this lovely mess.
+class SgPhase(SgEntity):
+  '''
+  Class that represents a Phase Entity.
+  '''
+
+  def _buildFields(self, sgFieldInfos):
+    '''
+    Subclass portion of SgEntity.buildFields().
+
+    Note:
+    Do not call this directly!
+    '''
+
+    fieldClasses = SgField.__fieldclasses__
+
+    for field in sgFieldInfos:
+      fieldName = field.name()
+
+      newFieldCls = None
+
+      if fieldName == 'color':
+        newFieldCls = fieldClasses.get(SgField.RETURN_TYPE_COLOR2, None)
+      else:
+        newFieldCls = fieldClasses.get(field.returnType(), None)
+
+      self._fields[fieldName] = newFieldCls(self, field)
+
+# Fix for the lame ass return type "color2".  See ShotgunORM.SgFieldColor2 for more
+# information on this lovely mess.
+class SgTask(SgEntity):
+  '''
+  Class that represents a Task Entity.
+  '''
+
+  def _buildFields(self, sgFieldInfos):
+    '''
+    Subclass portion of SgEntity.buildFields().
+
+    Note:
+    Do not call this directly!
+    '''
+
+    fieldClasses = SgField.__fieldclasses__
+
+    for field in sgFieldInfos:
+      fieldName = field.name()
+
+      newFieldCls = None
+
+      if fieldName == 'color':
+        newFieldCls = fieldClasses.get(SgField.RETURN_TYPE_COLOR2, None)
+      else:
+        newFieldCls = fieldClasses.get(field.returnType(), None)
+
+      self._fields[fieldName] = newFieldCls(self, field)
 
 class SgTicket(SgEntity):
   '''

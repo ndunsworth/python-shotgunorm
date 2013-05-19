@@ -40,14 +40,6 @@ from xml.etree import ElementTree as ET
 # This module imports
 import ShotgunORM
 
-# Fix for the lame ass return type "color2".  See ShotgunORM.SgFieldColor2 for more
-# information on this lovely mess.
-def _fixFieldSchema(sgEntityName, sgFieldSchemas):
-  if not sgEntityName in ['Phase', 'Task']:
-    return
-
-  sgFieldSchemas['color']['data_type']['value'] = 'color2'
-
 class SgEntityInfo(object):
   '''
   Class for representing basic information about a Shotgun Entity.
@@ -76,13 +68,11 @@ class SgEntityInfo(object):
 
     fieldInfos = {}
 
-    _fixFieldSchema(sgEntityName, sgFieldSchemas)
-
     for fieldName, schemaData in sgFieldSchemas.items():
       if fieldName.startswith('step_'):
         continue
 
-      fieldInfo = ShotgunORM.SgFieldInfo.fromSg(fieldName, schemaData)
+      fieldInfo = ShotgunORM.SgFieldInfo.fromSg(sgEntityName, sgEntityLabel, fieldName, schemaData)
 
       # Skip fields that have an unsupported return type!
       if fieldInfo.returnType() == ShotgunORM.SgField.RETURN_TYPE_UNSUPPORTED:
@@ -110,17 +100,19 @@ class SgEntityInfo(object):
     if fields == None:
       raise RuntimeError('could not find fields element')
 
+    entityName = sgXmlElement.attrib.get('name')
+    entityLabel = sgXmlElement.attrib.get('label')
+
     for field in fields:
       # Skip fields that have an unsupported return type!
-      fieldInfo = ShotgunORM.SgFieldInfo.fromXML(field)
+      fieldInfo = ShotgunORM.SgFieldInfo.fromXML(entityName, entityLabel, field)
 
       if fieldInfo.returnType() == ShotgunORM.SgField.RETURN_TYPE_UNSUPPORTED:
+        ShotgunORM.LoggerEntity.warning('field %s.%s ignored because of return type unsupported' % (fieldInfo.name(), entityName))
+
         continue
 
       entityFieldInfos[field.attrib.get('name')] = fieldInfo
-
-    entityName = sgXmlElement.attrib.get('name')
-    entityLabel = sgXmlElement.attrib.get('label')
 
     return self(entityName, entityLabel, entityFieldInfos)
 
@@ -443,6 +435,23 @@ class SgEntity(object):
       fieldObj._valid = True
       fieldObj._hasCommit = False
 
+  def _buildFields(self, sgFieldInfos):
+    '''
+    Subclass portion of SgEntity.buildFields().
+
+    Note:
+    Do not call this directly!
+    '''
+
+    fieldClasses = ShotgunORM.SgField.__fieldclasses__
+
+    for field in sgFieldInfos:
+      fieldName = field.name()
+
+      newField = fieldClasses.get(field.returnType(), None)
+
+      self._fields[fieldName] = newField(self, field)
+
   def buildFields(self):
     '''
     Builds the ShotgunORM.SgField objects for this Entity.
@@ -460,10 +469,7 @@ class SgEntity(object):
 
     self._fields = {}
 
-    for field in entityFieldInfos:
-      fieldName = field.name()
-
-      self._fields[fieldName] = field.create(self)
+    self._buildFields(entityFieldInfos)
 
     self._hasBuiltFields = True
 
