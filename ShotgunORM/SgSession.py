@@ -31,6 +31,7 @@ __all__ = [
 
 # Python imports
 import threading
+from Queue import Queue
 
 # This module imports
 import ShotgunORM
@@ -47,7 +48,7 @@ class SgSession(object):
     self._connection = sgConnection
     self._name = sgSessionName
 
-  def _createEntity(self, sgEntityType, sgData, sgFields=None):
+  def _createEntity(self, sgEntityType, sgData):
     '''
     Internal function!
 
@@ -57,23 +58,8 @@ class SgSession(object):
     ShotgunORM.LoggerSession.debug('%(session)s._createEntity(...)', {'session': self.__repr__()})
     ShotgunORM.LoggerSession.debug('    * sgEntityType: %(entityName)s', {'entityName': sgEntityType})
     ShotgunORM.LoggerSession.debug('    * sgData: %(sgData)s', {'sgData': sgData})
-    ShotgunORM.LoggerSession.debug('    * sgFields: %(sgFields)s', {'sgFields': sgFields})
 
-    sgData = dict(sgData)
-
-    factory = self.connection().classFactory()
-
-    if not sgFields in [None, []]:
-      sgSearch = self.connection().connection().find_one(sgEntityType, [['id', 'is', sgData['id']]], sgFields)
-
-      if sgSearch == None:
-        raise RuntimError('unable to locate Entity in Shotgun')
-
-      sgData.update(sgSearch)
-
-      return factory.createEntity(self, sgEntityType, sgData)
-    else:
-      return factory.createEntity(self, sgEntityType, sgData)
+    return self.connection().classFactory().createEntity(self, sgEntityType, dict(sgData))
 
   def _createEntities(self, sgEntities, sgFields=None):
     '''
@@ -82,74 +68,105 @@ class SgSession(object):
     Do not call!
     '''
 
+    ShotgunORM.LoggerSession.debug('%(session)s._createEntities(...)', {'session': self.__repr__()})
+    ShotgunORM.LoggerSession.debug('    * Entities: %(entities)s', {'entities': sgEntities})
+    ShotgunORM.LoggerSession.debug('    * sgFields: %(sgFields)s', {'sgFields': sgFields})
+
     result = []
 
     if len(sgEntities) <= 0:
       return result
 
-    connection = self.connection()
-    sgconnection = connection.connection()
-
     entities = {}
-
-    index = 0
 
     for e in sgEntities:
       t = e['type']
 
       if not entities.has_key(t):
-        entities[t] = {
-          'ids': [],
-          'indices': {}
-        }
+        entities[t] = {}
 
-      iD = e['id']
+      entity = self._createEntity(t, e)
 
-      entities[t]['ids'].append(iD)
-      entities[t]['indices'][iD] = index
+      entities[t][entity.id] = entity
 
-      index += 1
+      result.append(entity)
 
-    result = [None] * len(sgEntities)
+    ev = threading.Event()
 
-    ShotgunORM.LoggerSession.debug('%(session)s._createEntities(...)', {'session': self.__repr__()})
-    ShotgunORM.LoggerSession.debug('    * Entities: %(entities)s', {'entities': sgEntities})
+    t = threading.Thread(target=self._createEntitiesThread, args=[entities, sgFields, ev])
 
-    for key, value in entities.items():
-      ShotgunORM.LoggerSession.debug('        * Entity: %(entityName)s', {'entityName': key})
-      ShotgunORM.LoggerSession.debug('        * ids: %(ids)s', {'ids': value['ids']})
+    t.start()
 
-      defaultFields = ['id']
-
-      if sgFields == None:
-        defaultFields = list(connection.defaultEntityQueryFields(key))
-      else:
-        if sgFields.has_key(key):
-          defaultFields = sgFields[key]
-        else:
-          defaultFields = list(connection.defaultEntityQueryFields(key))
-
-      ShotgunORM.LoggerSession.debug('        * sgFields: %(sgFields)s', {'sgFields': defaultFields})
-
-      sgSearch = sgconnection.find(
-        key,
-        [['id', 'in', value['ids']]],
-        defaultFields
-      )
-
-      if len(sgSearch) != len(value['ids']):
-        raise RuntimeError('one or more Entities not found in Shotgun')
-
-      indices = value['indices']
-
-      for e in sgSearch:
-        entity = self._createEntity(key, e)
-
-        index = indices[entity.id]
-
-        result[index] = entity
+    ev.wait()
 
     return result
+
+  def _createEntitiesThread(self, sgEntities, sgFields, event):
+    '''
+
+    '''
+
+    for key, value in sgEntities.items():
+      ShotgunORM.LoggerSession.debug('%(session)s._createEntitiesThread(...)', {'session': self.__repr__()})
+      ShotgunORM.LoggerSession.debug('    * EntityType: %(entityType)s', {'entityType': key})
+      ShotgunORM.LoggerSession.debug('    * ids: %(ids)s', {'ids': value.keys()})
+
+      for entity in value.values():
+        entity._lock()
+
+    event.set()
+
+    connection = self.connection()
+
+    try:
+      for key, value in sgEntities.items():
+        defaultFields = []
+
+        if sgFields == None:
+          defaultFields = list(connection.defaultEntityQueryFields(key))
+        else:
+          if sgFields.has_key(key):
+            defaultFields = sgFields[key]
+          else:
+            defaultFields = list(connection.defaultEntityQueryFields(key))
+
+        ShotgunORM.LoggerSession.debug('    * sgFields: %(sgFields)s', {'sgFields': defaultFields})
+
+        if defaultFields == None or len(defaultFields) <= 0:
+          for entity in value.values():
+            entity._release()
+
+          continue
+
+        sgSearch = self._sg_find(
+          key,
+          [['id', 'in', value.keys()]],
+          defaultFields
+        )
+
+        if len(sgSearch) != len(value):
+          raise RuntimeError('one or more Entities not found in Shotgun')
+
+        for e in sgSearch:
+          entity = sgEntities[key][e['id']]
+
+          del e['id']
+          del e['type']
+
+          entity._updateFields(e, setValue=True, skipValid=True, ignoreWithUpdates=True)
+
+          entity._release()
+
+          ShotgunORM.LoggerSession.debug('    * releasing: %(id)s', {'id': entity.id})
+    except:
+      for key, value in sgEntities.items():
+        for entity in value.values():
+          try:
+            entity._release()
+          except:
+            pass
+
+      raise
 
   def _flattenFilters(self, sgFilters):
     '''
@@ -208,6 +225,58 @@ class SgSession(object):
       return flattenDict(sgFilters)
     else:
       return sgFilters
+
+  def _sg_find(
+    self,
+    entity_type,
+    filters,
+    fields=None,
+    order=None,
+    filter_operator=None,
+    limit=0,
+    retired_only=False,
+    page=0
+  ):
+
+    ShotgunORM.SHOTGUN_API_LOCK.acquire()
+
+    try:
+      return self.connection().connection().find(
+        entity_type,
+        filters,
+        fields,
+        order,
+        filter_operator,
+        limit,
+        retired_only,
+        page
+      )
+    finally:
+      ShotgunORM.SHOTGUN_API_LOCK.release()
+
+  def _sg_find_one(
+    self,
+    entity_type,
+    filters=[],
+    fields=None,
+    order=None,
+    filter_operator=None,
+    retired_only=False,
+  ):
+
+    ShotgunORM.SHOTGUN_API_LOCK.acquire()
+
+    try:
+      return self.connection().connection().find_one(
+        entity_type,
+        filters,
+        fields,
+        order,
+        filter_operator,
+        retired_only,
+      )
+    finally:
+      ShotgunORM.SHOTGUN_API_LOCK.release()
 
   def batch(self, requests):
     '''
@@ -399,7 +468,6 @@ class SgSession(object):
     '''
 
     connection = self.connection()
-    sgconnection = connection.connection()
     schema = connection.schema()
 
     entity_type = schema.entityApiName(entity_type)
@@ -425,7 +493,7 @@ class SgSession(object):
     ShotgunORM.LoggerSession.debug('    * filters: %(sgFilters)s', {'sgFilters': filters})
     ShotgunORM.LoggerSession.debug('    * fields: %(sgFields)s', {'sgFields': fields})
 
-    searchResult = sgconnection.find(
+    searchResult = self._sg_find(
       entity_type=entity_type,
       filters=filters,
       fields=fields,
@@ -463,7 +531,6 @@ class SgSession(object):
     '''
 
     connection = self.connection()
-    sgconnection = connection.connection()
     schema = connection.schema()
 
     entity_type = schema.entityApiName(entity_type)
@@ -489,7 +556,7 @@ class SgSession(object):
     ShotgunORM.LoggerSession.debug('    * filters: %(sgFilters)s', {'sgFilters': filters})
     ShotgunORM.LoggerSession.debug('    * fields: %(sgFields)s', {'sgFields': fields})
 
-    searchResult = sgconnection.find_one(
+    searchResult = self._sg_find_one(
       entity_type=entity_type,
       filters=filters,
       fields=fields,
@@ -538,7 +605,7 @@ class SgSession(object):
 
     return
 
-  def search(self, sgEntityType, sgSearchExp, sgFields=None, sgSearchArgs=[], order=None, limit=0, retired_only=False, page=0, onlyOne=False):
+  def search(self, sgEntityType, sgSearchExp, sgFields=None, sgSearchArgs=[], order=None, limit=0, retired_only=False, page=0):
     '''
     Uses a search string to find entities in Shotgun instead of a list.
 
@@ -568,10 +635,7 @@ class SgSession(object):
 
       * (int) page:
         Return a single specified page number of records instead of the entire
-        result set
-
-      * (bool) onlyOne:
-        Return only one result.
+        result set.
     '''
 
     connection = self.connection()
@@ -605,41 +669,15 @@ class SgSession(object):
 
         sgFields.update(connection.defaultEntityQueryFields(entity_type))
 
-    searchResult = None
-
-    if onlyOne:
-      searchResult = sgconnection.find_one(
-        entity_type,
-        filters,
-        sgFields,
-        order=order,
-        retired_only=retired_only,
-      )
-    else:
-      searchResult = sgconnection.find(
-        entity_type,
-        filters,
-        sgFields,
-        order=order,
-        limit=limit,
-        retired_only=retired_only,
-        page=page
-      )
-
-    if searchResult != None:
-      if onlyOne:
-        return self._createEntity(entity_type, searchResult)
-      else:
-        newResult = []
-
-        for i in searchResult:
-          entity = self._createEntity(entity_type, i)
-
-          newResult.append(entity)
-
-        searchResult = newResult
-
-    return searchResult
+    return self.find(
+      entity_type,
+      filters,
+      sgFields,
+      order=order,
+      limit=limit,
+      retired_only=retired_only,
+      page=page
+    )
 
   def searchOne(self, sgEntityType, sgSearchExp, sgFields=None, sgSearchArgs=[], order=None, retired_only=False, page=0):
     '''
@@ -702,6 +740,8 @@ class SgSessionCached(SgSession):
 
     self._lockCache.acquire()
 
+    result = None
+
     try:
       eId = None
 
@@ -710,192 +750,114 @@ class SgSessionCached(SgSession):
       else:
         eId = int(sgData['id'])
 
-      result = None
-
       if not self._entityCache.has_key(sgEntityType):
         self._entityCache[sgEntityType] = {
           -1: {}
         }
 
+      # Return immediately if the Entity does not exist.
       if eId <= -1:
         result = factory.createEntity(self, sgEntityType, sgData)
 
         self._entityCache[sgEntityType][-1][id(result)] = result
+
+        return result
+
+      # Check the cache and if its found update any non-valid fields that
+      # have data contained in the passed sgData.  If not found create the
+      # Entity and add it to the cache.
+      if self._entityCache[sgEntityType].has_key(eId):
+        result = self._entityCache[sgEntityType][eId]
+
+        result._updateFields(sgData, setValue=True, skipValid=True, ignoreWithUpdates=True)
       else:
-        if self._entityCache[sgEntityType].has_key(eId):
-          result = self._entityCache[sgEntityType][eId]
+        result = factory.createEntity(self, sgEntityType, sgData)
 
-          result._lock()
-
-          try:
-            for field in dict(sgData):
-              fieldObj = result.field(field)
-
-              if fieldObj == None or fieldObj.isValid():
-                del sgData[field]
-
-            if len(sgData) >= 1:
-              result._updateFields(sgData)
-          finally:
-            result._release()
-        else:
-          result = factory.createEntity(self, sgEntityType, sgData)
-
-          self._entityCache[sgEntityType][eId] = result
-
-        if not sgFields in [None, []]:
-          result._lock()
-
-          try:
-            queryFields = []
-
-            for field in sgFields:
-              fieldObj = result.field(field)
-
-              if fieldObj == None or fieldObj.isValid():
-                continue
-
-              queryFields.append(field)
-
-            if len(queryFields) >= 1:
-              ShotgunORM.LoggerSession.debug('    * pulled: %(sgFields)s', {'sgFields': sgFields})
-
-              sgSearch = self.connection().connection().find_one(sgEntityType, [['id', 'is', result.id]], sgFields)
-
-              if sgSearch == None:
-                raise RuntimError('unable to locate Entity in Shotgun')
-
-              del sgSearch['type']
-              del sgSearch['id']
-
-              result._updateFields(sgSearch)
-          finally:
-            result._release()
+        self._entityCache[sgEntityType][eId] = result
     finally:
       self._lockCache.release()
 
     return result
 
-  def _createEntities(self, sgEntities, sgFields=None):
-    '''
-    Internal function!
-
-    Do not call!
+  def _createEntitiesThread(self, sgEntities, sgFields, event):
     '''
 
-    self._lockCache.acquire()
+    '''
+
+    connection = self.connection()
+
+    defaultFields = {}
 
     try:
-      if len(sgEntities) <= 0:
-        return []
+      for key, value in dict(sgEntities).items():
+        ShotgunORM.LoggerSession.debug('%(session)s._createEntitiesThread(...)', {'session': self.__repr__()})
+        ShotgunORM.LoggerSession.debug('    ** EntityType: %(entityType)s', {'entityType': key})
 
-      result = [None] * len(sgEntities)
-
-      connection = self.connection()
-      sgconnection = connection.connection()
-
-      entities = {}
-
-      index = 0
-
-      for e in sgEntities:
-        iD = e['id']
-        t = e['type']
-
-        if not entities.has_key(t):
-          defaultFields = ['id']
-
-          if sgFields == None:
-            defaultFields = list(connection.defaultEntityQueryFields(t))
-          else:
-            if sgFields.has_key(t):
-              defaultFields = sgFields[t]
-            else:
-              defaultFields = list(connection.defaultEntityQueryFields(t))
-
-          entities[t] = {
-            'ids': [],
-            'indices': {},
-            'fields': defaultFields
-          }
-
-        iD = e['id']
-
-        ids = entities[t]['ids']
-        indices = entities[t]['indices']
-
-        if self._entityCache.has_key(t):
-          if self._entityCache[t].has_key(iD):
-            eObj = self._entityCache[t][iD]
-
-            noPull = True
-
-            for field in entities[t]['fields']:
-              if not eObj.field(field).isValid():
-                noPull = False
-
-                break
-
-            if noPull:
-              result[index] = eObj
-            else:
-              ids.append(iD)
-
-              indices[iD] = index
-          else:
-            ids.append(iD)
-
-            indices[iD] = index
+        if sgFields == None:
+          defaultFields[key] = list(connection.defaultEntityQueryFields(key))
         else:
-          ids.append(iD)
+          if sgFields.has_key(key):
+            defaultFields[key] = sgFields[key]
+          else:
+            defaultFields[key] = list(connection.defaultEntityQueryFields(key))
 
-          indices[iD] = index
-
-        index += 1
-
-      ShotgunORM.LoggerSession.debug('%(session)s._createEntities(...)', {'session': self.__repr__()})
-      ShotgunORM.LoggerSession.debug('    * Entities: %(entities)s', {'entities': sgEntities})
-
-      for key, value in entities.items():
-        if len(value['ids']) <= 0:
-          continue
-
-        if key in ['AppWelcome', 'Banner']:
-          for n in value['ids']:
-            entity = self._createEntity(key, {'id': n})
-
-            index = indices[entity.id]
-
-            result[index] = entity
+        if defaultFields[key] in [None, []]:
+          del sgEntities[key]
 
           continue
 
-        ShotgunORM.LoggerSession.debug('        * Entity: %(entityName)s', {'entityName': key})
-        ShotgunORM.LoggerSession.debug('        * ids: %(ids)s', {'ids': value['ids']})
-        ShotgunORM.LoggerSession.debug('        * sgFields: %(sgFields)s', {'sgFields': value['fields']})
+        noPull = []
 
-        sgSearch = sgconnection.find(
-          key,
-          [['id', 'in', value['ids']]],
-          value['fields'],
-        )
+        pullFields = set([])
 
-        if len(sgSearch) != len(value['ids']):
-          raise RuntimeError('one or more Entities not found in Shotgun')
+        for entity in value.values():
+          pull = False
 
-        indices = value['indices']
+          for field in defaultFields[key]:
+            if not entity.field(field).isValid():
+              pull = True
 
-        for e in sgSearch:
-          entity = self._createEntity(key, e)
+              pullFields.add(field)
 
-          index = indices[entity.id]
+          if not pull:
+            noPull.append(entity.id)
 
-          result[index] = entity
+        defaultFields[key] = list(pullFields)
 
-      return result
+        if len(noPull) >= 1:
+          for n in noPull:
+            del sgEntities[key][n]
 
+        if len(value) <= 0:
+          del sgEntities[key]
+
+        ShotgunORM.LoggerSession.debug('    ** ids: %(ids)s', {'ids': value.keys()})
+        ShotgunORM.LoggerSession.debug('    ** sgFields: %(sgFields)s', {'sgFields': defaultFields[key]})
     finally:
-      self._lockCache.release()
+      event.set()
+
+    if len(sgEntities) <= 0:
+      return
+
+    for key, value in sgEntities.items():
+      sgSearch = self._sg_find(
+        key,
+        [['id', 'in', value.keys()]],
+        defaultFields[key]
+      )
+
+      if len(sgSearch) != len(value):
+        raise RuntimeError('one or more Entities not found in Shotgun')
+
+      for e in sgSearch:
+        entity = sgEntities[key][e['id']]
+
+        del e['id']
+        del e['type']
+
+        entity._updateFields(e, setValue=True, skipValid=True, ignoreWithUpdates=True)
+
+        ShotgunORM.LoggerSession.debug('    ** releasing: %(id)s', {'id': entity.id})
 
   def clearCache(self, sgEntityTypes=None):
     '''

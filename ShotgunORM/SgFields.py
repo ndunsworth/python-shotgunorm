@@ -344,18 +344,10 @@ class SgFieldEntity(ShotgunORM.SgField):
 
     session = self.parentEntity().session()
 
-    if sgFields == None:
-      return session._createEntity(
-        result['type'],
-        result,
-        list(session.connection().defaultEntityQueryFields(result['type']))
-      )
-    else:
-      return session._createEntity(
-        result['type'],
-        result,
-        sgFields
-      )
+    return session._createEntities(
+      [result],
+      sgFields={result['type']: sgFields}
+    )[0]
 
   def _setValue(self, sgData):
     if sgData == None:
@@ -440,8 +432,8 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
   def value(self, sgFields=None):
     value = super(SgFieldEntityMulti, self).value()
 
-    if value == None:
-      return None
+    if value in [None, []]:
+      return value
 
     session = self.parentEntity().session()
 
@@ -951,7 +943,7 @@ class SgFieldSummary(ShotgunORM.SgField):
     elif self._summaryType == 'record_count':
       # Dont use the orm for this search, waste to build the classes when all
       # we are doing is getting a len on the search result.
-      sgSearch = self.parentEntity().session().connection().connection().find(self.entityType(), searchExp)
+      sgSearch = self.parentEntity().session()._sg_find(self.entityType(), searchExp)
 
       self._value = len(sgSearch)
     elif self._summaryType == 'count':
@@ -970,7 +962,7 @@ class SgFieldSummary(ShotgunORM.SgField):
 
       # Dont use the orm for this search, waste to build the classes when all
       # we are doing is getting a len on the search result.
-      sgSearch = self.parentEntity().session().connection().connection().find(self.entityType(), searchExp, fields=[])
+      sgSearch = self.parentEntity().session()._sg_find(self.entityType(), searchExp, fields=[])
 
       self._value = len(sgSearch)
 

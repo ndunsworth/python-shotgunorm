@@ -408,20 +408,6 @@ class SgField(object):
 
     self.__fieldclasses__[sgFieldReturnType] = sgFieldClass
 
-  def _fetch(self):
-    '''
-    Internal function do not call!
-
-    SgField.value() calls this when the field is not valid.  Subclasses can
-    override this function to define how to retrieve their value.
-
-    Default function calls _fetch() on the parent Entity.
-
-    For an example of a custom fetch see the SgFieldExpression class.
-    '''
-
-    self.parentEntity()._fetch([self.name()])
-
   def defaultValue(self):
     '''
     Returns the default value for the field.
@@ -468,6 +454,45 @@ class SgField(object):
     result = session.find('EventLogEntry', filters, order=order, limit=sgRecordLimit)
 
     return result
+
+  def _fetch(self):
+    '''
+    Internal function do not call!
+
+    SgField.value() calls this when the field is not valid.  Subclasses can
+    override this function to define how to retrieve their value.
+
+    Default function calls fetch() on the parent Entity.
+
+    If you do not call fetch() on the parent Entity you must lock the parent
+    down first before setting this._value.
+
+    For an example of a custom fetch see the SgFieldSummary class.
+    '''
+
+    return self.parentEntity().fetch([self.name()])
+
+  def fetch(self, thread=False):
+    '''
+    Retrieves the fields value from Shotgun.
+
+    Args:
+      * (bool) thread:
+        Forks the call to Shotgun so this returns immediately.  Returns the
+        Thread object.
+    '''
+
+    ShotgunORM.LoggerEntityField.debug('%(field)s.fetch()', {'field': self.__repr__()})
+    ShotgunORM.LoggerEntityField.debug('    * thread: %(thread)s', {'thread': thread})
+
+    if thread:
+      t = threading.Thread(target=self.fetch)
+
+      t.start()
+
+      return t
+
+    return self._fetch()
 
   def _fromFieldData(self, sgData):
     '''
@@ -531,13 +556,20 @@ class SgField(object):
     Do not call this esp in a threaded env unless you know what you are doing!
     '''
 
-    # You must not invalidate an ID knob!
-    if self.name() == 'id':
-      return
+    parent = self.parentEntity()
 
-    self._value = None
-    self._hasCommit = False
-    self._valid = False
+    parent._lock()
+
+    try:
+      # You must not invalidate an ID knob!
+      if self.name() == 'id':
+        return
+
+      self._value = None
+      self._hasCommit = False
+      self._valid = False
+    finally:
+      parent._release()
 
   def isCustom(self):
     '''
@@ -684,47 +716,26 @@ class SgField(object):
     Returns the value of the Entity field formated for Shotgun.
     '''
 
-    parent = self.parentEntity()
-
-    parent._lock()
-
-    try:
-      if self.isValid() or self.name() == 'id':
-        return self._toFieldData()
-
-      self._fetch()
-
+    if self.isValid() or self.name() == 'id':
       return self._toFieldData()
-    finally:
-      parent._release()
+
+    self.fetch()
+
+    return self._toFieldData()
 
   def value(self):
     '''
     Returns the value of the Entity field.
-
-    Note:
-    This syncs with Shotgun if value() has not yet been called.  Syncing will
-    always occur if the parent SgEntity the field belongs to has field caching
-    turned off.
     '''
 
-    parent = self.parentEntity()
-
-    parent._lock()
-
-    try:
-      if self.isValid() or self.name() == 'id':
-        return self._value
-
-      # Only fetch if the parent Entity exists.
-      if parent.exists():
-        self._fetch()
-
-      self.__profiler__.profile(self)
-
+    if self.isValid() or self.name() == 'id':
       return self._value
-    finally:
-      parent._release()
+
+    self.fetch()
+
+    self.__profiler__.profile(self)
+
+    return self._value
 
   def validValues(self):
     '''

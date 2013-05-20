@@ -307,57 +307,8 @@ class SgEntity(object):
     self._markedForDeletion = False
 
     self._hasBuiltFields = False
-
-  def _fetch(self, sgFields=[]):
-    '''
-    Internal function!
-
-    Fetches the specified fields from the Shotgun db.
-
-    Not thread safe!
-    '''
-
-    ####
-    # DO NOT CALL THIS FUNCTION FOR SUMMARY FIELDS!
-    ####
-
-    if not self.exists():
-      return
-
-    connection = self.session().connection()
-    sgconnection = connection.connection()
-
-    queryFields = set([])
-
-    for field in sgFields:
-      fieldObj = self.field(field)
-
-      if fieldObj == None:
-        continue
-
-      if fieldObj.isValid() or fieldObj.returnType() == ShotgunORM.SgField.RETURN_TYPE_SUMMARY:
-        continue
-
-      queryFields.add(field)
-
-    # Bail if no fields need querying!
-    if len(queryFields) <= 0:
-      return
-
-    queryFields = list(queryFields)
-
-    ShotgunORM.LoggerEntity.debug('%(entity)s._fetch()', {'entity': self.__repr__()})
-    ShotgunORM.LoggerEntity.debug('    * requested: %(sgFields)s', {'sgFields': sgFields})
-
-    sgResult = sgconnection.find_one(self.type, self.toEntitySearchPattern(), queryFields)
-
-    if sgResult == None:
-      raise RuntimeError('unable to find Entity in Shotgun database %s' % self.__repr__())
-
-    del sgResult['type']
-    del sgResult['id']
-
-    self._updateFields(sgResult)
+    self._isFetching = False
+    self._isCommitting = False
 
   def _fromFieldData(self, sgData):
     '''
@@ -411,29 +362,39 @@ class SgEntity(object):
 
     self._rlock.release()
 
-  def _updateFields(self, sgData, setValue=True):
+  def _updateFields(self, sgData, setValue=True, skipValid=False, ignoreWithUpdates=False):
     '''
     Internal function!
 
     This is not thread safe do not call it!
     '''
 
-    for field in sgData:
-      fieldData = sgData[field]
-      fieldObj = self.field(field)
+    self._lock()
 
-      if fieldObj == None:
-        raise RuntimeError('unable to find field "%s" on entity %s, this is most likely because the Entity schema has changed' % (field, self.__repr__()))
+    try:
+      for field, value in sgData.items():
+        if field in ['type']:
+          continue
 
-      # No need to do anythin for summary expression fields.
-      if fieldObj.returnType() == ShotgunORM.SgField.RETURN_TYPE_SUMMARY:
-        continue
+        fieldObj = self.field(field)
 
-      if setValue:
-        fieldObj._fromFieldData(fieldData)
+        if fieldObj == None:
+          continue
 
-      fieldObj._valid = True
-      fieldObj._hasCommit = False
+        # No need to do anythin for summary expression fields.
+        if fieldObj.returnType() == ShotgunORM.SgField.RETURN_TYPE_SUMMARY:
+          continue
+
+        if setValue:
+          if (skipValid and fieldObj.isValid()) or (ignoreWithUpdates and fieldObj.hasUpdate()):
+            continue
+
+          fieldObj._fromFieldData(value)
+
+        fieldObj._valid = True
+        fieldObj._hasCommit = False
+    finally:
+      self._release()
 
   def _buildFields(self, sgFieldInfos):
     '''
@@ -489,6 +450,8 @@ class SgEntity(object):
     self._lock()
 
     try:
+      self._isCommitting = True
+
       if self._markedForDeletion:
         result = self.delete(sgCommit=True)
 
@@ -502,6 +465,8 @@ class SgEntity(object):
         sgFields = self.fieldNames()
       elif isinstance(sgFields, str):
         sgFields = [sgFields]
+      else:
+        sgFields = list(set(sgFields))
 
       for field in sgFields:
         fieldObj = self.field(field)
@@ -549,9 +514,9 @@ class SgEntity(object):
       ShotgunORM.onEntityCommit(self, commitType)
 
       return True
-    except:
-      raise
     finally:
+      self._isCommitting = False
+
       self._release()
 
   def clone(self, inheritFields=[], numberOfEntities=1):
@@ -638,6 +603,123 @@ class SgEntity(object):
 
     return self['id'] != None
 
+  def _fetch(self, sgFields):
+    '''
+    Internal function!
+
+    Fetches the specified fields from the Shotgun db.
+
+    Not thread safe!
+
+    Args:
+      * (list) sgFields:
+        List of fields to fetch from Shotgun.
+    '''
+
+    ####
+    # DO NOT CALL THIS FUNCTION FOR SUMMARY FIELDS!
+    ####
+
+    if not self.exists():
+      return
+
+    queryFields = set([])
+
+    for field in sgFields:
+      fieldObj = self.field(field)
+
+      if fieldObj == None:
+        continue
+
+      if fieldObj.isValid() or fieldObj.returnType() == ShotgunORM.SgField.RETURN_TYPE_SUMMARY:
+        continue
+
+      queryFields.add(field)
+
+    # Bail if no fields need querying!
+    if len(queryFields) <= 0:
+      return False
+
+    queryFields = list(queryFields)
+
+    sgResult = self.session()._sg_find_one(self.type, self.toEntitySearchPattern(), queryFields)
+
+    if sgResult == None:
+      raise RuntimeError('unable to find Entity in Shotgun database %s' % self.__repr__())
+
+    del sgResult['type']
+    del sgResult['id']
+
+    self._updateFields(sgResult)
+
+  def fetch(self, sgFields, thread=False):
+    '''
+    Retrieves the specified fields from Shotgun.
+
+    Only those fields which isValid() returns False will be fetched.
+
+    Args:
+      * (list) sgFields:
+        List of fields to fetch from Shotgun.
+
+      * (bool) thread:
+        Forks the call to Shotgun so this returns immediately.  Returns the
+        Thread object.
+    '''
+
+    ShotgunORM.LoggerEntity.debug('%(entity)s.fetch()', {'entity': self.__repr__()})
+    ShotgunORM.LoggerEntity.debug('    * requested: %(sgFields)s', {'sgFields': sgFields})
+    ShotgunORM.LoggerEntity.debug('    * thread: %(thread)s', {'thread': thread})
+
+    if thread:
+      t = threading.Thread(self.fetch, args=sgFields)
+
+      t.start()
+
+      return t
+
+    if sgFields == None:
+      sgFields = self.fieldNames()
+    else:
+      if isinstance(sgFields, str):
+        sgFields = [sgFields]
+      elif not isinstance(sgFields, (list, set, tuple)):
+        raise TypeError('expected a list for sgFields, got "%s"' % sgFields.__name__)
+
+    self._lock()
+
+    self._isFetching = True
+
+    try:
+      if not self.exists():
+        return True
+
+      queryFields = []
+
+      for field in sgFields:
+        fieldObj = self.field(field)
+
+        if fieldObj == None or fieldObj.isValid():
+          continue
+
+        if fieldObj.returnType() == fieldObj.RETURN_TYPE_SUMMARY:
+          fieldObj.fetch()
+
+          continue
+
+        queryFields.append(field)
+
+      if len(queryFields) >= 1:
+        self._fetch(queryFields)
+
+        return True
+
+      return False
+    finally:
+      self._isFetching = False;
+
+      self._release()
+
   def field(self, sgField):
     '''
     Returns the Entity field.
@@ -690,66 +772,20 @@ class SgEntity(object):
 
     if sgFields == None:
       sgFields = self.fieldNames()
-    else:
-      if isinstance(sgFields, str):
-        sgFields = [sgFields]
-      elif not isinstance(sgFields, (list, set, tuple)):
-        raise TypeError('expected a list for sgFields, got "%s"' % sgFields.__name__)
 
-    sgFields = set(sgFields)
+    self.fetch(sgFields)
 
-    self._lock()
+    result = {}
 
-    try:
-      # First check if any fields are summary expression fields.
-      # They may validate some of the other fields.
-      expressionFields = []
+    for field in sgFields:
+      fieldObj = self.field(field)
 
-      sgFields2 = []
+      if fieldObj == None:
+        continue
 
-      for field in sgFields:
-        fieldObj = self.field(field)
+      result[field] = fieldObj.value()
 
-        if fieldObj == None:
-          raise RuntimeError('no field named "%s"' % field)
-
-        if fieldObj.returnType() == ShotgunORM.SgField.RETURN_TYPE_SUMMARY:
-          expressionFields.append(fieldObj)
-        else:
-          sgFields2.append(fieldObj)
-
-      result = {}
-
-      # Get the summary expression fields first!
-      if len(expressionFields) >= 1:
-        for field in expressionFields:
-          result[field.name()] = field.value()
-
-      sgconnection = self.session().connection().connection()
-
-      queryFields = []
-
-      exists = self.exists()
-
-      for field in sgFields2:
-        # If the field is valid use its value, if the Entity does not exist
-        # use its default value.
-        if field.isValid() or not exists:
-          result[field.name()] = field.value()
-        else:
-          queryFields.append(field.name())
-
-      if len(queryFields) >= 1:
-        self._fetch(queryFields)
-
-        for field in queryFields:
-          result[field] = self.field(field).value()
-
-      return result
-    except:
-      raise
-    finally:
-      self._release()
+    return result
 
   def hasField(self, sgField):
     '''
@@ -786,12 +822,27 @@ class SgEntity(object):
 
     return self.__classinfo__
 
+  def isCommitting(self):
+    '''
+    Returns True if the Entity is currently commiting to Shotgun.
+    '''
+
+    return self._isCommitting
+
   def isCustom(self):
     '''
     Returns True if the Entity is a custom Shotgun entity, example CustomEntity01.
     '''
 
     return self.info().isCustom()
+
+  def isFetching(self):
+    '''
+    Returns True if the Entity is currently retrieving field values from the
+    Shotgun database.
+    '''
+
+    return self._isFetching
 
   def label(self):
     '''
@@ -855,10 +906,7 @@ class SgEntity(object):
       for field in sgFields:
         fieldObj = self.field(field)
 
-        if fieldObj == None:
-          continue
-
-        if not fieldObj.hasUpdate():
+        if fieldObj == None or fieldObj.hasUpdate():
           continue
 
         fieldObj.invalidate()
@@ -866,8 +914,6 @@ class SgEntity(object):
         result = True
 
       return result
-    except:
-      raise
     finally:
       self._release()
 
@@ -1025,54 +1071,17 @@ class SgEntity(object):
       elif not isinstance(sgFields, (list, set, tuple)):
         raise TypeError('expected a list for sgFields, got "%s"' % sgFields.__name__)
 
-    sgFields = set(sgFields)
+    self.fetch(sgFields)
 
     result = {}
-
-    if len(sgFields) <= 0:
-      return result
-
-    # First check if any fields are summary expression fields.
-    # They may validate some of the other fields.
-    expressionFields = []
-
-    sgFields2 = []
 
     for field in sgFields:
       fieldObj = self.field(field)
 
       if fieldObj == None:
-        raise RuntimeError('no field named "%s"' % field)
+        continue
 
-      if fieldObj.returnType() == ShotgunORM.SgField.RETURN_TYPE_SUMMARY:
-        expressionFields.append(fieldObj)
-      else:
-        sgFields2.append(fieldObj)
-
-    # Get the summary expression fields first!
-    if len(expressionFields) >= 1:
-      for field in expressionFields:
-        result[field.name()] = field.toFieldData()
-
-    sgconnection = self.session().connection().connection()
-
-    queryFields = []
-
-    exists = self.exists()
-
-    for field in sgFields2:
-      # If the field is valid use its value, if the Entity does not exist
-      # use its default value.
-      if field.isValid() or not exists:
-        result[field.name()] = field.toFieldData()
-      else:
-        queryFields.append(field.name())
-
-    if len(queryFields) >= 1:
-      self._fetch(queryFields)
-
-      for field in queryFields:
-        result[field] = self.field(field).toFieldData()
+      result[field] = field.toFieldData()
 
     return result
 
@@ -1099,21 +1108,26 @@ class SgEntity(object):
 
     sgFields = set(sgFields)
 
-    result = {}
+    self._lock()
 
-    if len(sgFields) <= 0:
+    try:
+      result = {}
+
+      if len(sgFields) <= 0:
+        return result
+
+      for field in sgFields:
+        fieldObj = self.field(field)
+
+        if fieldObj == None:
+          continue
+
+        if fieldObj.hasUpdate():
+          result[field] = fieldObj.toFieldData()
+
       return result
-
-    for field in sgFields:
-      fieldObj = self.field(field)
-
-      if fieldObj == None:
-        raise RuntimeError('no field named "%s"' % field)
-
-      if fieldObj.hasUpdate():
-        result[field] = fieldObj.toFieldData()
-
-    return result
+    finally:
+      self._release()
 
   @property
   def type(self):
