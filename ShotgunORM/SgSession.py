@@ -106,15 +106,18 @@ class SgSession(object):
 
     '''
 
-    for key, value in sgEntities.items():
-      ShotgunORM.LoggerSession.debug('%(session)s._createEntitiesThread(...)', {'session': self.__repr__()})
-      ShotgunORM.LoggerSession.debug('    * EntityType: %(entityType)s', {'entityType': key})
-      ShotgunORM.LoggerSession.debug('    * ids: %(ids)s', {'ids': value.keys()})
+    try:
+      for key, value in sgEntities.items():
+        ShotgunORM.LoggerSession.debug('%(session)s._createEntitiesThread(...)', {'session': self.__repr__()})
+        ShotgunORM.LoggerSession.debug('    ** EntityType: %(entityType)s', {'entityType': key})
+        ShotgunORM.LoggerSession.debug('    ** ids: %(ids)s', {'ids': value.keys()})
 
-      for entity in value.values():
-        entity._lock()
+        for entity in value.values():
+          entity._lock()
 
-    event.set()
+          entity._isFetching = True
+    finally:
+      event.set()
 
     connection = self.connection()
 
@@ -130,7 +133,7 @@ class SgSession(object):
           else:
             defaultFields = list(connection.defaultEntityQueryFields(key))
 
-        ShotgunORM.LoggerSession.debug('    * sgFields: %(sgFields)s', {'sgFields': defaultFields})
+        ShotgunORM.LoggerSession.debug('    ** sgFields: %(sgFields)s', {'sgFields': defaultFields})
 
         if defaultFields == None or len(defaultFields) <= 0:
           for entity in value.values():
@@ -155,13 +158,17 @@ class SgSession(object):
 
           entity._updateFields(e, setValue=True, skipValid=True, ignoreWithUpdates=True)
 
+          entity._isFetching = False
+
           entity._release()
 
-          ShotgunORM.LoggerSession.debug('    * releasing: %(id)s', {'id': entity.id})
+          ShotgunORM.LoggerSession.debug('    ** releasing: %(entity)s', {'entity': entity})
     except:
       for key, value in sgEntities.items():
         for entity in value.values():
           try:
+            entity._isFetching = False
+
             entity._release()
           except:
             pass
@@ -821,6 +828,10 @@ class SgSessionCached(SgSession):
 
           if not pull:
             noPull.append(entity.id)
+          else:
+            entity._lock()
+
+            entity._isFetching = True
 
         defaultFields[key] = list(pullFields)
 
@@ -828,11 +839,22 @@ class SgSessionCached(SgSession):
           for n in noPull:
             del sgEntities[key][n]
 
-        if len(value) <= 0:
+        if len(sgEntities[key]) <= 0:
           del sgEntities[key]
 
         ShotgunORM.LoggerSession.debug('    ** ids: %(ids)s', {'ids': value.keys()})
         ShotgunORM.LoggerSession.debug('    ** sgFields: %(sgFields)s', {'sgFields': defaultFields[key]})
+    except:
+      for key, value in sgEntities.items():
+        for entity in value.values():
+          try:
+            entity._isFetching = False
+
+            entity._release()
+          except:
+            pass
+
+      raise
     finally:
       event.set()
 
@@ -857,7 +879,11 @@ class SgSessionCached(SgSession):
 
         entity._updateFields(e, setValue=True, skipValid=True, ignoreWithUpdates=True)
 
-        ShotgunORM.LoggerSession.debug('    ** releasing: %(id)s', {'id': entity.id})
+        entity._isFetching = False
+
+        entity._release()
+
+        ShotgunORM.LoggerSession.debug('    ** releasing: %(entity)s', {'entity': entity})
 
   def clearCache(self, sgEntityTypes=None):
     '''
