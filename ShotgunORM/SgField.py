@@ -483,9 +483,10 @@ class SgField(object):
     '''
 
     ShotgunORM.LoggerEntityField.debug('%(field)s.fetch()', {'field': self.__repr__()})
-    ShotgunORM.LoggerEntityField.debug('    * thread: %(thread)s', {'thread': thread})
 
     if thread:
+      ShotgunORM.LoggerEntityField.debug('    * thread: %(thread)s', {'thread': thread})
+
       t = threading.Thread(target=self.fetch)
 
       t.start()

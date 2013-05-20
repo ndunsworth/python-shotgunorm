@@ -669,9 +669,10 @@ class SgEntity(object):
 
     ShotgunORM.LoggerEntity.debug('%(entity)s.fetch()', {'entity': self.__repr__()})
     ShotgunORM.LoggerEntity.debug('    * requested: %(sgFields)s', {'sgFields': sgFields})
-    ShotgunORM.LoggerEntity.debug('    * thread: %(thread)s', {'thread': thread})
 
     if thread:
+      ShotgunORM.LoggerEntity.debug('    * thread: %(thread)s', {'thread': thread})
+
       t = threading.Thread(self.fetch, args=sgFields)
 
       t.start()
@@ -986,8 +987,6 @@ class SgEntity(object):
           count += 1
 
         return count >= 1
-    except:
-      raise
     finally:
       self._release()
 
