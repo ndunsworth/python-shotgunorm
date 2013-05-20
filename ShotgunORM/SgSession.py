@@ -305,10 +305,14 @@ class SgSession(object):
       for entity in requests:
         entity._lock()
 
+        entity._isCommitting = True
+
         entityBatchData = entity.toBatchFieldData()
 
         if entityBatchData == None:
           batchResult.append([entity, None])
+
+          entity._isCommitting = False
 
           entity._release()
 
@@ -355,6 +359,8 @@ class SgSession(object):
           ShotgunORM.onEntityCommit(self, ShotgunORM.COMMIT_TYPE_UPDATE)
     finally:
       for entity in sgBatchRequestEntities:
+        entity._isCommitting = False
+
         entity._release()
 
     return batchResult
@@ -418,12 +424,16 @@ class SgSession(object):
 
     sgEntity._lock()
 
+    sgEntity._isCommitting = True
+
     try:
       if not sgEntity.exist():
         raise RuntimeError('unable to delete a node which does not exist in Shotgun')
 
       result = self.connection().connection().delete(sgEntity.type, sgEntity['id'])
     finally:
+      sgEntity._isCommitting = False
+
       sgEntity._release()
 
     if result:
