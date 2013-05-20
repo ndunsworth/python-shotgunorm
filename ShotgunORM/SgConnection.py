@@ -127,6 +127,7 @@ class SgConnection(object):
     self._schema = None
     self._factory = None
     self._fieldQueryDefaults = sgQueryTemplate
+    self._fieldQueryDefaultsFallback = 'default'
 
     schemas = ShotgunORM.SgSchema.__schemas__
 
@@ -175,7 +176,8 @@ class SgConnection(object):
 
     result = schema.defaultEntityQueryFields(
       self.fieldQueryTemplate(),
-      schema.entityApiName(sgEntityType)
+      schema.entityApiName(sgEntityType),
+      self.fieldQueryTemplateFallback()
     )
 
     if result == set(['all']):
@@ -191,6 +193,13 @@ class SgConnection(object):
     '''
 
     return self._fieldQueryDefaults
+
+  def fieldQueryTemplateFallback(self):
+    '''
+    Returns the name of the fallback template used for default field queries.
+    '''
+
+    return self._fieldQueryDefaultsFallback
 
   def disconnect(self):
     '''
@@ -259,6 +268,17 @@ class SgConnection(object):
       raise TypeError('expected a str for sgQueryTemplate, got %s' % type(sgQueryTemplate).__name__)
 
     self._fieldQueryDefaults = sgQueryTemplate
+
+  def setFieldQueryTemplateFallback(self, sgQueryTemplate):
+    '''
+    Sets the connections default field query template fallback.
+
+    Args:
+      * (str) sgQueryTemplate:
+        Name of the query template.
+    '''
+
+    self._fieldQueryDefaultsFallback = sgQueryTemplate
 
   def url(self, openInBrowser=False):
     '''

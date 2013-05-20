@@ -114,10 +114,8 @@ class SgFieldInfo(object):
     self._valueTypes = sgFieldAttribs['value_types']
     self._validValues = sgFieldAttribs['valid_values']
 
-    self._constructor = SgField.__fieldclasses__.get(self._returnType, None)
-
   @classmethod
-  def fromSg(self, sgFieldName, sgSchema):
+  def fromSg(self, sgEntityName, sgEntityLabel, sgFieldName, sgSchema):
     '''
     Returns a new SgFieldInfo that is constructed from the arg "sgSchema".
     '''
@@ -170,7 +168,7 @@ class SgFieldInfo(object):
     return self(data)
 
   @classmethod
-  def fromXML(self, sgXmlElement):
+  def fromXML(self, sgEntityName, sgEntityLabel, sgXmlElement):
     '''
     Returns a new SgFieldInfo that is constructed from the arg "sgXmlElement".
     '''
@@ -204,20 +202,6 @@ class SgFieldInfo(object):
       data['valid_values'] = data['valid_values'].split(',')
 
     return self(data)
-
-  def constructor(self):
-    '''
-    Return the fields constructor.
-    '''
-
-    return self._constructor
-
-  def create(self, parentEntity):
-    '''
-    Creates a new SgField based off the info obj.
-    '''
-
-    return self.constructor()(parentEntity, self)
 
   def defaultValue(self):
     '''
@@ -378,14 +362,18 @@ class SgField(object):
   RETURN_TYPE_INT = 8
   RETURN_TYPE_LIST = 9
   RETURN_TYPE_MULTI_ENTITY = 10
-  RETURN_TYPE_STATUS_LIST = 11
-  RETURN_TYPE_SUMMARY = 12
-  RETURN_TYPE_TAG_LIST = 13
-  RETURN_TYPE_TEXT = 14
-  RETURN_TYPE_URL = 15
+  RETURN_TYPE_SERIALIZABLE = 11
+  RETURN_TYPE_STATUS_LIST = 12
+  RETURN_TYPE_SUMMARY = 13
+  RETURN_TYPE_TAG_LIST = 14
+  RETURN_TYPE_TEXT = 15
+  RETURN_TYPE_URL = 16
 
   __fieldclasses__ = {
-    RETURN_TYPE_UNSUPPORTED: None
+    'default': {
+      RETURN_TYPE_UNSUPPORTED: None
+    },
+    'entities': {}
   }
 
   __profiler__ = SgFieldQueryProfiler()
@@ -419,20 +407,6 @@ class SgField(object):
     '''
 
     self.__fieldclasses__[sgFieldReturnType] = sgFieldClass
-
-  def _fetch(self):
-    '''
-    Internal function do not call!
-
-    SgField.value() calls this when the field is not valid.  Subclasses can
-    override this function to define how to retrieve their value.
-
-    Default function calls _fetch() on the parent Entity.
-
-    For an example of a custom fetch see the SgFieldExpression class.
-    '''
-
-    self.parentEntity()._fetch([self.name()])
 
   def defaultValue(self):
     '''
@@ -480,6 +454,46 @@ class SgField(object):
     result = session.find('EventLogEntry', filters, order=order, limit=sgRecordLimit)
 
     return result
+
+  def _fetch(self):
+    '''
+    Internal function do not call!
+
+    SgField.value() calls this when the field is not valid.  Subclasses can
+    override this function to define how to retrieve their value.
+
+    Default function calls fetch() on the parent Entity.
+
+    If you do not call fetch() on the parent Entity you must lock the parent
+    down first before setting this._value.
+
+    For an example of a custom fetch see the SgFieldSummary class.
+    '''
+
+    return self.parentEntity().fetch([self.name()])
+
+  def fetch(self, thread=False):
+    '''
+    Retrieves the fields value from Shotgun.
+
+    Args:
+      * (bool) thread:
+        Forks the call to Shotgun so this returns immediately.  Returns the
+        Thread object.
+    '''
+
+    ShotgunORM.LoggerEntityField.debug('%(field)s.fetch()', {'field': self.__repr__()})
+
+    if thread:
+      ShotgunORM.LoggerEntityField.debug('    * thread: %(thread)s', {'thread': thread})
+
+      t = threading.Thread(target=self.fetch)
+
+      t.start()
+
+      return t
+
+    return self._fetch()
 
   def _fromFieldData(self, sgData):
     '''
@@ -543,13 +557,20 @@ class SgField(object):
     Do not call this esp in a threaded env unless you know what you are doing!
     '''
 
-    # You must not invalidate an ID knob!
-    if self.name() == 'id':
-      return
+    parent = self.parentEntity()
 
-    self._value = None
-    self._hasCommit = False
-    self._valid = False
+    parent._lock()
+
+    try:
+      # You must not invalidate an ID knob!
+      if self.name() == 'id':
+        return
+
+      self._value = None
+      self._hasCommit = False
+      self._valid = False
+    finally:
+      parent._release()
 
   def isCustom(self):
     '''
@@ -696,47 +717,26 @@ class SgField(object):
     Returns the value of the Entity field formated for Shotgun.
     '''
 
-    parent = self.parentEntity()
-
-    parent._lock()
-
-    try:
-      if self.isValid() or self.name() == 'id':
-        return self._toFieldData()
-
-      self._fetch()
-
+    if self.isValid() or self.name() == 'id':
       return self._toFieldData()
-    finally:
-      parent._release()
+
+    self.fetch()
+
+    return self._toFieldData()
 
   def value(self):
     '''
     Returns the value of the Entity field.
-
-    Note:
-    This syncs with Shotgun if value() has not yet been called.  Syncing will
-    always occur if the parent SgEntity the field belongs to has field caching
-    turned off.
     '''
 
-    parent = self.parentEntity()
-
-    parent._lock()
-
-    try:
-      if self.isValid() or self.name() == 'id':
-        return self._value
-
-      # Only fetch if the parent Entity exists.
-      if parent.exists():
-        self._fetch()
-
-      self.__profiler__.profile(self)
-
+    if self.isValid() or self.name() == 'id':
       return self._value
-    finally:
-      parent._release()
+
+    self.fetch()
+
+    self.__profiler__.profile(self)
+
+    return self._value
 
   def validValues(self):
     '''
@@ -770,6 +770,7 @@ FIELD_RETURN_TYPES = {
   'password': SgField.RETURN_TYPE_TEXT,
   'percent': SgField.RETURN_TYPE_INT,
   'number': SgField.RETURN_TYPE_INT,
+  'serializable': SgField.RETURN_TYPE_SERIALIZABLE,
   'status_list': SgField.RETURN_TYPE_STATUS_LIST,
   'summary': SgField.RETURN_TYPE_SUMMARY,
   'tag_list': SgField.RETURN_TYPE_TAG_LIST,

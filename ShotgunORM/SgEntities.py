@@ -31,6 +31,8 @@ __all__ = [
   'SgBanner',
   'SgHumanUser',
   'SgNote',
+  'SgPhase',
+  'SgTask',
   'SgTicket',
   'SgVersion'
 ]
@@ -44,6 +46,7 @@ import smtplib
 
 # This module imports
 from SgEntity import SgEntity
+from SgField import SgField
 
 class SgApiUser(SgEntity):
   '''
@@ -102,7 +105,7 @@ class SgHumanUser(SgEntity):
 
       ccEmail = i['email']
 
-      if ccEmail == '' or ccEmail.isspace():
+      if ccEmail == None or ccEmail == '' or ccEmail.isspace():
         raise RuntimeError('HumanUser %s\'s email field is emtpy' % i['name'])
 
       ccEmails.append(ccEmail)
@@ -160,6 +163,64 @@ class SgNote(SgEntity):
   '''
 
   pass
+
+# Fix for the lame ass return type "color2".  See ShotgunORM.SgFieldColor2 for more
+# information on this lovely mess.
+class SgPhase(SgEntity):
+  '''
+  Class that represents a Phase Entity.
+  '''
+
+  def _buildFields(self, sgFieldInfos):
+    '''
+    Subclass portion of SgEntity.buildFields().
+
+    Note:
+    Do not call this directly!
+    '''
+
+    fieldClasses = SgField.__fieldclasses__
+
+    for field in sgFieldInfos:
+      fieldName = field.name()
+
+      newFieldCls = None
+
+      if fieldName == 'color':
+        newFieldCls = fieldClasses.get(SgField.RETURN_TYPE_COLOR2, None)
+      else:
+        newFieldCls = fieldClasses.get(field.returnType(), None)
+
+      self._fields[fieldName] = newFieldCls(self, field)
+
+# Fix for the lame ass return type "color2".  See ShotgunORM.SgFieldColor2 for more
+# information on this lovely mess.
+class SgTask(SgEntity):
+  '''
+  Class that represents a Task Entity.
+  '''
+
+  def _buildFields(self, sgFieldInfos):
+    '''
+    Subclass portion of SgEntity.buildFields().
+
+    Note:
+    Do not call this directly!
+    '''
+
+    fieldClasses = SgField.__fieldclasses__
+
+    for field in sgFieldInfos:
+      fieldName = field.name()
+
+      newFieldCls = None
+
+      if fieldName == 'color':
+        newFieldCls = fieldClasses.get(SgField.RETURN_TYPE_COLOR2, None)
+      else:
+        newFieldCls = fieldClasses.get(field.returnType(), None)
+
+      self._fields[fieldName] = newFieldCls(self, field)
 
 class SgTicket(SgEntity):
   '''
@@ -317,8 +378,6 @@ class SgVersion(SgEntity):
           ]
         )
 
-    project = self.toFieldData(['project'])['project']
-
     searchFilters = [
       ['code', 'is', newVersion],
     ]
@@ -328,11 +387,11 @@ class SgVersion(SgEntity):
         [
           'project',
           'is',
-          self.toFieldData(['project'])['project']
+          self.field('project').toFieldData()
         ]
       )
 
-    return self.session().findOne('Version', searchFilters, ['code', 'project'])
+    return self.session().findOne('Version', searchFilters, ['default', 'code', 'project'])
 
   def isSubVersioned(self):
     '''
@@ -424,14 +483,14 @@ class SgVersion(SgEntity):
         [
           'project',
           'is',
-          self.toFieldData(['project'])['project']
+          self.field('project').toFieldData()
         ]
       )
 
     if self.exists():
       searchFilters.append(['id', 'is_not', self['id']])
 
-    return self.session().find('Version', searchFilters, ['code', 'project'])
+    return self.session().find('Version', searchFilters, ['default', 'code', 'project'])
 
   def otherVersions(self, ignoreProject=False):
     '''
@@ -448,8 +507,6 @@ class SgVersion(SgEntity):
     if search == None:
       return []
 
-    project = self.toFieldData(['project'])['project']
-
     searchFilters = [
       ['code', 'starts_with', name[:search.span()[0] + 2]],
     ]
@@ -459,14 +516,14 @@ class SgVersion(SgEntity):
         [
           'project',
           'is',
-          self.toFieldData(['project'])['project']
+          self.field('project').toFieldData()
         ]
       )
 
     if self.exists():
       searchFilters.append(['id', 'is_not', self['id']])
 
-    return self.session().find('Version', searchFilters, ['code', 'project'])
+    return self.session().find('Version', searchFilters, ['default', 'code', 'project'])
 
   def subVersion(self, subVersion, ignoreProject=False):
     '''
@@ -507,8 +564,6 @@ class SgVersion(SgEntity):
     if search == None or search.groups()[3] == None:
       return []
 
-    project = self.toFieldData(['project'])['project']
-
     searchFilters = [
       ['code', 'starts_with', name[:search.spans()[3][0]]],
     ]
@@ -518,11 +573,11 @@ class SgVersion(SgEntity):
         [
           'project',
           'is',
-          self.toFieldData(['project'])['project']
+          self.field('project').toFieldData()
         ]
       )
 
-    return self.session().find('Version', searchFilters, ['code', 'project'])
+    return self.session().find('Version', searchFilters, ['default', 'code', 'project'])
 
   def version(self, version, ignoreProject=False):
     '''
@@ -566,8 +621,6 @@ class SgVersion(SgEntity):
     if search == None:
       return []
 
-    project = self.toFieldData(['project'])['project']
-
     searchFilters = [
       ['code', 'starts_with', name[:search.span()[0] + 2]],
     ]
@@ -577,8 +630,8 @@ class SgVersion(SgEntity):
         [
           'project',
           'is',
-          self.toFieldData(['project'])['project']
+          self.field('project').toFieldData()
         ]
       )
 
-    return self.session().find('Version', searchFilters, ['code', 'project'])
+    return self.session().find('Version', searchFilters, ['default', 'code', 'project'])

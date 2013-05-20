@@ -179,10 +179,12 @@ class SgFieldColor2(ShotgunORM.SgField):
         return None
 
       if self._value == self._linkString:
-        try:
-          return self.parentEntity()[self._linkField]['color']
-        except:
+        fieldObj = self.parentEntity().field(self._linkField)
+
+        if fieldObj == None:
           return None
+
+        return fieldObj.value(sgFields=['color'])
       else:
         s = self._value.split(',')
 
@@ -334,7 +336,7 @@ class SgFieldEntity(ShotgunORM.SgField):
   Entity field that stores a link to another Entity.
   '''
 
-  def value(self):
+  def value(self, sgFields=None):
     result = super(SgFieldEntity, self).value()
 
     if result == None:
@@ -342,11 +344,10 @@ class SgFieldEntity(ShotgunORM.SgField):
 
     session = self.parentEntity().session()
 
-    return session._createEntity(
-      result['type'],
-      result,
-      list(session.connection().defaultEntityQueryFields(result['type']))
-    )
+    return session._createEntities(
+      [result],
+      sgFields={result['type']: sgFields}
+    )[0]
 
   def _setValue(self, sgData):
     if sgData == None:
@@ -356,7 +357,7 @@ class SgFieldEntity(ShotgunORM.SgField):
 
       return result
 
-    if not isinstance(sgData, SgEntity):
+    if not isinstance(sgData, ShotgunORM.SgEntity):
       raise TypeError('%s invalid value type "%s", expected a SgEntity' % (self.__repr__(), type(sgData).__name__))
 
     valueTypes = self.valueTypes()
@@ -428,15 +429,15 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
   Example: [Entity01, Entity02, ...]
   '''
 
-  def value(self):
+  def value(self, sgFields=None):
     value = super(SgFieldEntityMulti, self).value()
 
-    if value == None:
-      return None
+    if value in [None, []]:
+      return value
 
     session = self.parentEntity().session()
 
-    result = session._createEntities(value)
+    result = session._createEntities(value, sgFields=sgFields)
 
     return result
 
@@ -448,13 +449,13 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
 
       return result
 
-    if isinstance(sgData, SgEntity):
+    if isinstance(sgData, ShotgunORM.SgEntity):
       sgData = [sgData]
     elif not isinstance(sgData, list):
       raise TypeError('%s invalid value type "%s", expected a SgEntity or list' % (self.__repr__(), type(sgData).__name__))
     else:
       for i in sgData:
-        if not isinstance(i, SgEntity):
+        if not isinstance(i, ShotgunORM.SgEntity):
           raise TypeError('%s invalid value type "%s", expected a SgEntity' % (self.__repr__(), type(i).__name__))
 
     valueTypes = self.valueTypes()
@@ -669,6 +670,53 @@ class SgFieldSelectionList(ShotgunORM.SgField):
 
   def _toFieldData(self):
     return self._value
+
+class SgFieldSerializable(ShotgunORM.SgField):
+  '''
+  Entity field that stores serializable data.
+  '''
+
+  def _setValue(self, sgData):
+    if sgData != None:
+      if not isinstance(sgData, dict):
+        raise TypeError('%s invalid value type "%s", expected a dict' % (self.__repr__(), type(sgData).__name__))
+
+      sgData = copy.deepcopy(sgData)
+
+    if sgData == self._value:
+      return False
+
+    self._value = sgData
+
+    return True
+
+  def _fromFieldData(self, sgData):
+    if sgData != None:
+      if not isinstance(sgData, dict):
+        raise ValueError('%s invalid data from Shotgun "%s", expected a dict' % (self.__repr__(), sgData))
+
+      sgData = copy.deepcopy(sgData)
+
+    if sgData == self._value:
+      return False
+
+    self._value = sgData
+
+    return True
+
+  def _toFieldData(self):
+    if self._value == None:
+      return None
+
+    return copy.deepcopy(self._value)
+
+  def value(self):
+    result = super(SgFieldSerializable, self).value()
+
+    if result == None:
+      return None
+
+    return copy.deepcopy(result)
 
 class SgFieldSummary(ShotgunORM.SgField):
   '''
@@ -895,7 +943,7 @@ class SgFieldSummary(ShotgunORM.SgField):
     elif self._summaryType == 'record_count':
       # Dont use the orm for this search, waste to build the classes when all
       # we are doing is getting a len on the search result.
-      sgSearch = self.parentEntity().session().connection().connection().find(self.entityType(), searchExp)
+      sgSearch = self.parentEntity().session()._sg_find(self.entityType(), searchExp)
 
       self._value = len(sgSearch)
     elif self._summaryType == 'count':
@@ -914,7 +962,7 @@ class SgFieldSummary(ShotgunORM.SgField):
 
       # Dont use the orm for this search, waste to build the classes when all
       # we are doing is getting a len on the search result.
-      sgSearch = self.parentEntity().session().connection().connection().find(self.entityType(), searchExp, fields=[])
+      sgSearch = self.parentEntity().session()._sg_find(self.entityType(), searchExp, fields=[])
 
       self._value = len(sgSearch)
 
@@ -1390,6 +1438,7 @@ ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_IMAGE, SgFi
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_INT, SgFieldInt)
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_LIST, SgFieldSelectionList)
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_MULTI_ENTITY, SgFieldEntityMulti)
+ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_SERIALIZABLE, SgFieldSerializable)
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_STATUS_LIST, SgFieldSelectionList)
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_SUMMARY, SgFieldSummary)
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_TAG_LIST, SgFieldTagList)

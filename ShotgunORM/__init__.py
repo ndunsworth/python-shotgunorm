@@ -25,6 +25,7 @@
 #
 __all__ = [
   'SHOTGUN_API',
+  'SHOTGUN_API_LOCK',
   'Entities',
   'SgConnection',
   'SgEntity',
@@ -41,6 +42,12 @@ __all__ = [
 ]
 
 __version__ = '1.0v1'
+
+import threading
+
+SHOTGUN_API_LOCK = threading.RLock()
+
+del threading
 
 ################################################################################
 #
