@@ -16,5 +16,5 @@ Special thanks
 
 The ShotgunORM project is also very grateful to:
 
-* **Scott Ballard** <scott@scottballard.net> Consultant and beta tester.
+* **Scott Ballard** <scott@scottballard.net> Beta tester.
 * **Eli Rarey** Beta tester

@@ -58,6 +58,10 @@ class SgApiUser(SgEntity):
 class SgAppWelcome(SgEntity):
   '''
   Class that represents a AppWelcome Entity.
+
+  This Entity does nothing and is used by HumanUser Entities.
+
+  This class is just a place holder.
   '''
 
   pass
@@ -130,9 +134,11 @@ class SgHumanUser(SgEntity):
 
     serverSmtp.sendmail(emailInfo['From'], [emailInfo['TO']] + ccEmails, emailInfo.as_string())
 
-  def sendInstantMessage(self, subject, msg):
+  def sendInstantMessage(self, msg):
     '''
-    Sens the user an instant message.
+    Sends the user an instant message.
+
+    Default function raises a RuntimeError of "not implemented".
     '''
 
     raise RuntimeError('not implemented')
@@ -146,7 +152,7 @@ class SgHumanUser(SgEntity):
         Addtional search expression to append when finding Tasks.
 
       * extrSgFilterArgs:
-        List of args passed to the session.search() function.
+        List of args passed to the connection.search() function.
     '''
 
     searchExp = 'task_assignees in [%s]' % self.toEntityFieldData()
@@ -155,7 +161,7 @@ class SgHumanUser(SgEntity):
       if len(extraSgFilters) >= 1 and not extraSgFilters.isspace():
         searchExp += ' and ' + extraSgFilters
 
-    return self.session().search('Task', searchExp, sgSearchArgs=extraSgFilterArgs)
+    return self.connection().search('Task', searchExp, sgSearchArgs=extraSgFilterArgs)
 
 class SgNote(SgEntity):
   '''
@@ -179,19 +185,15 @@ class SgPhase(SgEntity):
     Do not call this directly!
     '''
 
+    colorFieldInfo = sgFieldInfos['color']
+
+    del sgFieldInfos['color']
+
     fieldClasses = SgField.__fieldclasses__
 
-    for field in sgFieldInfos:
-      fieldName = field.name()
+    self._fields['color'] = fieldClasses.get(SgField.RETURN_TYPE_COLOR2, None)(self, colorFieldInfo)
 
-      newFieldCls = None
-
-      if fieldName == 'color':
-        newFieldCls = fieldClasses.get(SgField.RETURN_TYPE_COLOR2, None)
-      else:
-        newFieldCls = fieldClasses.get(field.returnType(), None)
-
-      self._fields[fieldName] = newFieldCls(self, field)
+    super(SgPhase, self)._buildFields(sgFieldInfos)
 
 # Fix for the lame ass return type "color2".  See ShotgunORM.SgFieldColor2 for more
 # information on this lovely mess.
@@ -208,26 +210,23 @@ class SgTask(SgEntity):
     Do not call this directly!
     '''
 
+    colorFieldInfo = sgFieldInfos['color']
+
+    del sgFieldInfos['color']
+
     fieldClasses = SgField.__fieldclasses__
 
-    for field in sgFieldInfos:
-      fieldName = field.name()
+    self._fields['color'] = fieldClasses.get(SgField.RETURN_TYPE_COLOR2, None)(self, colorFieldInfo)
 
-      newFieldCls = None
+    super(SgTask, self)._buildFields(sgFieldInfos)
 
-      if fieldName == 'color':
-        newFieldCls = fieldClasses.get(SgField.RETURN_TYPE_COLOR2, None)
-      else:
-        newFieldCls = fieldClasses.get(field.returnType(), None)
-
-      self._fields[fieldName] = newFieldCls(self, field)
 
 class SgTicket(SgEntity):
   '''
   Class that represents a Ticket Entity.
   '''
 
-  def reply(self, sgMsg, sgUser=None, sgCommit=True):
+  def reply(self, sgMsg, sgUser=None, sgCommit=False):
     '''
     Creates a reply to the ticket.
 
@@ -241,13 +240,13 @@ class SgTicket(SgEntity):
     been published to Shotgun.  You must call commit() on the returned Entity.
     '''
 
-    session = self.session()
+    connection = self.connection()
 
     replyData = None
 
     if sgUser != None:
       if isinstance(sgUser, str):
-        user = session.findOne('HumanUser', [['name', 'is', sgUser]])
+        user = connection.findOne('HumanUser', [['name', 'is', sgUser]])
 
         if user == None:
           raise RuntimeError('unable to find HumanUser "%s"' % sgUser)
@@ -267,9 +266,47 @@ class SgTicket(SgEntity):
         'entity': self.toEntityFieldData(),
       }
 
-    result = session.create('Reply', replyData, sgCommit=sgCommit)
+    result = connection.create('Reply', replyData, sgCommit=sgCommit)
 
     return result
+
+  #def close(self, sgMsg=None, sgUser=None):
+  #  '''
+  #  Closes the ticket and adds a reply is the arg "sgMsg" is not None.
+  #  '''
+  #
+  #  with self:
+  #    fieldStatus = self.field('status')
+  #
+  #    fieldStatus.setValue('res')
+  #
+  #    if sgUser != None and sgMsg == None:
+  #      raise RuntimeError('arg "sgUser" specified without a message')
+  #
+  #    if sgUser != None:
+  #      if isinstance(sgUser, str):
+  #        user = sg.searchOne('HumanUser', 'name == "%s"' % sgUser)
+  #
+  #        if user == None:
+  #          raise RuntimeError('not able to find Shotgun user "%s"' % sgUser)
+  #
+  #        sgUser = user
+  #      elif isinstance(sgUser, SgEntity):
+  #        if not sgUser.type == 'HumanUser':
+  #          raise TypeError('invalid entity type "%s" expected a HumanUser' % sgUser.type)
+  #
+  #    if sgMsg != None:
+  #      if not isinstance(sgMsg, str):
+  #        raise TypeError('expected a str for "sgMsg" got %s' % sgMsg)
+  #
+  #      reply = self.connection().create('Reply', {
+  #        'content': sgMsg,
+  #      })
+  #
+  #      if sgUser != None:
+  #        reply['user'] = sgUser
+  #
+  #      batch.append(reply)
 
 class SgVersion(SgEntity):
   '''
@@ -279,6 +316,13 @@ class SgVersion(SgEntity):
   REGEXP_VER = re.compile(r'([_.]v)(\d+)(s(\d+))?$')
 
   def _changeVersion(self, value, doSub=False, valueIsVersion=False, ignoreProject=False):
+    self.sync(
+      ['code', 'project'],
+      ignoreValid=True,
+      ignoreWithUpdate=True,
+      backgroundPull=True
+    )
+
     name = self['code']
 
     if name == None or name == '':
@@ -391,7 +435,7 @@ class SgVersion(SgEntity):
         ]
       )
 
-    return self.session().findOne('Version', searchFilters, ['default', 'code', 'project'])
+    return self.connection().findOne('Version', searchFilters, ['default', 'code', 'project'])
 
   def isSubVersioned(self):
     '''
@@ -467,6 +511,13 @@ class SgVersion(SgEntity):
     Returns all sub-versions but not including this one.
     '''
 
+    self.sync(
+      ['code', 'project'],
+      ignoreValid=True,
+      ignoreWithUpdate=True,
+      backgroundPull=True
+    )
+
     name = self['code']
 
     search = self.REGEXP_VER.search(name)
@@ -490,7 +541,7 @@ class SgVersion(SgEntity):
     if self.exists():
       searchFilters.append(['id', 'is_not', self['id']])
 
-    return self.session().find('Version', searchFilters, ['default', 'code', 'project'])
+    return self.connection().find('Version', searchFilters, ['default', 'code', 'project'])
 
   def otherVersions(self, ignoreProject=False):
     '''
@@ -499,6 +550,13 @@ class SgVersion(SgEntity):
     Note:
     This is performs a Shotgun search for its return value.
     '''
+
+    self.sync(
+      ['code', 'project'],
+      ignoreValid=True,
+      ignoreWithUpdate=True,
+      backgroundPull=True
+    )
 
     name = self['code']
 
@@ -523,7 +581,7 @@ class SgVersion(SgEntity):
     if self.exists():
       searchFilters.append(['id', 'is_not', self['id']])
 
-    return self.session().find('Version', searchFilters, ['default', 'code', 'project'])
+    return self.connection().find('Version', searchFilters, ['default', 'code', 'project'])
 
   def subVersion(self, subVersion, ignoreProject=False):
     '''
@@ -557,6 +615,13 @@ class SgVersion(SgEntity):
     Returns all sub-versions.
     '''
 
+    self.sync(
+      ['code', 'project'],
+      ignoreValid=True,
+      ignoreWithUpdate=True,
+      backgroundPull=True
+    )
+
     name = self['code']
 
     search = self.REGEXP_VER.search(name)
@@ -577,7 +642,7 @@ class SgVersion(SgEntity):
         ]
       )
 
-    return self.session().find('Version', searchFilters, ['default', 'code', 'project'])
+    return self.connection().find('Version', searchFilters, ['default', 'code', 'project'])
 
   def version(self, version, ignoreProject=False):
     '''
@@ -614,6 +679,13 @@ class SgVersion(SgEntity):
     This is performs a Shotgun search for its return value.
     '''
 
+    self.sync(
+      ['code', 'project'],
+      ignoreValid=True,
+      ignoreWithUpdate=True,
+      backgroundPull=True
+    )
+
     name = self['code']
 
     search = self.REGEXP_VER.search(name)
@@ -634,4 +706,4 @@ class SgVersion(SgEntity):
         ]
       )
 
-    return self.session().find('Version', searchFilters, ['default', 'code', 'project'])
+    return self.connection().find('Version', searchFilters, ['default', 'code', 'project'])

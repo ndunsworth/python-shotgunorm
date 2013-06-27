@@ -25,6 +25,7 @@
 #
 
 __all__ = [
+  'COMMIT_TYPE_NONE',
   'COMMIT_TYPE_CREATE',
   'COMMIT_TYPE_DELETE',
   'COMMIT_TYPE_REVIVE',
@@ -32,15 +33,19 @@ __all__ = [
   'ON_ENTITY_COMMIT_CBS',
   'ON_ENTITY_CREATE_CBS',
   'ON_FIELD_CHANGED_CBS',
+  'ON_SCHEMA_CHANGED_CBS',
   'addOnEntityCommit',
   'addOnEntityCreate',
   'addOnFieldChanged',
+  'addOnSchemaChanged',
   'appendOnEntityCommit',
   'appendOnEntityCreate',
   'appendOnFieldChanged',
+  'appendOnSchemaChanged',
   'onEntityCommit',
   'onEntityCreate',
-  'onFieldChanged'
+  'onFieldChanged',
+  'onSchemaChanged'
 ]
 
 # Python imports
@@ -48,21 +53,32 @@ import os
 import socket
 
 # This module imports
-from ShotgunORM import LoggerCallback
+import ShotgunORM
 
-COMMIT_TYPE_CREATE = 0
-COMMIT_TYPE_DELETE = 1
-COMMIT_TYPE_REVIVE = 2
-COMMIT_TYPE_UPDATE = 3
+COMMIT_TYPE_NONE = 0
+COMMIT_TYPE_CREATE = 1
+COMMIT_TYPE_DELETE = 2
+COMMIT_TYPE_REVIVE = 3
+COMMIT_TYPE_UPDATE = 4
 
 def _defaultOnEntityCommit(sgEntity, sgCommitType):
-  LoggerCallback.debug('onEntityCommit: %s %d' % (sgEntity.__repr__(), sgCommitType))
+  ShotgunORM.LoggerCallback.debug('onEntityCommit: %s %d' % (sgEntity, sgCommitType))
 
 def _defaultOnEntityCreate(sgEntity):
-  LoggerCallback.debug('onEntityCreate: %s' % sgEntity.__repr__())
+  ShotgunORM.LoggerCallback.debug('onEntityCreate: %s' % sgEntity)
 
-def _defaultOnFieldChangedCb(sgEntityField):
-  LoggerCallback.debug('onFieldChanged: %s' % sgEntityField.__repr__())
+def _defaultOnFieldChanged(sgEntityField):
+  ShotgunORM.LoggerCallback.debug('onFieldChanged: %s' % sgEntityField)
+
+def _defaultOnSchemaChanged(sgSchema):
+  ShotgunORM.LoggerCallback.debug('onSchemaChanged: %s' % sgSchema)
+
+  url = sgSchema.url()
+
+  connections = ShotgunORM.SgConnection.__metaclass__.connections(url)
+
+  for connection in connections:
+    connection.schemaChanged()
 
 #def _defaultOnFieldChangedCb(sgEntityField):
 #  soc = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -107,7 +123,16 @@ ON_ENTITY_CREATE_CBS = {
 ON_FIELD_CHANGED_CBS = {
   '*': [
     {
-      'cb': _defaultOnFieldChangedCb,
+      'cb': _defaultOnFieldChanged,
+      'description': 'default_cb'
+    }
+  ]
+}
+
+ON_SCHEMA_CHANGED_CBS = {
+  '*': [
+    {
+      'cb': _defaultOnSchemaChanged,
       'description': 'default_cb'
     }
   ]
@@ -151,7 +176,10 @@ def appendOnEntityCommit(cb, filterName='*', description=''):
 
 def addOnEntityCreate(cb, filterName='*', description=''):
   '''
+  Adds the callback and places it at the front of the onEntityCreate callback
+  list.
 
+  This callback will be executed anytime an Entity object is created.
   '''
 
   if filterName in [None, '']:
@@ -169,7 +197,10 @@ def addOnEntityCreate(cb, filterName='*', description=''):
 
 def appendOnEntityCreate(cb, filterName='*', description=''):
   '''
+  Adds the callback and places it at the end of the onEntityCreate callback
+  list.
 
+  This callback will be executed anytime an Entity object is created.
   '''
 
   if filterName in [None, '']:
@@ -187,7 +218,10 @@ def appendOnEntityCreate(cb, filterName='*', description=''):
 
 def addOnFieldChanged(cb, filterName='*', description=''):
   '''
+  Adds the callback and places it at the front of the onFieldChanged callback
+  list.
 
+  This callback will be executed anytime an Entity objects field is modified.
   '''
 
   if filterName in [None, '']:
@@ -205,7 +239,10 @@ def addOnFieldChanged(cb, filterName='*', description=''):
 
 def appendOnFieldChanged(cb, filterName='*', description=''):
   '''
+  Adds the callback and places it at the end of the onFieldChanged callback
+  list.
 
+  This callback will be executed anytime an Entity objects field is modified.
   '''
 
   if filterName in [None, '']:
@@ -221,7 +258,49 @@ def appendOnFieldChanged(cb, filterName='*', description=''):
   except:
     ON_FIELD_CHANGED_CBS[filterName] = [data]
 
-def onEntityCommit(sgEntity, sgCommitType):
+def addOnSchemaChanged(cb, filterName='*', description=''):
+  '''
+  Adds the callback and places it at the front of the onSchemaChanged callback
+  list.
+
+  This callback will be executed anytime a schema object initializes or rebuilds.
+  '''
+
+  if filterName in [None, '']:
+    filterName = '*'
+
+  data = {
+    'cb': cb,
+    'description': description
+  }
+
+  try:
+    ON_SCHEMA_CHANGED_CBS[filterName].insert(0, data)
+  except:
+    ON_SCHEMA_CHANGED_CBS[filterName] = [data]
+
+def appendOnSchemaChanged(cb, filterName='*', description=''):
+  '''
+  Adds the callback and places it at the end of the onSchemaChanged callback
+  list.
+
+  This callback will be executed anytime a schema object initializes or rebuilds.
+  '''
+
+  if filterName in [None, '']:
+    filterName = '*'
+
+  data = {
+    'cb': cb,
+    'description': description
+  }
+
+  try:
+    ON_SCHEMA_CHANGED_CBS[filterName].append(data)
+  except:
+    ON_SCHEMA_CHANGED_CBS[filterName] = [data]
+
+def onEntityCommit(sgEntity, sgBatchData):
   '''
 
   '''
@@ -237,11 +316,12 @@ def onEntityCommit(sgEntity, sgCommitType):
   cbs = ON_ENTITY_COMMIT_CBS['*']
 
   for i in cbs:
-    i['cb'](sgEntity, sgCommitType)
+    i['cb'](sgEntity, sgBatchData)
 
 def onEntityCreate(sgEntity):
   '''
-
+  This function is called anytime an Entity object is created.  Not to be
+  confused with when an Entity is created in the Shotgun database.
   '''
 
   entityType = sgEntity.type
@@ -259,7 +339,13 @@ def onEntityCreate(sgEntity):
 
 def onFieldChanged(sgEntityField):
   '''
+  This function is called anytime an Entity fields value changes.
 
+  Called during:
+    1: When a field validates itself.
+    2: When a field is set to a new value.
+    3: When a field is set to cache data.
+    4: When a fields SgField.changed() function is called.
   '''
 
   entityFieldName = sgEntityField.parentEntity().type + '.' + sgEntityField.name()
@@ -274,3 +360,21 @@ def onFieldChanged(sgEntityField):
 
   for i in cbs:
     i['cb'](sgEntityField)
+
+def onSchemaChanged(sgSchema):
+  '''
+  Called whenever a SgSchema initializes or rebuilds.
+  '''
+
+  url = sgSchema.url()
+
+  if ON_SCHEMA_CHANGED_CBS.has_key(url):
+    cbs = ON_SCHEMA_CHANGED_CBS[url]
+
+    for i in cbs:
+      i['cb'](sgSchema)
+
+  cbs = ON_SCHEMA_CHANGED_CBS['*']
+
+  for i in cbs:
+    i['cb'](sgSchema)

@@ -24,6 +24,11 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 __all__ = [
+  '__version__',
+  'MAJOR_VERSION',
+  'MINOR_VERSION',
+  'RELEASE_VERSION',
+  'VERSION',
   'SHOTGUN_API',
   'SHOTGUN_API_LOCK',
   'Entities',
@@ -33,15 +38,26 @@ __all__ = [
   'SgEntityInfo',
   'SgField',
   'SgFieldInfo',
+  'SgQueryEngine',
   'SgSchema',
   'SgScriptField',
-  'SgSession',
+  'SgUserField',
   'parseFromLogicalOp',
   'parseToLogicalOp',
   'config'
 ]
 
-__version__ = '1.0v1'
+MAJOR_VERSION = 1
+MINOR_VERSION = 0
+RELEASE_VERSION = 1
+
+VERSION = '%(major)d.%(minor)dv%(release)d' % {
+  'major': MAJOR_VERSION,
+  'minor': MINOR_VERSION,
+  'release': RELEASE_VERSION
+}
+
+__version__ = VERSION
 
 import threading
 
@@ -79,14 +95,14 @@ from utils import *
 
 ################################################################################
 #
-# Import connection and schema related classes
+# Import schema, connection and engine related classes
 #
 ################################################################################
 
 from SgConnection import SgConnection
 from SgEntityClassFactory import SgEntityClassFactory
+from SgQueryEngine import SgQueryEngine
 from SgSchema import SgSchema
-from SgSession import SgSession, SgSessionCached
 
 ################################################################################
 #
@@ -95,7 +111,7 @@ from SgSession import SgSession, SgSessionCached
 ################################################################################
 
 from SgEntity import SgEntity, SgEntityInfo
-from SgField import SgField, SgFieldInfo
+from SgField import SgField, SgFieldInfo, SgUserField
 
 # Entities
 import SgEntities

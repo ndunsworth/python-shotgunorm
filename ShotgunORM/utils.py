@@ -135,15 +135,12 @@ def mkEntityString(sgEntity):
   if sgEntity.hasField('project'):
     result += '.Project'
 
-  id = sgEntity['id']
-
-  if id == None:
-    id = -1
+  iD = sgEntity['id']
 
   if sgEntity.isCustom():
-    result += '.%s(id:%d)' % (sgEntity.__classinfo__.label(), id)
+    result += '.%s(id:%d)' % (sgEntity.__classinfo__.label(), iD)
   else:
-    result += '.%s(id:%d)' % (sgEntity.type, id)
+    result += '.%s(id:%d)' % (sgEntity.type, iD)
 
   return result
 

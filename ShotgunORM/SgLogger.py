@@ -29,11 +29,11 @@ __all__ = [
   'LoggerCallback',
   'LoggerConnection',
   'LoggerEntity',
-  'LoggerEntityField',
+  'LoggerField',
   'LoggerFactory',
+  'LoggerQueryEngine',
   'LoggerSchema',
-  'LoggerScriptEngine',
-  'LoggerSession'
+  'LoggerScriptEngine'
 ]
 
 # Python imports
@@ -43,11 +43,11 @@ import os
 LoggerCallback = None
 LoggerConnection = None
 LoggerEntity = None
-LoggerEntityField = None
+LoggerField = None
 LoggerFactory = None
+LoggerQueryEngine = None
 LoggerSchema = None
 LoggerScriptEngine = None
-LoggerSession = None
 
 class SgLogger(logging.Logger):
   '''
@@ -59,12 +59,12 @@ class SgLogger(logging.Logger):
 
   SgCallbacks            debug: PY_SHOTGUNORM_SGCALLBACK_DEBUG=1
   SgConnection           debug: PY_SHOTGUNORM_SGCONNECTION_DEBUG=1
-  SgSchema               debug: PY_SHOTGUNORM_SGSCHEMA_DEBUG=1
-  SgEntityClassFactory   debug: PY_SHOTGUNORM_SGENTITYCLASSFACTORY_DEBUG=1
-  SgSession              debug: PY_SHOTGUNORM_SGSESSION_DEBUG=1
-  SgScriptEngine         debug: PY_SHOTGUNORM_SGENTITYFIELD_DEBUG=1
   SgEntity               debug: PY_SHOTGUNORM_SGENTITY_DEBUG=1
-  SgField                debug: PY_SHOTGUNORM_SGENTITYFIELD_DEBUG=1
+  SgEntityClassFactory   debug: PY_SHOTGUNORM_SGENTITYCLASSFACTORY_DEBUG=1
+  SgField                debug: PY_SHOTGUNORM_SGFIELD_DEBUG=1
+  SgQueryEngine          debug: PY_SHOTGUNORM_SGQUERYENGINE_DEBUG=1
+  SgSchema               debug: PY_SHOTGUNORM_SGSCHEMA_DEBUG=1
+  SgScriptEngine         debug: PY_SHOTGUNORM_SGSCRIPTENGINE_DEBUG=1
   '''
 
   def __init__(self, name, level=None):
@@ -90,9 +90,10 @@ class SgLogger(logging.Logger):
     self.addHandler(self._logStreamHandler)
 
 LoggerCallback = SgLogger('SgCallback')
+LoggerConnection = SgLogger('SgConnection')
 LoggerEntity = SgLogger('SgEntity')
-LoggerEntityField = SgLogger('SgField')
+LoggerField = SgLogger('SgField')
 LoggerFactory = SgLogger('SgEntityClassFactory')
+LoggerQueryEngine = SgLogger('SgQueryEngine')
 LoggerSchema = SgLogger('SgSchema')
 LoggerScriptEngine = SgLogger('SgScriptEngine')
-LoggerSession = SgLogger('SgSession')
