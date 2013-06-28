@@ -91,6 +91,20 @@ def formatSerializable(obj, indent=0, indentSize=2, indentChar=' '):
   '''
   Converts the serializeble list/dict into a user friendly string better than
   pretty print.
+
+  Args:
+    * (obj) obj:
+      Serializable Python object
+
+    * (int) indent:
+      Indentation level.
+
+    * (int) indentSize:
+      The string length of a single indent.  The arg "indentChar" is multiplied
+      by this value.
+
+    * (str) indentChar:
+      Char used to represent an indent.
   '''
 
   result = ''
@@ -149,13 +163,38 @@ def mkEntityFieldString(sgEntityField):
   Returns a string formatted for the Entity field.
   '''
 
-  result = mkEntityString(sgEntityField.parentEntity())
+  parent = sgEntityField.parentEntity()
 
-  result += '.Field("%s")' % sgEntityField.name()
+  result = ''
+
+  if parent == None:
+    result = '%s.Field("%s")' % (
+      type(sgEntityField).__name__,
+      sgEntityField.name()
+    )
+  else:
+    result = mkEntityString(sgEntityField.parentEntity())
+
+    result += '.Field("%s")' % sgEntityField.name()
 
   return result
 
 def mkIndent(indent, indentSize, indentChar):
+  '''
+  Returns a indentation string.
+
+  Args:
+    * (int) indent:
+      Indentation level.
+
+    * (int) indentSize:
+      The string length of a single indent.  The arg "indentChar" is multiplied
+      by this value.
+
+    * (str) indentChar:
+      Char used to represent an indent.
+  '''
+
   return (indentChar * indentSize) * indent
 
 def printSerializable(obj, indent=0, indentSize=2, indentChar=' '):
@@ -164,6 +203,20 @@ def printSerializable(obj, indent=0, indentSize=2, indentChar=' '):
   print.
 
   Useful for debuging logical operator search filters.
+
+  Args:
+    * (obj) obj:
+      Serializable Python object
+
+    * (int) indent:
+      Indentation level.
+
+    * (int) indentSize:
+      The string length of a single indent.  The arg "indentChar" is multiplied
+      by this value.
+
+    * (str) indentChar:
+      Char used to represent an indent.
   '''
 
-  print formatSerializable(obj)
+  print formatSerializable(obj, indent, indentSize, indentChar)
