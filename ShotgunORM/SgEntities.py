@@ -458,6 +458,122 @@ class SgVersion(SgEntity):
 
     return search != None
 
+  def latestSubVersion(self, ignoreProject=False):
+    '''
+    Returns the highest sub-version in Shotgun.
+
+    If no higher sub-version exists returns None.
+    '''
+
+    # Bail if not versioned!
+    if not self.isVersioned() or not self.isSubVersioned():
+      return None
+
+    self.sync(
+      ['code', 'project'],
+      ignoreValid=True,
+      ignoreWithUpdate=True,
+      backgroundPull=True
+    )
+
+    name = self['code']
+
+    search = self.REGEXP_VER.search(name)
+
+    startIndex = search.span()[0]
+
+    for n in search.groups()[0:2]:
+      startIndex += len(n)
+
+    searchFilters = [
+      ['code', 'starts_with', name[:startIndex]]
+    ]
+
+    if not ignoreProject:
+      searchFilters.append(
+        [
+          'project',
+          'is',
+          self.field('project').toFieldData()
+        ]
+      )
+
+    if self.exists():
+      searchFilters.append(['id', 'is_not', self['id']])
+
+    otherVersions = self.connection().find('Version', searchFilters, ['default', 'code', 'project'])
+
+    if len(otherVersions) <= 0:
+      return None
+
+    highestVer = None
+    highestVerInt = -1
+
+    for version in otherVersions:
+      v = version.versionNumber()
+
+      if v > highestVerInt:
+        highestVer = version
+        highestVerInt = v
+
+    return highestVer
+
+
+  def latestVersion(self, ignoreProject=False):
+    '''
+    Returns the highest version in Shotgun.
+
+    If no higher version exists returns None.
+    '''
+
+    # Bail if not versioned!
+    if not self.isVersioned():
+      return None
+
+    self.sync(
+      ['code', 'project'],
+      ignoreValid=True,
+      ignoreWithUpdate=True,
+      backgroundPull=True
+    )
+
+    name = self['code']
+
+    search = self.REGEXP_VER.search(name)
+
+    searchFilters = [
+      ['code', 'starts_with', name[:search.span()[0] + 2]]
+    ]
+
+    if not ignoreProject:
+      searchFilters.append(
+        [
+          'project',
+          'is',
+          self.field('project').toFieldData()
+        ]
+      )
+
+    if self.exists():
+      searchFilters.append(['id', 'is_not', self['id']])
+
+    otherVersions = self.connection().find('Version', searchFilters, ['default', 'code', 'project'])
+
+    if len(otherVersions) <= 0:
+      return None
+
+    highestVer = None
+    highestVerInt = -1
+
+    for version in otherVersions:
+      v = version.versionNumber()
+
+      if v > highestVerInt:
+        highestVer = version
+        highestVerInt = v
+
+    return highestVer
+
   def prevSubVersion(self, ignoreProject=False):
     '''
     Returns the Version Entity that is the previous sub-version of this one.
@@ -511,6 +627,10 @@ class SgVersion(SgEntity):
     Returns all sub-versions but not including this one.
     '''
 
+    # Bail if not versioned!
+    if not self.isVersioned() or not self.isSubVersioned():
+      return []
+
     self.sync(
       ['code', 'project'],
       ignoreValid=True,
@@ -522,11 +642,13 @@ class SgVersion(SgEntity):
 
     search = self.REGEXP_VER.search(name)
 
-    if search == None or search.groups()[3] == None:
-      return []
+    startIndex = search.span()[0]
+
+    for n in search.groups()[0:2]:
+      startIndex += len(n)
 
     searchFilters = [
-      ['code', 'starts_with', name[:search.spans()[3][0]]],
+      ['code', 'starts_with', name[:startIndex]]
     ]
 
     if not ignoreProject:
@@ -551,6 +673,10 @@ class SgVersion(SgEntity):
     This is performs a Shotgun search for its return value.
     '''
 
+    # Bail if not versioned!
+    if not self.isVersioned():
+      return []
+
     self.sync(
       ['code', 'project'],
       ignoreValid=True,
@@ -561,9 +687,6 @@ class SgVersion(SgEntity):
     name = self['code']
 
     search = self.REGEXP_VER.search(name)
-
-    if search == None:
-      return []
 
     searchFilters = [
       ['code', 'starts_with', name[:search.span()[0] + 2]],
@@ -610,10 +733,26 @@ class SgVersion(SgEntity):
 
     return int(search.group(4))
 
+  def subVersionNumberPadding(self):
+    '''
+    Returns the number padding for the sub-version.
+    '''
+
+    search = self.REGEXP_VER.search(self['code'])
+
+    if search == None or search.group(4) == None:
+      return None
+
+    return len(search.group(4))
+
   def subVersions(self, ignoreProject=False):
     '''
     Returns all sub-versions.
     '''
+
+    # Bail if not versioned!
+    if not self.isVersioned() or not self.isSubVersioned():
+      return []
 
     self.sync(
       ['code', 'project'],
@@ -625,13 +764,6 @@ class SgVersion(SgEntity):
     name = self['code']
 
     search = self.REGEXP_VER.search(name)
-
-    if search == None or search.groups()[3] == None:
-      return []
-
-    searchFilters = [
-      ['code', 'starts_with', name[:search.spans()[3][0]]],
-    ]
 
     if not ignoreProject:
       searchFilters.append(
@@ -671,6 +803,18 @@ class SgVersion(SgEntity):
 
     return int(search.group(2))
 
+  def versionNumberPadding(self):
+    '''
+    Returns the number padding of the version.
+    '''
+
+    search = self.REGEXP_VER.search(self['code'])
+
+    if search == None:
+      return None
+
+    return len(search.group(2))
+
   def versions(self, ignoreProject=False):
     '''
     Returns all versions.
@@ -678,6 +822,10 @@ class SgVersion(SgEntity):
     Note:
     This is performs a Shotgun search for its return value.
     '''
+
+    # Bail if not versioned!
+    if not self.isVersioned():
+      return []
 
     self.sync(
       ['code', 'project'],
@@ -689,9 +837,6 @@ class SgVersion(SgEntity):
     name = self['code']
 
     search = self.REGEXP_VER.search(name)
-
-    if search == None:
-      return []
 
     searchFilters = [
       ['code', 'starts_with', name[:search.span()[0] + 2]],
