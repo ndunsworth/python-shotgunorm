@@ -89,11 +89,11 @@ class SgHumanUser(SgEntity):
   Class that represents a Human User Entity.
   '''
 
-  def sendEmail(self, subject, msg, cc=[], sender='mr.roboto@leetstudios.com', server='localhost'):
+  def sendEmail(self, subject, msg, cc=None, sender='mr.roboto@leetstudios.com', server='localhost'):
     '''
     Send the user an email.
 
-    The arg "cc" should be a list of other SgHumanUser objects.
+    The arg "cc" should be a list of other SgHumanUser objects or strings.
     '''
 
     email = self['email']
@@ -103,16 +103,17 @@ class SgHumanUser(SgEntity):
 
     ccEmails = []
 
-    for i in cc:
-      if not isinstance(i, SgHumanUser):
-        raise TypeError('expected a SgHumanUser, got "%s"' % i.__class__.__name__)
+    if cc != None:
+      for i in cc:
+        if not isinstance(i, SgHumanUser):
+          raise TypeError('expected a SgHumanUser, got "%s"' % i.__class__.__name__)
 
-      ccEmail = i['email']
+        ccEmail = i['email']
 
-      if ccEmail == None or ccEmail == '' or ccEmail.isspace():
-        raise RuntimeError('HumanUser %s\'s email field is emtpy' % i['name'])
+        if ccEmail == None or ccEmail == '' or ccEmail.isspace():
+          raise RuntimeError('HumanUser %s\'s email field is emtpy' % i['name'])
 
-      ccEmails.append(ccEmail)
+        ccEmails.append(ccEmail)
 
     emailInfo = MIMEMultipart()
 
@@ -501,7 +502,7 @@ class SgVersion(SgEntity):
     if self.exists():
       searchFilters.append(['id', 'is_not', self['id']])
 
-    otherVersions = self.connection().find('Version', searchFilters, ['default', 'code', 'project'])
+    otherVersions = self.connection().find('Version', searchFilters, ['code'])
 
     if len(otherVersions) <= 0:
       return None
@@ -516,8 +517,18 @@ class SgVersion(SgEntity):
         highestVer = version
         highestVerInt = v
 
-    return highestVer
+    if highestVer != None:
+      fields = self.connection().defaultEntityQueryFields('Version')
 
+      if len(fields) >= 1:
+        highestVer.sync(
+          fields,
+          ignoreValid=True,
+          ignoreWithUpdate=True,
+          backgroundPull=True
+        )
+
+    return highestVer
 
   def latestVersion(self, ignoreProject=False):
     '''
@@ -557,7 +568,7 @@ class SgVersion(SgEntity):
     if self.exists():
       searchFilters.append(['id', 'is_not', self['id']])
 
-    otherVersions = self.connection().find('Version', searchFilters, ['default', 'code', 'project'])
+    otherVersions = self.connection().find('Version', searchFilters, ['code'])
 
     if len(otherVersions) <= 0:
       return None
@@ -571,6 +582,17 @@ class SgVersion(SgEntity):
       if v > highestVerInt:
         highestVer = version
         highestVerInt = v
+
+    if highestVer != None:
+      fields = self.connection().defaultEntityQueryFields('Version')
+
+      if len(fields) >= 1:
+        highestVer.sync(
+          fields,
+          ignoreValid=True,
+          ignoreWithUpdate=True,
+          backgroundPull=True
+        )
 
     return highestVer
 
@@ -663,7 +685,7 @@ class SgVersion(SgEntity):
     if self.exists():
       searchFilters.append(['id', 'is_not', self['id']])
 
-    return self.connection().find('Version', searchFilters, ['default', 'code', 'project'])
+    return self.connection().find('Version', searchFilters)
 
   def otherVersions(self, ignoreProject=False):
     '''
@@ -704,7 +726,7 @@ class SgVersion(SgEntity):
     if self.exists():
       searchFilters.append(['id', 'is_not', self['id']])
 
-    return self.connection().find('Version', searchFilters, ['default', 'code', 'project'])
+    return self.connection().find('Version', searchFilters)
 
   def subVersion(self, subVersion, ignoreProject=False):
     '''
@@ -774,7 +796,7 @@ class SgVersion(SgEntity):
         ]
       )
 
-    return self.connection().find('Version', searchFilters, ['default', 'code', 'project'])
+    return self.connection().find('Version', searchFilters)
 
   def version(self, version, ignoreProject=False):
     '''
@@ -851,4 +873,4 @@ class SgVersion(SgEntity):
         ]
       )
 
-    return self.connection().find('Version', searchFilters, ['default', 'code', 'project'])
+    return self.connection().find('Version', searchFilters)
