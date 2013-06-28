@@ -411,7 +411,7 @@ class SgEntity(object):
     ** The Entity is still locked down when this is called **
     '''
 
-    ShotgunORM.LoggerEntity.debug('%(entity)s.afterCommit()', {'entity': self.__repr__()})
+    ShotgunORM.LoggerEntity.debug('%(entity)s.afterCommit()', {'entity': self})
     ShotgunORM.LoggerEntity.debug('    * sgBatchData: %(value)s', {'value': sgBatchData})
     ShotgunORM.LoggerEntity.debug('    * sgBatchResult: %(value)s', {'value': sgBatchResult})
     ShotgunORM.LoggerEntity.debug('    * sgCommitError: %(value)s', {'value': sgCommitError})
@@ -461,7 +461,7 @@ class SgEntity(object):
     Sets SgEntity.isCommitting() to True and calls SgEntity._beforeCommit.
     '''
 
-    ShotgunORM.LoggerEntity.debug('%(entity)s.beforeCommit()', {'entity': self.__repr__()})
+    ShotgunORM.LoggerEntity.debug('%(entity)s.beforeCommit()', {'entity': self})
     ShotgunORM.LoggerEntity.debug('    * sgBatchData: %(value)s', {'value': sgBatchData})
 
     self._beforeCommit(sgBatchData)
@@ -1077,7 +1077,7 @@ class SgEntity(object):
     will be called as well.
     '''
 
-    ShotgunORM.LoggerEntity.debug('%(entity)s.onFieldChanged()', {'entity': self.__repr__()})
+    ShotgunORM.LoggerEntity.debug('%(entity)s.onFieldChanged()', {'entity': self})
     ShotgunORM.LoggerEntity.debug('    * sgField: %(sgField)s', {'sgField': sgField})
 
     self._onFieldChanged(sgField)
@@ -1338,7 +1338,7 @@ class SgEntity(object):
         List of fields to fetch from Shotgun.
     '''
 
-    ShotgunORM.LoggerEntity.debug('%(entity)s.valuesSg()', {'entity': self.__repr__()})
+    ShotgunORM.LoggerEntity.debug('%(entity)s.valuesSg()', {'entity': self})
     ShotgunORM.LoggerEntity.debug('    * requested: %(sgFields)s', {'sgFields': sgFields})
 
     if not self.exists():
