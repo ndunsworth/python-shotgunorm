@@ -572,8 +572,17 @@ class SgConnection(SgConnectionPriv):
     the Shotgun database.
 
     Args:
+      * (str) sgEntityType:
+        Type of Entity to create.
+
       * (dict) sgData:
         Shotgun formated dictionary of field data.
+
+      * (bool) sgCommit:
+        Commits the result immediately to Shotgun.
+
+      * (int) numberOfEntities:
+        Number of Entities to create.
     '''
 
     ShotgunORM.LoggerConnection.debug('%(connection)s.create(...)', {'connection': self})
@@ -816,6 +825,27 @@ class SgConnection(SgConnectionPriv):
     '''
     Find one entity. This is a wrapper for find() with a limit=1. This will also
     speeds the request as no paging information is requested from the server.
+
+    Args:
+      * (str) entity_type:
+        Entity type to find.
+
+      * (list) filters:
+        List of Shotgun formatted filters.
+
+      * (list) fields:
+        Fields that return results will have filled in with data from Shotgun.
+
+      * (list) order:
+        List of Shotgun formatted order filters.
+
+      * (str) filter_operator:
+        Controls how the filters are matched. There are only two valid
+        options: all and any. You cannot currently combine the two options in the
+        same query.
+
+      * (bool) retired_only:
+        Return only retired entities.
     '''
 
     if isinstance(filters, int):
@@ -992,12 +1022,34 @@ class SgConnection(SgConnectionPriv):
       page=page
     )
 
-  def searchOne(self, sgEntityType, sgSearchExp, sgFields=None, sgSearchArgs=[], order=None, retired_only=False, page=0):
+  def searchOne(self, sgEntityType, sgSearchExp, sgFields=None, sgSearchArgs=[], order=None, retired_only=False):
     '''
     Same as search(...) but only returns a single Entity.
+
+    Args:
+      * (str) sgEntityType:
+        Entity type to find.
+
+      * (str) sgSearchExp:
+        Search expression string.
+
+      * (list) sgFields:
+        Fields that return results will have filled in with data from Shotgun.
+
+      * (list) sgSearchArgs:
+        Args used by the search expression string during evaluation.
+
+      * (list) order:
+        List of Shotgun formatted order filters.
+
+      * (int) limit:
+        Limits the amount of Entities can be returned.
+
+      * (bool) retired_only:
+        Return only retired entities.
     '''
 
-    result = self.search(sgEntityType, sgSearchExp, sgFields, sgSearchArgs, order=order, limit=1, retired_only=retired_only, page=page)
+    result = self.search(sgEntityType, sgSearchExp, sgFields, sgSearchArgs, order=order, limit=1, retired_only=retired_only)
 
     if len(result) >= 1:
       return result[0]
