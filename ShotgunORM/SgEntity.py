@@ -342,6 +342,10 @@ class SgEntity(object):
     Sets the Entities field values from data returned by a Shotgun query.
 
     This is called when the Entity object is created.
+
+    Args:
+      * (dict) sgData:
+        Dictionary of Shotgun formatted data.
     '''
 
     with self:
@@ -1075,6 +1079,10 @@ class SgEntity(object):
 
     If SgEntity.widget() is not None then SgEntity.widget().onFieldChanged()
     will be called as well.
+
+    Args:
+      * (SgField) sgField:
+        Field that changed.
     '''
 
     ShotgunORM.LoggerEntity.debug('%(entity)s.onFieldChanged()', {'entity': self})
@@ -1100,6 +1108,9 @@ class SgEntity(object):
       * (list) sgFields:
         List of field names to revert.  When specified only those select fields
         will be reverted. All others will be left un-touched.
+
+      * (bool) ignoreValid:
+        Ignores fields that valid() returns True.
 
       * (bool) ignoreWithUpdate:
         Ignores fields that have pending updates and leaves them untouched by
@@ -1202,6 +1213,10 @@ class SgEntity(object):
     isMarkedForDeletion() is True and fields contain pending updates.
 
     Returns an empty list when nothing is to be done.
+
+    Args:
+      * (list) sgFields:
+        List of fields to return batch data for.
     '''
 
     result = []

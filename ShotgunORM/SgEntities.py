@@ -94,6 +94,22 @@ class SgHumanUser(SgEntity):
     Send the user an email.
 
     The arg "cc" should be a list of other SgHumanUser objects or strings.
+
+    Args:
+      * (str) subject:
+        Email subject string.
+
+      * (str) msg:
+        Email message.
+
+      * (list) cc:
+        List of HumanUser or strings that will be cc'd.
+
+      * (str) sender:
+        Return email address.
+
+      * (str) server:
+        Email server ip.
     '''
 
     email = self['email']
@@ -140,19 +156,23 @@ class SgHumanUser(SgEntity):
     Sends the user an instant message.
 
     Default function raises a RuntimeError of "not implemented".
+
+    Args:
+      * (str) msg:
+        Message string.
     '''
 
     raise RuntimeError('not implemented')
 
-  def tasks(self, extraSgFilters='', extraSgFilterArgs=[]):
+  def tasks(self, extraSgFilters=None, extraSgFilterArgs=None):
     '''
     Returns all the Tasks the user belongs to.
 
     Args:
-      * extraSgFilters:
+      * (list) extraSgFilters:
         Addtional search expression to append when finding Tasks.
 
-      * extrSgFilterArgs:
+      * (list) extrSgFilterArgs:
         List of args passed to the connection.search() function.
     '''
 
@@ -239,6 +259,16 @@ class SgTicket(SgEntity):
     Note:
     If the arg "sgCommit" is False then the returned Reply Entity has not yet
     been published to Shotgun.  You must call commit() on the returned Entity.
+
+    Args:
+      * (str) sgMsg:
+        Reply message.
+
+      * (HumanUser, str) sgUser:
+        User which the replay will originate from.
+
+      * (bool) sgCommit:
+        Commit the reply immediately.
     '''
 
     connection = self.connection()
@@ -464,6 +494,13 @@ class SgVersion(SgEntity):
     Returns the highest sub-version in Shotgun.
 
     If no higher sub-version exists returns None.
+
+    Note:
+    This is performs a Shotgun search for its return value.
+
+    Args:
+      * (bool) ignoreProject:
+        Ignore the project field when searchign for other versions.
     '''
 
     # Bail if not versioned!
@@ -535,6 +572,13 @@ class SgVersion(SgEntity):
     Returns the highest version in Shotgun.
 
     If no higher version exists returns None.
+
+    Note:
+    This is performs a Shotgun search for its return value.
+
+    Args:
+      * (bool) ignoreProject:
+        Ignore the project field when searchign for other versions.
     '''
 
     # Bail if not versioned!
@@ -604,6 +648,10 @@ class SgVersion(SgEntity):
 
     Note:
     This is performs a Shotgun search for its return value.
+
+    Args:
+      * (bool) ignoreProject:
+        Ignore the project field when searchign for other versions.
     '''
 
     return self._changeVersion(-1, True, ignoreProject=ignoreProject)
@@ -616,6 +664,10 @@ class SgVersion(SgEntity):
 
     Note:
     This is performs a Shotgun search for its return value.
+
+    Args:
+      * (bool) ignoreProject:
+        Ignore the project field when searchign for other versions.
     '''
 
     return self._changeVersion(-1, False, ignoreProject=ignoreProject)
@@ -628,6 +680,10 @@ class SgVersion(SgEntity):
 
     Note:
     This is performs a Shotgun search for its return value.
+
+    Args:
+      * (bool) ignoreProject:
+        Ignore the project field when searchign for other versions.
     '''
 
     return self._changeVersion(1, True, ignoreProject=ignoreProject)
@@ -640,6 +696,10 @@ class SgVersion(SgEntity):
 
     Note:
     This is performs a Shotgun search for its return value.
+
+    Args:
+      * (bool) ignoreProject:
+        Ignore the project field when searchign for other versions.
     '''
 
     return self._changeVersion(1, False)
@@ -647,6 +707,13 @@ class SgVersion(SgEntity):
   def otherSubVersions(self, ignoreProject=False):
     '''
     Returns all sub-versions but not including this one.
+
+    Note:
+    This is performs a Shotgun search for its return value.
+
+    Args:
+      * (bool) ignoreProject:
+        Ignore the project field when searchign for other versions.
     '''
 
     # Bail if not versioned!
@@ -693,6 +760,10 @@ class SgVersion(SgEntity):
 
     Note:
     This is performs a Shotgun search for its return value.
+
+    Args:
+      * (bool) ignoreProject:
+        Ignore the project field when searchign for other versions.
     '''
 
     # Bail if not versioned!
@@ -737,6 +808,10 @@ class SgVersion(SgEntity):
 
     Note:
     This is performs a Shotgun search for its return value.
+
+    Args:
+      * (bool) ignoreProject:
+        Ignore the project field when searchign for other versions.
     '''
 
     return self._changeVersion(int(subVersion), True, True, ignoreProject=ignoreProject)
@@ -770,6 +845,13 @@ class SgVersion(SgEntity):
   def subVersions(self, ignoreProject=False):
     '''
     Returns all sub-versions.
+
+    Note:
+    This is performs a Shotgun search for its return value.
+
+    Args:
+      * (bool) ignoreProject:
+        Ignore the project field when searchign for other versions.
     '''
 
     # Bail if not versioned!
@@ -807,6 +889,10 @@ class SgVersion(SgEntity):
 
     Note:
     This is performs a Shotgun search for its return value.
+
+    Args:
+      * (bool) ignoreProject:
+        Ignore the project field when searchign for other versions.
     '''
 
     return self._changeVersion(int(version), False, True, ignoreProject=ignoreProject)
@@ -843,6 +929,10 @@ class SgVersion(SgEntity):
 
     Note:
     This is performs a Shotgun search for its return value.
+
+    Args:
+      * (bool) ignoreProject:
+        Ignore the project field when searchign for other versions.
     '''
 
     # Bail if not versioned!
