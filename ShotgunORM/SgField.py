@@ -1002,6 +1002,7 @@ class SgField(object):
         return False
 
       self.setValid(True)
+      self.setHasCommit(True)
 
       self.changed()
 
