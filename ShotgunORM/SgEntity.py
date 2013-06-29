@@ -32,6 +32,7 @@ __all__ = [
 # Python imports
 from exceptions import AttributeError, KeyError
 
+import copy
 import threading
 import weakref
 import webbrowser
@@ -306,10 +307,10 @@ class SgEntity(object):
     return item in self._fields
 
   def __enter__(self):
-    self.__lock.acquire()
+    self._lock()
 
   def __exit__(self, exc_type, exc_value, traceback):
-    self.__lock.release()
+    self._unlock()
 
     return False
 
@@ -399,7 +400,21 @@ class SgEntity(object):
 
           fieldObj.validate()
 
-  def _afterCommit(self, sgBatchData, sgBatchResult, sgCommitError):
+  def _lock(self):
+    '''
+    Internal function to lock the Entities lock.
+    '''
+
+    self.__lock.acquire()
+
+  def _unlock(self):
+    '''
+    Internal function to unlock the Entities lock.
+    '''
+
+    self.__lock.release()
+
+  def _afterCommit(self, sgBatchData, sgBatchResult, sgCommitData, sgCommitError):
     '''
     Sub-class portion of SgEntity.afterCommit().
 
@@ -408,7 +423,7 @@ class SgEntity(object):
 
     pass
 
-  def afterCommit(self, sgBatchData, sgBatchResult, sgCommitError=None):
+  def afterCommit(self, sgBatchData, sgBatchResult, sgCommitData, sgCommitError=None):
     '''
     Called in the moments immediately after the call to Shotgun has returned.
 
@@ -418,36 +433,60 @@ class SgEntity(object):
     ShotgunORM.LoggerEntity.debug('%(entity)s.afterCommit()', {'entity': self})
     ShotgunORM.LoggerEntity.debug('    * sgBatchData: %(value)s', {'value': sgBatchData})
     ShotgunORM.LoggerEntity.debug('    * sgBatchResult: %(value)s', {'value': sgBatchResult})
+    ShotgunORM.LoggerEntity.debug('    * sgCommitData: %(value)s', {'value': sgCommitData})
     ShotgunORM.LoggerEntity.debug('    * sgCommitError: %(value)s', {'value': sgCommitError})
 
-    for batch, result in map(None, sgBatchData, sgBatchResult):
-      commitType = batch['request_type']
+    self._isCommitting = False
 
-      if sgCommitError == None:
+    if sgCommitError == None:
+      for batch, result in map(None, sgBatchData, sgBatchResult):
+        commitType = batch['request_type']
+
         if commitType == 'delete':
           self._markedForDeletion = False
+        elif commitType == 'revive':
+          pass
         elif commitType in ['create', 'update']:
-          for field in self.fields(batch['data'].keys()):
+          fieldNames = batch['data'].keys()
+
+          for field in self.fields(fieldNames).values():
             field.setIsCommitting(False)
 
             field.setHasCommit(False)
-        else:
-          raise RuntimeError('unknown commit type %s' % commitType)
 
         if commitType == 'create':
           self['id']._value = result['id']
-      else:
-        if commitType in ['create', 'update']:
-          for field in self.fields(batch['data'].keys()):
+    else:
+      for batch, result in map(None, sgBatchData, sgBatchResult):
+        if commitType == 'delete':
+          pass
+        elif commitType == 'revive':
+          pass
+        elif commitType in ['create', 'update']:
+          fieldNames = batch['data'].keys()
+
+          for field in self.fields(fieldNames).values():
             field.setIsCommitting(False)
 
-    self._afterCommit(sgBatchData, sgBatchResult, sgCommitError)
+    error = None
 
-    if sgCommitError == None:
-      for batch in sgBatchData:
-        ShotgunORM.onEntityCommit(self, batch)
+    try:
+      self._afterCommit(sgBatchData, sgBatchResult, sgCommitData, sgCommitError)
+    except Exception, e:
+      error = e
 
-  def _beforeCommit(self, sgBatchData):
+    batchDataCopy = copy.deepcopy(sgBatchData)
+
+    try:
+      ShotgunORM.afterEntityCommit(self, batchDataCopy, sgBatchResult, sgCommitData, sgCommitError)
+    except Exception, e:
+      if error == None:
+        error = e
+
+    if error != None:
+      raise error
+
+  def _beforeCommit(self, sgBatchData, sgCommitData):
     '''
     Subclass portion of SgEntity.beforeCommit().
 
@@ -456,26 +495,63 @@ class SgEntity(object):
 
     pass
 
-  def beforeCommit(self, sgBatchData):
+  def beforeCommit(self, sgBatchData, sgCommitData):
     '''
     This function is called in the moments before the call to Shotgun.
 
     ** The Entity is locked down when this is called **
 
     Sets SgEntity.isCommitting() to True and calls SgEntity._beforeCommit.
+
+    Args:
+      * (dict) sgBatchData:
+        Shotgun formatted batch dictionary of the Entities commit data.
+
+      * (dict) sgCommitData:
+        Dictionary used to pass data user between beforeCommit() and
+        afterCommit().
     '''
 
     ShotgunORM.LoggerEntity.debug('%(entity)s.beforeCommit()', {'entity': self})
     ShotgunORM.LoggerEntity.debug('    * sgBatchData: %(value)s', {'value': sgBatchData})
+    ShotgunORM.LoggerEntity.debug('    * sgCommitData: %(value)s', {'value': sgCommitData})
 
-    self._beforeCommit(sgBatchData)
+    self._isCommitting = True
 
     for batch in sgBatchData:
       commitType = batch['request_type']
 
-      if commitType in ['create', 'update']:
-        for field in self.fields(batch['data'].keys()):
+      if commitType == 'delete':
+        if not self.exists():
+          raise RuntimeError('unable to delete Entity which does not exist in Shotgun')
+      elif commitType == 'revive':
+        if not self.exists():
+          raise RuntimeError('unable to delete Entity which does not exist in Shotgun')
+      elif commitType in ['create', 'update']:
+        fieldNames = batch['data'].keys()
+
+        for field in self.fields(fieldNames).values():
           field.setIsCommitting(True)
+      else:
+        raise RuntimeError('unknown commit type %s' % commitType)
+
+    error = None
+
+    try:
+      self._beforeCommit(sgBatchData, sgCommitData)
+    except Exception, e:
+      error = e
+
+    batchDataCopy = copy.deepcopy(sgBatchData)
+
+    try:
+      ShotgunORM.beforeEntityCommit(self, batchDataCopy, sgCommitData)
+    except Exception, e:
+      if error == None:
+        error = e
+
+    if error != None:
+      raise error
 
   def _buildFields(self, sgFieldInfos):
     '''
@@ -554,91 +630,6 @@ class SgEntity(object):
 
     self._buildUserFields()
 
-  def commit(self, sgFields=None):
-    '''
-    Commits any modified Entity fields that have not yet been published to the
-    Shotgun database.
-
-    Returns True if anything modifcations were published to Shotgun.
-
-    Args:
-      * (dict) sgFields:
-        List of fields to commit.  When specified only those fields will be
-        commited.
-    '''
-
-    with self:
-      rawBatchData = self.toBatchData(sgFields, sgCommitDepth)
-
-      if len(origBatchData) <= 0:
-        return False
-
-      batches = []
-
-      for i in rawBatchData:
-        rt = i['request_type']
-
-        if rt == 'delete':
-          batches.append(
-            [
-              ShotgunORM.COMMIT_TYPE_DELETE,
-              i
-            ]
-          )
-        elif rt == 'create':
-          batches.append(
-            [
-              ShotgunORM.COMMIT_TYPE_CREATE,
-              i
-            ]
-          )
-        else:
-          batches.append(
-            [
-              ShotgunORM.COMMIT_TYPE_UPDATE,
-              i
-            ]
-          )
-
-      sgBatches = []
-      tmp = []
-
-      self._isCommitting = True
-
-      for batch in batches:
-        try:
-          self.beforeCommit(batch[0], batch[1])
-
-          sgBatches.append(batch[1])
-
-          tmp.append(batch)
-        except Exception, e:
-          self._isCommitting = False
-
-          for b in tmp:
-            self.afterCommit(b[0], b[1], e)
-
-          raise
-
-      sgResult = None
-
-      try:
-        sgResult = self.connection()._batch(sgBatches)
-      except Exception, e:
-        self._isCommitting = False
-
-        for batch in batches:
-          self.afterCommit(batch[0], batch[1], e)
-
-        raise
-
-      self._isCommitting = False
-
-      for batch, result in map(None, batches, sgResult):
-        self.afterCommit(batch[0], result)
-
-      return True
-
   def clone(self, inheritFields=[], numberOfEntities=1):
     '''
     Creates a new Entity of this Entities type and returns it.  This returned
@@ -690,6 +681,41 @@ class SgEntity(object):
         numberOfEntities=numberOfEntities
       )
 
+  def commit(self, sgFields=None):
+    '''
+    Commits any modified Entity fields that have not yet been published to the
+    Shotgun database.
+
+    Returns True if anything modifcations were published to Shotgun.
+
+    Args:
+      * (dict) sgFields:
+        List of fields to commit.  When specified only those fields will be
+        commited.
+    '''
+
+    with self:
+      ShotgunORM.LoggerEntity.debug('%(entity)s.commit(...)', {'entity': self})
+      ShotgunORM.LoggerEntity.debug('    * sgFields: %(fields)s', {'fields': sgFields})
+
+      batchData = self.toBatchData(sgFields)
+
+      if len(batchData) <= 0:
+        return False
+
+      connection = self.connection()
+
+      connection._batch(
+        [
+          {
+            'entity': self,
+            'batch_data': batchData
+          }
+        ]
+      )
+
+      return True
+
   def connection(self):
     '''
     Returns the SgConnection the Entity belongs to.
@@ -707,6 +733,9 @@ class SgEntity(object):
     '''
 
     with self:
+      if not self.exists():
+        raise RuntimeError('entity does not exist, can not generate request data for type delete')
+
       if sgCommit:
         self.connection().delete(self)
       else:
@@ -1131,7 +1160,11 @@ class SgEntity(object):
     Revives the Entity.
     '''
 
-    return self.connection().revive(self)
+    with self:
+      if not self.exists():
+        raise RuntimeError('entity does not exist, can not generate request data for type revive')
+
+      self.connection().revive(self)
 
   def sync(self, sgFields=None, ignoreValid=False, ignoreWithUpdate=True, backgroundPull=True):
     '''
@@ -1185,7 +1218,8 @@ class SgEntity(object):
         result = True
 
       if len(pullFields) >= 1:
-        if backgroundPull:
+        # Only pull if the Entity exists in Shotgun!
+        if backgroundPull and self.exists():
           self.connection().queryEngine().addQueue(self, pullFields)
         else:
           values = self.valuesSg(pullFields)
@@ -1196,6 +1230,7 @@ class SgEntity(object):
             fieldObj._updateValue = value
             fieldObj.setHasSyncUpdate(True)
 
+            # Don't slow down the sync process by calling validate!
             #fieldObj.validate()
 
       if len(nonQueryableFields) >= 1:
@@ -1222,9 +1257,6 @@ class SgEntity(object):
     result = []
 
     if self._markedForDeletion:
-      if not self.exists():
-        raise RuntimeError('entity does not exist, can not generate request data for type delete')
-
       result.append(
         {
           'request_type': 'delete',
