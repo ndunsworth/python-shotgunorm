@@ -511,21 +511,88 @@ class SgConnection(SgConnectionPriv):
       return sgFilters
 
   def _batch(self, requests):
-    '''
+    def undoEntities(batchConfigs, exception):
+      if len(batchConfigs) <= 0:
+        return
 
-    '''
+      for data in batchConfigs:
+        entity = data['entity']
+        batchData = data['batch_data']
+        commitData = data['commit_data']
 
-    data = {
-      'data': requests,
-      'event': threading.Event(),
-      'result': None
-    }
+        try:
+          entity.afterCommit(batchData, None, commitData, exception)
+        except:
+          pass
 
-    self._batchQueue.put(data, block=False)
+    if len(requests) <= 0:
+      return
 
-    data['event'].wait()
+    batchConfigs = []
+    batchData = []
+    batchSize = []
 
-    return data['result']
+    for i in requests:
+      entity = i['entity']
+
+      entityBatchData = i['batch_data']
+
+      commitData = {}
+
+      try:
+        entity.beforeCommit(entityBatchData, commitData)
+      except Exception, e:
+        try:
+          entity.afterCommit(entityBatchData, None, commitData, e)
+        except:
+          pass
+
+        undoEntities(batchConfigs, e)
+
+        raise e
+
+      batchConfigs.append(
+        {
+          'entity': entity,
+          'batch_data': entityBatchData,
+          'commit_data': commitData
+        }
+      )
+
+      batchData.extend(entityBatchData)
+      batchSize.append(len(entityBatchData))
+
+    try:
+      sgResult = self._sg_batch(batchData)
+    except Exception, e:
+      undoEntities(batchConfigs, e)
+
+      raise e
+
+    exception = None
+
+    for configData in batchConfigs:
+      entity = configData['entity']
+      entityBatchData = configData['batch_data']
+      entityCommitData = configData['commit_data']
+
+      resultSize = batchSize.pop(0)
+
+      entityResult = []
+
+      for n in xrange(0, resultSize):
+        entityResult.append(sgResult.pop(0))
+
+      try:
+        entity.afterCommit(entityBatchData, entityResult, entityCommitData, None)
+      except Exception, e:
+        if exception == None:
+          exception = e
+
+    if exception != None:
+      raise exception
+
+    return sgResult
 
   def batch(self, requests):
     '''
@@ -536,7 +603,38 @@ class SgConnection(SgConnectionPriv):
     will be rolled back.
     '''
 
-    pass
+    if isinstance(requests, ShotgunORM.SgEntity):
+      requests = [requests]
+
+    if len(requests) <= 0:
+      return []
+
+    # Lock the Entities down.
+    for entity in requests:
+      entity._lock()
+
+    batchRequests = []
+
+    for entity in requests:
+      try:
+        commitData = entity.toBatchData()
+      except Exception, e:
+        for entity in requests:
+          entity._unlock()
+
+        raise e
+
+      if len(commitData) <= 0:
+        continue
+
+      batchRequests.append(
+        {
+          'entity': entity,
+          'batch_data': commitData
+        }
+      )
+
+    self._batch(batchRequests)
 
   def classFactory(self):
     '''
@@ -626,32 +724,24 @@ class SgConnection(SgConnectionPriv):
     '''
 
     with sgEntity:
-      if not sgEntity.exist():
-        raise RuntimeError('unable to delete a node which does not exist in Shotgun')
+      batchData = [
+        {
+          'request_type': 'delete',
+          'entity_type': sgEntity.type,
+          'entity_id': sgEntity['id']
+        }
+      ]
 
-      sgEntity._isCommitting = True
+      commitData = [
+        {
+          'entity': sgEntity,
+          'batch_data': batchData
+        }
+      ]
 
-      sgEntity.beforeCommit(ShotgunORM.COMMIT_TYPE_DELETE, {})
+      sgResult = self._batch(commitData)
 
-      try:
-        result = self._sg_delete(sgEntity.type, sgEntity['id'])
-      except Exception, e:
-        sgEntity._isCommitting = False
-
-        # Don't allow an Exception in afterCommit to mask the error from
-        # revive.
-        try:
-          sgEntity.afterCommit(ShotgunORM.COMMIT_TYPE_DELETE, {}, e)
-        except:
-          pass
-
-        raise
-
-      sgEntity._isCommitting = False
-
-      sgEntity.afterCommit(ShotgunORM.COMMIT_TYPE_DELETE, result)
-
-      return result
+      return sgResult[0]
 
   def defaultEntityQueryFields(self, sgEntityType):
     '''
@@ -898,32 +988,41 @@ class SgConnection(SgConnectionPriv):
     '''
 
     with sgEntity:
-      if sgEntity.isMarkedForDeletion():
-        sgEntity._markedForDeletion = False
+      batchData = [
+        {
+          'request_type': 'revive',
+          'entity_type': sgEntity.type,
+          'entity_id': sgEntity['id']
+        }
+      ]
 
-        return True
-
-      sgEntity._isCommitting = True
-
-      sgEntity.beforeCommit(ShotgunORM.COMMIT_TYPE_REVIVE, {})
+      commitData = {}
 
       try:
-        result = self._sg_revive(sgEntity.type, sgEntity['id'])
+        sgEntity.beforeCommit(batchData, commitData)
       except Exception, e:
-        sgEntity._isCommitting = False
-
         try:
-          sgEntity.afterCommit(ShotgunORM.COMMIT_TYPE_REVIVE, {}, e)
+          sgEntity.afterCommit(batchData, None, commitData, e)
         except:
           pass
 
-        raise
+        raise e
 
-      sgEntity._isCommitting = False
+      sgResult = None
 
-      sgEntity.afterCommit(ShotgunORM.COMMIT_TYPE_REVIVE, result)
+      try:
+        sgResult = self._sg_revive(sgEntity.type, sgEntity['id'])
+      except Exception, e:
+        try:
+          sgEntity.afterCommit(batchData, None, commitData, e)
+        except:
+          pass
 
-      return result
+        raise e
+
+      sgEntity.afterCommit(batchData, [sgResult], commitData)
+
+      return sgResult
 
   def schema(self):
     '''
