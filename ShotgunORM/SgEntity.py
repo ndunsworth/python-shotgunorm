@@ -824,7 +824,7 @@ class SgEntity(object):
     result = []
 
     # Do it this way so that the index values match between this and fieldNames().
-    for field in sorted(sgFields, sgReturnTypes):
+    for field in self.fieldNames(sgFields, sgReturnTypes):
       result.append(
         self.field(field).label()
       )
