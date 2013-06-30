@@ -265,7 +265,8 @@ class SgTicket(SgEntity):
         Reply message.
 
       * (HumanUser, str) sgUser:
-        User which the replay will originate from.
+        User which the replay will originate from.  If left as None then the
+        connections SgApiUser will be used.
 
       * (bool) sgCommit:
         Commit the reply immediately.
@@ -301,43 +302,77 @@ class SgTicket(SgEntity):
 
     return result
 
-  #def close(self, sgMsg=None, sgUser=None):
-  #  '''
-  #  Closes the ticket and adds a reply is the arg "sgMsg" is not None.
-  #  '''
-  #
-  #  with self:
-  #    fieldStatus = self.field('status')
-  #
-  #    fieldStatus.setValue('res')
-  #
-  #    if sgUser != None and sgMsg == None:
-  #      raise RuntimeError('arg "sgUser" specified without a message')
-  #
-  #    if sgUser != None:
-  #      if isinstance(sgUser, str):
-  #        user = sg.searchOne('HumanUser', 'name == "%s"' % sgUser)
-  #
-  #        if user == None:
-  #          raise RuntimeError('not able to find Shotgun user "%s"' % sgUser)
-  #
-  #        sgUser = user
-  #      elif isinstance(sgUser, SgEntity):
-  #        if not sgUser.type == 'HumanUser':
-  #          raise TypeError('invalid entity type "%s" expected a HumanUser' % sgUser.type)
-  #
-  #    if sgMsg != None:
-  #      if not isinstance(sgMsg, str):
-  #        raise TypeError('expected a str for "sgMsg" got %s' % sgMsg)
-  #
-  #      reply = self.connection().create('Reply', {
-  #        'content': sgMsg,
-  #      })
-  #
-  #      if sgUser != None:
-  #        reply['user'] = sgUser
-  #
-  #      batch.append(reply)
+  def close(self, sgMsg, sgUser=None, sgCommit=False):
+    '''
+    Sets the tickets status to closed and creates a reply.
+
+    Returns the reply Entity.
+
+    Args:
+      * (str) sgMsg:
+        Reply message.
+
+      * (HumanUser, str) sgUser:
+        User which the replay will originate from.  If left as None then the
+        connections SgApiUser will be used.
+
+      * (bool) sgCommit:
+        Commit the reply immediately.
+    '''
+
+    with self:
+      if not isinstance(sgMsg, str):
+        raise TypeError('expected a str for "sgMsg" got %s' % sgMsg)
+
+      if sgUser != None:
+        if isinstance(sgUser, str):
+          user = sg.searchOne('HumanUser', 'name == "%s"' % sgUser)
+
+          if user == None:
+            raise RuntimeError('not able to find Shotgun user "%s"' % sgUser)
+
+          sgUser = user
+        elif isinstance(sgUser, SgEntity):
+          if not sgUser.type == 'HumanUser':
+            raise TypeError('invalid entity type "%s" expected a HumanUser' % sgUser.type)
+
+      fieldStatus = self.field('sg_status_list')
+
+      fieldStatus.setValue('res')
+
+      connection = self.connection()
+
+      replyEntity = connection.create('Reply', {
+        'content': sgMsg,
+        'entity': self.toEntityFieldData()
+      })
+
+      if sgUser != None:
+        replyEntity['user'] = sgUser
+
+      if not sgCommit:
+        return replyEntity
+
+      batchData = []
+
+      if fieldStatus.hasCommit():
+        batchData.append(
+          {
+            'entity': self,
+            'batch_data': self.toBatchData(['sg_status_list'])
+          }
+        )
+
+      batchData.append(
+        {
+          'entity': replyEntity,
+          'batch_data': replyEntity.toBatchData()
+        }
+      )
+
+      connection._batch(batchData)
+
+      return replyEntity
 
 class SgVersion(SgEntity):
   '''
