@@ -255,6 +255,14 @@ class SgEntity(object):
 
     return field.value()
 
+  def __setitem__(self, item, value):
+    field = self.field(item)
+
+    if field == None:
+      raise KeyError('invalid field name')
+
+    return field.setValue(value)
+
   def __setattr__(self, item, value):
     try:
       fieldObj = self._fields[item]
@@ -350,6 +358,8 @@ class SgEntity(object):
     '''
 
     with self:
+      sgData = dict(sgData)
+
       isNewEntity = not sgData.has_key('id')
 
       if isNewEntity:
@@ -377,13 +387,12 @@ class SgEntity(object):
           if fieldObj == None or fieldObj.returnType() == ShotgunORM.SgField.RETURN_TYPE_SUMMARY:
             continue
 
-          if value == None:
-            value = fieldObj.defaultValue()
+          #if value == None:
+          #  value = fieldObj.defaultValue()
 
-          fieldObj._updateValue = value
-          fieldObj.setHasSyncUpdate(True)
+          fieldObj.fromFieldData(value)
 
-          fieldObj.validate()
+          #fieldObj.validate()
       else:
         for field, value in sgData.items():
           fieldObj = self.field(field)
@@ -392,13 +401,13 @@ class SgEntity(object):
           if fieldObj == None or fieldObj.returnType() == ShotgunORM.SgField.RETURN_TYPE_SUMMARY:
             continue
 
-          if value == None:
-            value = fieldObj.defaultValue()
+          #if value == None:
+          #  value = fieldObj.defaultValue()
 
           fieldObj._updateValue = value
           fieldObj.setHasSyncUpdate(True)
 
-          fieldObj.validate()
+          #fieldObj.validate()
 
   def _lock(self):
     '''
@@ -455,7 +464,7 @@ class SgEntity(object):
             field.setHasCommit(False)
 
         if commitType == 'create':
-          self['id']._value = result['id']
+          self.field('id')._value = result['id']
     else:
       for batch, result in map(None, sgBatchData, sgBatchResult):
         if commitType == 'delete':
