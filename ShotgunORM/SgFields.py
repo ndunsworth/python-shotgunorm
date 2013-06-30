@@ -1697,30 +1697,68 @@ class SgFieldID(ShotgunORM.SgUserField):
     self._valid = True
 
   def invalidate(self):
+    '''
+    Does nothing for ID fields.
+    '''
+
     return False
 
   def isCacheable(self):
+    '''
+    Always returns False for ID fields.
+    '''
+
     return False
 
   def isEditable(self):
+    '''
+    Always returns False for ID fields.
+    '''
+
     return False
 
   def setHasSyncUpdate(self, valid):
+    '''
+    Always returns False for ID fields.
+    '''
+
     return False
 
   def setValid(self, valid):
+    '''
+    Always returns False for ID fields.
+    '''
+
     return False
 
   def setValueFromShotgun(self):
+    '''
+    Always returns False for ID fields.
+    '''
+
     return False
 
   def validate(self):
+    '''
+    Always returns False for ID fields.
+    '''
+
     return False
 
   def value(self):
+    '''
+    Returns the value of the ID field.
+    '''
+
     return self._value
 
   def _valueSg(self):
+    '''
+    Returns the value of the ID field.
+
+    For ID fields this will never query Shotgun.
+    '''
+
     return self._value
 
 class SgFieldType(ShotgunORM.SgUserField):
@@ -1759,28 +1797,66 @@ class SgFieldType(ShotgunORM.SgUserField):
     self._valid = True
 
   def invalidate(self):
+    '''
+    Always returns False for Type fields.
+    '''
+
     return False
 
   def isCacheable(self):
+    '''
+    Always returns False for Type fields.
+    '''
+
     return False
 
   def isEditable(self):
+    '''
+    Always returns False for Type fields.
+    '''
+
     return False
 
   def setHasSyncUpdate(self, valid):
+    '''
+    Always returns False for Type fields.
+    '''
+
     return False
 
   def setValid(self, valid):
+    '''
+    Always returns False for Type fields.
+    '''
+
     return False
 
   def setValueFromShotgun(self):
+    '''
+    Always returns False for Type fields.
+    '''
+
     return False
 
   def validate(self):
+    '''
+    Always returns False for Type fields.
+    '''
+
     return False
 
   def value(self):
+    '''
+    Returns the Entity type the field belongs to.
+    '''
+
     return self._value
 
   def _valueSg(self):
+    '''
+    Returns the Entity type the field belongs to.
+
+    For Type fields this will never query Shotgun.
+    '''
+
     return self._value

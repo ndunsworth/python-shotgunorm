@@ -34,7 +34,6 @@ from exceptions import AttributeError, KeyError
 
 import copy
 import threading
-import weakref
 import webbrowser
 
 from xml.etree import ElementTree as ET
@@ -52,9 +51,6 @@ class SgEntityInfo(object):
       return '<SgEntityInfo("%s"|"%s")>' % (self.name(), self.label())
     else:
       return '<SgEntityInfo("%s")>' % self.name()
-
-  def __str__(self):
-    return self.name()
 
   def __init__(self, name, label, fieldInfos):
     self._isCustom = name.startswith('CustomEntity') or name.startswith('CustomNonProjectEntity')

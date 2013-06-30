@@ -222,7 +222,8 @@ class SgSchema(object):
   @classmethod
   def defaultEntityQueryFields(cls, sgQueryFieldTemplate, sgEntityType, fallBackTo='default'):
     '''
-
+    Returns the list of default query fields for the specified Entity type and
+    query template.
     '''
 
     try:
@@ -509,7 +510,7 @@ class SgSchema(object):
 
   def url(self):
     '''
-
+    Returns the Shotgun url the schema represents.
     '''
 
     return self._url

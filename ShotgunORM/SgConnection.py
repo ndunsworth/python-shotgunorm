@@ -146,10 +146,22 @@ class SgConnectionPriv(object):
     )
 
   def _sg_batch(self, requests):
+    '''
+    Calls the Shotgun Python API batch function.
+
+    This will lock the global Shotgun Python API lock.
+    '''
+
     with ShotgunORM.SHOTGUN_API_LOCK:
       return self.connection().batch(requests)
 
   def _sg_delete(self, entityType, entityId):
+    '''
+    Calls the Shotgun Python API delete function.
+
+    This will lock the global Shotgun Python API lock.
+    '''
+
     with ShotgunORM.SHOTGUN_API_LOCK:
       return self.connection().delete(entityType, entityId)
 
@@ -164,6 +176,12 @@ class SgConnectionPriv(object):
     retired_only=False,
     page=0
   ):
+    '''
+    Calls the Shotgun Python API find function.
+
+    This will lock the global Shotgun Python API lock.
+    '''
+
     with ShotgunORM.SHOTGUN_API_LOCK:
       if fields != None:
         fields = list(fields)
@@ -188,6 +206,11 @@ class SgConnectionPriv(object):
     filter_operator=None,
     retired_only=False,
   ):
+    '''
+    Calls the Shotgun Python API find_one function.
+
+    This will lock the global Shotgun Python API lock.
+    '''
 
     with ShotgunORM.SHOTGUN_API_LOCK:
       if fields != None:
@@ -203,6 +226,12 @@ class SgConnectionPriv(object):
       )
 
   def _sg_revive(self, entityType, entityId):
+    '''
+    Calls the Shotgun Python API revive function.
+
+    This will lock the global Shotgun Python API lock.
+    '''
+
     with ShotgunORM.SHOTGUN_API_LOCK:
       return self.connection().revive(entityType, entityId)
 

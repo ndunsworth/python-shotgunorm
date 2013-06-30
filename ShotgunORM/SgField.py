@@ -91,9 +91,6 @@ class SgFieldInfo(object):
   Class that represents a Shotgun Entities field information.
   '''
 
-  def __str__(self):
-    return self.name()
-
   def __repr__(self):
     return '<%s.%s name:%s, label:%s, valueTypes:%s>' % (
       self.__module__,
@@ -971,13 +968,12 @@ class SgField(object):
 
   def setValue(self, sgData):
     '''
-    Set the value of the field to the Shotgun formatted dict passed through arg
-    "sgData".
+    Set the value of the field.
 
     Returns True on success.
 
     Args:
-      * (dict) sgData:
+      * (object) sgData:
         New field value.
     '''
 
