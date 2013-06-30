@@ -42,7 +42,10 @@ def formatDict(obj, indent=0, indentSize=2, indentChar=' '):
   #result.append('{')
 
   for key, value in obj.items():
-    s = '%s%s: ' % (mkIndent(indent + 1, indentSize, indentChar), key)
+    if isinstance(key, str):
+      s = "%s'%s': " % (mkIndent(indent + 1, indentSize, indentChar), key)
+    else:
+      s = '%s%s: ' % (mkIndent(indent + 1, indentSize, indentChar), key)
 
     o = formatSerializable(value, indent + 1, indentSize, indentChar)
 
