@@ -423,7 +423,7 @@ class SgFieldEntity(ShotgunORM.SgField):
     if self._value == sgData:
       return False
 
-    self._value = sgData.toFieldData()
+    self._value = sgData.toEntityFieldData()
 
     return True
 
