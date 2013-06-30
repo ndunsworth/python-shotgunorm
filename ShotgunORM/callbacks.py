@@ -328,7 +328,6 @@ def addOnFieldChanged(cb, filterName='*', description=''):
     The callback must contain 1 args.  See the documentation for
     ShotgunORM.onFieldChanged() for detailed arg information.
 
-
     def myCallback(sgField):
       ...
   '''
