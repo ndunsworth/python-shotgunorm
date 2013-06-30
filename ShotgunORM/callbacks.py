@@ -74,8 +74,8 @@ def _defaultBeforeEntityCommit(sgEntity, sgBatchData, sgCommitData):
 def _defaultOnEntityCreate(sgEntity):
   ShotgunORM.LoggerCallback.debug('onEntityCreate: %s' % sgEntity)
 
-def _defaultOnFieldChanged(sgEntityField):
-  ShotgunORM.LoggerCallback.debug('onFieldChanged: %s' % sgEntityField)
+def _defaultOnFieldChanged(sgField):
+  ShotgunORM.LoggerCallback.debug('onFieldChanged: %s' % sgField)
 
 def _defaultOnSchemaChanged(sgSchema):
   ShotgunORM.LoggerCallback.debug('onSchemaChanged: %s' % sgSchema)
@@ -514,7 +514,7 @@ def onEntityCreate(sgEntity):
   for i in cbs:
     i['cb'](sgEntity)
 
-def onFieldChanged(sgEntityField):
+def onFieldChanged(sgField):
   '''
   This function is called anytime an Entity fields value changes.
 
@@ -525,18 +525,26 @@ def onFieldChanged(sgEntityField):
     4: When a fields SgField.changed() function is called.
   '''
 
-  entityFieldName = sgEntityField.parentEntity().type + '.' + sgEntityField.name()
+  entityFieldName = sgField.parentEntity().type + '.' + sgField.name()
 
   if ON_FIELD_CHANGED_CBS.has_key(entityFieldName):
     cbs = ON_FIELD_CHANGED_CBS[entityFieldName]
 
     for i in cbs:
-      i['cb'](sgEntityField)
+      i['cb'](sgField)
+
+  entityFieldName = sgField.name()
+
+  if ON_FIELD_CHANGED_CBS.has_key(entityFieldName):
+    cbs = ON_FIELD_CHANGED_CBS[entityFieldName]
+
+    for i in cbs:
+      i['cb'](sgField)
 
   cbs = ON_FIELD_CHANGED_CBS['*']
 
   for i in cbs:
-    i['cb'](sgEntityField)
+    i['cb'](sgField)
 
 def onSchemaChanged(sgSchema):
   '''
