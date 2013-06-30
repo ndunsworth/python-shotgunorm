@@ -1439,7 +1439,7 @@ class SgEntity(object):
 
     url = self.connection().url()
 
-    if iD == None:
+    if iD <= -1:
       url += '/page/project_default?entity_type=%s' % self.type
 
       if self.hasField('project'):
