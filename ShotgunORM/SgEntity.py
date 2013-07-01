@@ -1152,13 +1152,20 @@ class SgEntity(object):
     '''
 
     with self:
+      result = False
+
       for field in self.fields(sgFields).values():
+        if not field.isValid():
+          continue
+
         if (field.isValid() and ignoreValid) or (field.hasCommit() and ignoreWithUpdate):
           continue
 
         field.invalidate()
 
-      return True
+        result = True
+
+      return result
 
   def revive(self):
     '''
