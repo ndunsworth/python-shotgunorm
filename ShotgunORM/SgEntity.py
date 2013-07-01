@@ -32,6 +32,7 @@ __all__ = [
 # Python imports
 from exceptions import AttributeError, KeyError
 
+import copy
 import threading
 import webbrowser
 
@@ -50,9 +51,6 @@ class SgEntityInfo(object):
       return '<SgEntityInfo("%s"|"%s")>' % (self.name(), self.label())
     else:
       return '<SgEntityInfo("%s")>' % self.name()
-
-  def __str__(self):
-    return self.name()
 
   def __init__(self, name, label, fieldInfos):
     self._isCustom = name.startswith('CustomEntity') or name.startswith('CustomNonProjectEntity')
@@ -76,8 +74,13 @@ class SgEntityInfo(object):
 
       # Skip fields that have an unsupported return type!
       if fieldInfo.returnType() == ShotgunORM.SgField.RETURN_TYPE_UNSUPPORTED:
-        #print sgEntityName, fieldInfo.name(), schemaData
-        #print '*' * 80
+        ShotgunORM.LoggerSchema.warn(
+          'ignoring unsupported return type "%s", %s.%s' % (
+            fieldInfo.returnTypeName(),
+            sgEntityName, fieldInfo.name()
+          )
+        )
+
         continue
 
       fieldInfos[fieldName] = fieldInfo
@@ -193,13 +196,15 @@ class SgEntity(object):
   Base class that represents a Shotgun Entity.
   '''
 
-  # Set by the SgEntityClassFactory
+  # Set by the SgEntityClassFactory, do not attempt to manually set as it will
+  # be overridden.
   __classinfo__ = None
 
+  # Populated by SgEntity.registerDefaultEntityClass().
   __defaultentityclasses__ = {}
 
   @classmethod
-  def registerDefaultEntityClass(self, sgEntityCls, sgEntityTypes):
+  def registerDefaultEntityClass(cls, sgEntityCls, sgEntityTypes):
     '''
     Registers a default class for an Entity type.
 
@@ -221,7 +226,7 @@ class SgEntity(object):
       if not isinstance(e, str):
         raise TypeError('expected a str in entity type list, got %s' % e)
 
-      self.__defaultentityclasses__[e] = sgEntityCls
+      cls.__defaultentityclasses__[e] = sgEntityCls
 
   def __getattribute__(self, item):
     try:
@@ -239,12 +244,20 @@ class SgEntity(object):
       raise
 
   def __getitem__(self, item):
-    try:
-      field = self._fields[item]
-    except KeyError:
+    field = self.field(item)
+
+    if field == None:
       raise KeyError('invalid key field "%s"' % item)
 
     return field.value()
+
+  def __setitem__(self, item, value):
+    field = self.field(item)
+
+    if field == None:
+      raise KeyError('invalid field name')
+
+    return field.setValue(value)
 
   def __setattr__(self, item, value):
     try:
@@ -254,12 +267,12 @@ class SgEntity(object):
     except:
       raise
 
-    return  fieldObj.setValue(value)
+    return fieldObj.setValue(value)
 
   def __eq__(self, item):
     if isinstance(item, SgEntity):
       return self.type == item.type and self['id'] == item['id'] and \
-        self.session().connection().url().lower() == item.session().connection().url().lower()
+        self.connection().url().lower() == item.connection().url().lower()
     elif isinstance(item, int):
       return self.id == item
     elif isinstance(item, str):
@@ -294,33 +307,73 @@ class SgEntity(object):
 
     return False
 
+  def __contains__(self, item):
+    return item in self._fields
+
+  def __enter__(self):
+    self._lock()
+
+  def __exit__(self, exc_type, exc_value, traceback):
+    self._unlock()
+
+    return False
+
+  def __del__(self):
+    #print '<SgEntity %s %d> __del__' % (self.type, self.id)
+    self.connection()._cacheEntity(self)
+
   def __int__(self):
     return self.id
 
   def __repr__(self):
     return '<%s>' % ShotgunORM.mkEntityString(self)
 
-  def __init__(self, sgSession):
-    self.__dict__['_fields'] = {}
-    self._rlock = threading.RLock()
-    self._session = sgSession
+  def __init__(self, sgConnection):
+    self.__lock = threading.RLock()
+    self.__connection = sgConnection
+
+    self._fields = {}
+
     self._markedForDeletion = False
+    self._isCommitting = False
 
     self._hasBuiltFields = False
-    self._isFetching = False
-    self._isCommitting = False
+    self._createCompleted = False
+
+    self._widget = None
 
   def _fromFieldData(self, sgData):
     '''
     Sets the Entities field values from data returned by a Shotgun query.
 
     This is called when the Entity object is created.
+
+    Args:
+      * (dict) sgData:
+        Dictionary of Shotgun formatted data.
     '''
 
-    self._lock()
+    with self:
+      sgData = dict(sgData)
 
-    try:
       isNewEntity = not sgData.has_key('id')
+
+      if isNewEntity:
+        sgData['id'] = -1
+      else:
+        if sgData['id'] < 0:
+          isNewEntity = True
+
+      idField = self.field('id')
+
+      self.field('id')._value = sgData['id']
+
+      del sgData['id']
+
+      self.field('type')._value = self.info().name()
+
+      if sgData.has_key('type'):
+        sgData['type']
 
       if isNewEntity:
         for field, value in sgData.items():
@@ -330,10 +383,12 @@ class SgEntity(object):
           if fieldObj == None or fieldObj.returnType() == ShotgunORM.SgField.RETURN_TYPE_SUMMARY:
             continue
 
-          fieldObj._fromFieldData(value)
+          #if value == None:
+          #  value = fieldObj.defaultValue()
 
-          fieldObj._valid = True
-          fieldObj._hasCommit = True
+          fieldObj.fromFieldData(value)
+
+          #fieldObj.validate()
       else:
         for field, value in sgData.items():
           fieldObj = self.field(field)
@@ -342,71 +397,178 @@ class SgEntity(object):
           if fieldObj == None or fieldObj.returnType() == ShotgunORM.SgField.RETURN_TYPE_SUMMARY:
             continue
 
-          fieldObj._fromFieldData(value)
+          #if value == None:
+          #  value = fieldObj.defaultValue()
 
-          fieldObj._valid = True
-    finally:
-      self._release()
+          fieldObj._updateValue = value
+          fieldObj.setHasSyncUpdate(True)
+
+          #fieldObj.validate()
 
   def _lock(self):
     '''
-    Locks the Entity.
+    Internal function to lock the Entities lock.
     '''
 
-    self._rlock.acquire()
+    self.__lock.acquire()
 
-  def _release(self):
+  def _unlock(self):
     '''
-    Un-Locks the Entity.
-    '''
-
-    self._rlock.release()
-
-  def _updateFields(self, sgData, setValue=True, skipValid=False, ignoreWithUpdates=False):
-    '''
-    Internal function!
-
-    This is not thread safe do not call it!
+    Internal function to unlock the Entities lock.
     '''
 
-    self._lock()
+    self.__lock.release()
+
+  def _afterCommit(self, sgBatchData, sgBatchResult, sgCommitData, sgCommitError):
+    '''
+    Sub-class portion of SgEntity.afterCommit().
+
+    ** The Entity is still locked down when this is called **
+    '''
+
+    pass
+
+  def afterCommit(self, sgBatchData, sgBatchResult, sgCommitData, sgCommitError=None):
+    '''
+    Called in the moments immediately after the call to Shotgun has returned.
+
+    ** The Entity is still locked down when this is called **
+    '''
+
+    ShotgunORM.LoggerEntity.debug('%(entity)s.afterCommit()', {'entity': self})
+    ShotgunORM.LoggerEntity.debug('    * sgBatchData: %(value)s', {'value': sgBatchData})
+    ShotgunORM.LoggerEntity.debug('    * sgBatchResult: %(value)s', {'value': sgBatchResult})
+    ShotgunORM.LoggerEntity.debug('    * sgCommitData: %(value)s', {'value': sgCommitData})
+    ShotgunORM.LoggerEntity.debug('    * sgCommitError: %(value)s', {'value': sgCommitError})
+
+    self._isCommitting = False
+
+    if sgCommitError == None:
+      for batch, result in map(None, sgBatchData, sgBatchResult):
+        commitType = batch['request_type']
+
+        if commitType == 'delete':
+          self._markedForDeletion = False
+        elif commitType == 'revive':
+          pass
+        elif commitType in ['create', 'update']:
+          fieldNames = batch['data'].keys()
+
+          for field in self.fields(fieldNames).values():
+            field.setIsCommitting(False)
+
+            field.setHasCommit(False)
+
+        if commitType == 'create':
+          self.field('id')._value = result['id']
+    else:
+      for batch, result in map(None, sgBatchData, sgBatchResult):
+        if commitType == 'delete':
+          pass
+        elif commitType == 'revive':
+          pass
+        elif commitType in ['create', 'update']:
+          fieldNames = batch['data'].keys()
+
+          for field in self.fields(fieldNames).values():
+            field.setIsCommitting(False)
+
+    error = None
 
     try:
-      for field, value in sgData.items():
-        if field in ['type']:
-          continue
+      self._afterCommit(sgBatchData, sgBatchResult, sgCommitData, sgCommitError)
+    except Exception, e:
+      error = e
 
-        fieldObj = self.field(field)
+    batchDataCopy = copy.deepcopy(sgBatchData)
 
-        if fieldObj == None:
-          continue
+    try:
+      ShotgunORM.afterEntityCommit(self, batchDataCopy, sgBatchResult, sgCommitData, sgCommitError)
+    except Exception, e:
+      if error == None:
+        error = e
 
-        # No need to do anythin for summary expression fields.
-        if fieldObj.returnType() == ShotgunORM.SgField.RETURN_TYPE_SUMMARY:
-          continue
+    if error != None:
+      raise error
 
-        if setValue:
-          if (skipValid and fieldObj.isValid()) or (ignoreWithUpdates and fieldObj.hasUpdate()):
-            continue
+  def _beforeCommit(self, sgBatchData, sgCommitData):
+    '''
+    Subclass portion of SgEntity.beforeCommit().
 
-          fieldObj._fromFieldData(value)
+    ** The Entity is locked down when this is called **
+    '''
 
-        fieldObj._valid = True
-        fieldObj._hasCommit = False
-    finally:
-      self._release()
+    pass
+
+  def beforeCommit(self, sgBatchData, sgCommitData):
+    '''
+    This function is called in the moments before the call to Shotgun.
+
+    ** The Entity is locked down when this is called **
+
+    Sets SgEntity.isCommitting() to True and calls SgEntity._beforeCommit.
+
+    Args:
+      * (dict) sgBatchData:
+        Shotgun formatted batch dictionary of the Entities commit data.
+
+      * (dict) sgCommitData:
+        Dictionary used to pass data user between beforeCommit() and
+        afterCommit().
+    '''
+
+    ShotgunORM.LoggerEntity.debug('%(entity)s.beforeCommit()', {'entity': self})
+    ShotgunORM.LoggerEntity.debug('    * sgBatchData: %(value)s', {'value': sgBatchData})
+    ShotgunORM.LoggerEntity.debug('    * sgCommitData: %(value)s', {'value': sgCommitData})
+
+    self._isCommitting = True
+
+    for batch in sgBatchData:
+      commitType = batch['request_type']
+
+      if commitType == 'delete':
+        if not self.exists():
+          raise RuntimeError('unable to delete Entity which does not exist in Shotgun')
+      elif commitType == 'revive':
+        if not self.exists():
+          raise RuntimeError('unable to delete Entity which does not exist in Shotgun')
+      elif commitType in ['create', 'update']:
+        fieldNames = batch['data'].keys()
+
+        for field in self.fields(fieldNames).values():
+          field.setIsCommitting(True)
+      else:
+        raise RuntimeError('unknown commit type %s' % commitType)
+
+    error = None
+
+    try:
+      self._beforeCommit(sgBatchData, sgCommitData)
+    except Exception, e:
+      error = e
+
+    batchDataCopy = copy.deepcopy(sgBatchData)
+
+    try:
+      ShotgunORM.beforeEntityCommit(self, batchDataCopy, sgCommitData)
+    except Exception, e:
+      if error == None:
+        error = e
+
+    if error != None:
+      raise error
 
   def _buildFields(self, sgFieldInfos):
     '''
-    Subclass portion of SgEntity.buildFields().
+    Sub-class portion of SgEntity.buildFields().
 
-    Note:
-    Do not call this directly!
+    Default function iterates over the incoming SgFieldInfos and creates the
+    fields.
     '''
 
     fieldClasses = ShotgunORM.SgField.__fieldclasses__
 
-    for field in sgFieldInfos:
+    for field in sgFieldInfos.values():
       fieldName = field.name()
 
       newField = fieldClasses.get(field.returnType(), None)
@@ -415,109 +577,63 @@ class SgEntity(object):
 
   def buildFields(self):
     '''
-    Builds the ShotgunORM.SgField objects for this Entity.
+    Creates all the fields for the Entity.
+
+    After _buildFields(...) has been called buildUserFiels() is called.
 
     Note:
-    This is called by the class factory after the Entity has been created and
-    will immediately return anytime afterwards.
+      This is called by the class factory after the Entity has been created and
+      will immediately return anytime afterwards.
     '''
 
     # Only build the fields once!
     if self._hasBuiltFields:
       return
 
-    entityFieldInfos = self.info().fieldInfos().values()
+    # Add the type field.
+    self._fields['type'] = ShotgunORM.SgFieldType(self)
+    self._fields['id'] = ShotgunORM.SgFieldID(self)
 
-    self._fields = {}
+    entityFieldInfos = self.info().fieldInfos()
+
+    # Dont pass the "id" field as its manually built as a user field.  Same
+    # for the type field.
+    del entityFieldInfos['id']
 
     self._buildFields(entityFieldInfos)
 
+    self.buildUserFields()
+
+    for field in self._fields.keys():
+      if hasattr(self.__class__, field):
+        ShotgunORM.LoggerField.warn(
+          'Entity type %(entity)s field name "%(name)s confilicts with class method of same name' % {
+            'entity': self.type,
+            'name': field
+          }
+        )
+
     self._hasBuiltFields = True
 
-  def commit(self, sgFields=None):
+  def _buildUserFields(self):
     '''
-    Commits any modified Entity fields that have not yet been published to the
-    Shotgun database.
+    Sub-class portion of SgEntity.buildFields().
 
-    Returns True if any fields were updated.
-
-    Args:
-      * (dict) sgFields:
-        List of fields to commit.  When specified only those fields will be
-        commited.
+    Default function adds the "type" field to Entities.
     '''
 
-    self._lock()
+    pass
 
-    try:
-      self._isCommitting = True
+  def buildUserFields(self):
+    '''
+    Builds the user fields for the Entity.
+    '''
 
-      if self._markedForDeletion:
-        result = self.delete(sgCommit=True)
+    # Only build the fields once!
+    if self._hasBuiltFields:
+      return
 
-        ShotgunORM.onEntityCommit(self, ShotgunORM.COMMIT_TYPE_DELETE)
-
-        return result
-
-      updateData = {}
-
-      if sgFields == None:
-        sgFields = self.fieldNames()
-      elif isinstance(sgFields, str):
-        sgFields = [sgFields]
-      else:
-        sgFields = list(set(sgFields))
-
-      for field in sgFields:
-        fieldObj = self.field(field)
-
-        if fieldObj == None:
-          raise RuntimeError('no field named "%s"' % field)
-
-        if not fieldObj.hasUpdate():
-          continue
-
-        updateData[fieldObj.name()] = fieldObj.toFieldData()
-
-      if len(updateData) <= 0:
-        return False
-
-      # Dont use the SgConnection, this is so if the Entity is being created
-      # the ShotgunORM onEntityCreate callback isnt called.
-      sgconnection = self.session().connection().connection()
-
-      commitType = None
-
-      if not self.exists():
-        idField = self.field('id')
-
-        sgResultId = sgconnection.create(self.type, updateData, ['id'])['id']
-
-        idField._value = sgResultId
-        idField._valid = True
-
-        session = self.session()
-
-        try:
-          session._addEntity(self)
-        except:
-          pass
-
-        commitType = ShotgunORM.COMMIT_TYPE_CREATE
-      else:
-        sgconnection.update(self.type, self['id'], updateData)
-
-        commitType = ShotgunORM.COMMIT_TYPE_UPDATE
-
-      self._updateFields(updateData, setValue=False)
-
-      ShotgunORM.onEntityCommit(self, commitType)
-
-      return True
-    finally:
-      self._isCommitting = False
-
-      self._release()
+    self._buildUserFields()
 
   def clone(self, inheritFields=[], numberOfEntities=1):
     '''
@@ -534,25 +650,83 @@ class SgEntity(object):
         a list of Entity objects will be returned.
     '''
 
-    sgData = {}
+    with self:
+      sgData = {}
 
-    if isinstance(inheritFields, str):
-      inheritFields = [inheritFields]
+      if isinstance(inheritFields, str):
+        inheritFields = [inheritFields]
 
-    if len(inheritFields) >= 1:
-      sgData.update(self.toFieldData(inheritFields))
+      if len(inheritFields) >= 1:
+        validFields = []
 
-    if sgData.has_key('id'):
-      del sgData['id']
+        for field in self.fields(inheritFields):
+          if not field.isQueryable() or field.type == field.RETURN_TYPE_SUMMARY:
+            continue
 
-    if sgData.has_key('type'):
-      del sgData['type']
+          validFields.append(field.name())
 
-    numberOfEntities = max(1, numberOfEntities)
+        self.sync(validFields, ignoreValid=True, ignoreWithUpdate=True)
 
-    session = self.session()
+        sgData.update(
+          self.toFieldData(inheritFields)
+        )
 
-    return self.session().create(self.type, sgData, sgCommit=False, numberOfEntities=numberOfEntities)
+      if sgData.has_key('id'):
+        del sgData['id']
+
+      if sgData.has_key('type'):
+        del sgData['type']
+
+      numberOfEntities = max(1, numberOfEntities)
+
+      return self.connection().create(
+        self.type,
+        sgData,
+        sgCommit=False,
+        numberOfEntities=numberOfEntities
+      )
+
+  def commit(self, sgFields=None):
+    '''
+    Commits any modified Entity fields that have not yet been published to the
+    Shotgun database.
+
+    Returns True if anything modifcations were published to Shotgun.
+
+    Args:
+      * (dict) sgFields:
+        List of fields to commit.  When specified only those fields will be
+        commited.
+    '''
+
+    with self:
+      ShotgunORM.LoggerEntity.debug('%(entity)s.commit(...)', {'entity': self})
+      ShotgunORM.LoggerEntity.debug('    * sgFields: %(fields)s', {'fields': sgFields})
+
+      batchData = self.toBatchData(sgFields)
+
+      if len(batchData) <= 0:
+        return False
+
+      connection = self.connection()
+
+      connection._batch(
+        [
+          {
+            'entity': self,
+            'batch_data': batchData
+          }
+        ]
+      )
+
+      return True
+
+  def connection(self):
+    '''
+    Returns the SgConnection the Entity belongs to.
+    '''
+
+    return self.__connection
 
   def delete(self, sgCommit=False):
     '''
@@ -563,7 +737,14 @@ class SgEntity(object):
         Deletes the Entity and immediately commits the change.
     '''
 
-    return self.session().delete(self)
+    with self:
+      if not self.exists():
+        raise RuntimeError('entity does not exist, can not generate request data for type delete')
+
+      if sgCommit:
+        self.connection().delete(self)
+      else:
+        self._markedForDeletion = True
 
   def eventLogs(self, sgEventType=None, sgRecordLimit=0):
     '''
@@ -580,7 +761,7 @@ class SgEntity(object):
     if not self.exists():
       return []
 
-    session = self.session()
+    connection = self.connection()
 
     filters = [
       ['entity', 'is', self.toEntityFieldData()],
@@ -589,9 +770,20 @@ class SgEntity(object):
     order = [{'field_name':'created_at','direction':'desc'}]
 
     if sgEventType != None:
-      filters.append(['event_type', 'is', sgEventType])
+      filters.append(
+        [
+          'event_type',
+          'is',
+          sgEventType
+        ]
+      )
 
-    result = session.find('EventLogEntry', filters=filters, order=order, limit=sgRecordLimit)
+    result = connection.find(
+      'EventLogEntry',
+      filters=filters,
+      order=order,
+      limit=sgRecordLimit
+    )
 
     return result
 
@@ -601,125 +793,7 @@ class SgEntity(object):
     else returns False when the Entity has yet to be created with a commit.
     '''
 
-    return self['id'] != None
-
-  def _fetch(self, sgFields):
-    '''
-    Internal function!
-
-    Fetches the specified fields from the Shotgun db.
-
-    Not thread safe!
-
-    Args:
-      * (list) sgFields:
-        List of fields to fetch from Shotgun.
-    '''
-
-    ####
-    # DO NOT CALL THIS FUNCTION FOR SUMMARY FIELDS!
-    ####
-
-    if not self.exists():
-      return
-
-    queryFields = set([])
-
-    for field in sgFields:
-      fieldObj = self.field(field)
-
-      if fieldObj == None:
-        continue
-
-      if fieldObj.isValid() or fieldObj.returnType() == ShotgunORM.SgField.RETURN_TYPE_SUMMARY:
-        continue
-
-      queryFields.add(field)
-
-    # Bail if no fields need querying!
-    if len(queryFields) <= 0:
-      return False
-
-    queryFields = list(queryFields)
-
-    sgResult = self.session()._sg_find_one(self.type, self.toEntitySearchPattern(), queryFields)
-
-    if sgResult == None:
-      raise RuntimeError('unable to find Entity in Shotgun database %s' % self.__repr__())
-
-    del sgResult['type']
-    del sgResult['id']
-
-    self._updateFields(sgResult)
-
-  def fetch(self, sgFields, thread=False):
-    '''
-    Retrieves the specified fields from Shotgun.
-
-    Only those fields which isValid() returns False will be fetched.
-
-    Args:
-      * (list) sgFields:
-        List of fields to fetch from Shotgun.
-
-      * (bool) thread:
-        Forks the call to Shotgun so this returns immediately.  Returns the
-        Thread object.
-    '''
-
-    ShotgunORM.LoggerEntity.debug('%(entity)s.fetch()', {'entity': self.__repr__()})
-    ShotgunORM.LoggerEntity.debug('    * requested: %(sgFields)s', {'sgFields': sgFields})
-
-    if thread:
-      ShotgunORM.LoggerEntity.debug('    * thread: %(thread)s', {'thread': thread})
-
-      t = threading.Thread(self.fetch, args=sgFields)
-
-      t.start()
-
-      return t
-
-    if sgFields == None:
-      sgFields = self.fieldNames()
-    else:
-      if isinstance(sgFields, str):
-        sgFields = [sgFields]
-      elif not isinstance(sgFields, (list, set, tuple)):
-        raise TypeError('expected a list for sgFields, got "%s"' % sgFields.__name__)
-
-    self._lock()
-
-    self._isFetching = True
-
-    try:
-      if not self.exists():
-        return True
-
-      queryFields = []
-
-      for field in sgFields:
-        fieldObj = self.field(field)
-
-        if fieldObj == None or fieldObj.isValid():
-          continue
-
-        if fieldObj.returnType() == fieldObj.RETURN_TYPE_SUMMARY:
-          fieldObj.fetch()
-
-          continue
-
-        queryFields.append(field)
-
-      if len(queryFields) >= 1:
-        self._fetch(queryFields)
-
-        return True
-
-      return False
-    finally:
-      self._isFetching = False;
-
-      self._release()
+    return self['id'] >= 0
 
   def field(self, sgField):
     '''
@@ -732,61 +806,158 @@ class SgEntity(object):
 
     return self._fields.get(sgField, None)
 
-  def fieldLabels(self):
+  def fieldLabels(self, sgFields=None, sgReturnTypes=None):
     '''
     Returns a list of the field labels associated with the Entity in Shotgun.
+
+    The order of the returned result matches by index with the result from
+    SgEntity.fieldNames(), except when the arg "sgFields" is not None.
+
+    Args:
+      * (list) sgFields:
+        List of specific fields to return.
+
+      * (list) sgReturnTypes:
+        List of specific field return types to filter by.
     '''
 
     result = []
 
-    for field in self.fieldNames():
-      result.append(self.field(field).label())
+    # Do it this way so that the index values match between this and fieldNames().
+    for field in self.fieldNames(sgFields, sgReturnTypes):
+      result.append(
+        self.field(field).label()
+      )
 
     return result
 
-  def fieldNames(self):
+  def fieldNames(self, sgFields=None, sgReturnTypes=None):
     '''
     Returns a list of the field names associated with the Entity in Shotgun.
+
+    Args:
+      * (list) sgFields:
+        List of specific fields to return.
+
+      * (list) sgReturnTypes:
+        List of specific field return types to filter by.
     '''
 
-    return sorted(self.fields().keys())
+    return sorted(
+      self.fields(sgFields, sgReturnTypes).keys()
+    )
 
-  def fields(self):
+  def fields(self, sgFields=None, sgReturnTypes=None):
     '''
     Returns a dict containing all ShotgunORM.SgField objects that belong to the
     Entity.
+
+    When the arg "sgFields" is specified then only those field objects will be
+    returned.
+
+    Args:
+      * (list) sgFields:
+        List of specific fields to return.
+
+      * (list) sgReturnTypes:
+        List of specific field return types to filter by.
     '''
 
-    return dict(self._fields)
+    if sgFields == None and sgReturnTypes == None:
+      return dict(self._fields)
 
-  def fieldValues(self, sgFields=None):
+    if isinstance(sgFields, str):
+      sgFields = [sgFields]
+    elif sgFields == None:
+      sgFields = self._fields.keys()
+
+    sgFields = set(sgFields)
+
+    if sgReturnTypes == None:
+      pass
+    elif not isinstance(sgReturnTypes, (list, tuple, set)):
+      sgReturnTypes = [sgReturnTypes]
+    else:
+      sgReturnTypes = set(sgReturnTypes)
+
+    result = {}
+
+    if sgReturnTypes != None:
+      for field in sgFields:
+        fieldObj = self.field(field)
+
+        if fieldObj == None or not fieldObj.returnType() in sgReturnTypes:
+          continue
+
+        result[field] = fieldObj
+    else:
+      for field in sgFields:
+        fieldObj = self.field(field)
+
+        if fieldObj == None:
+          continue
+
+        result[field] = fieldObj
+
+    return result
+
+  def fieldValues(self, sgFields=None, sgReturnTypes=None):
     '''
     Returns a dict containing the value of all specified fields.
 
-    This is useful when you want to query multiple fields at once and keep the
-    outgoing Shotgun database calls to a minimum.
+    Use this function when you want to query multiple field values at once
+    and perform the action in a single call to the Shotgun database.
 
     Args:
       * (list) sgFields:
         List of fields to return.
+
+      * (list) sgReturnTypes:
+        List of specific field return types to filter by.
     '''
 
-    if sgFields == None:
-      sgFields = self.fieldNames()
+    with self:
+      if sgFields == None:
+        sgFields = self.fieldNames()
 
-    self.fetch(sgFields)
+      filteredFields = self.fields(sgFields, sgReturnTypes)
 
-    result = {}
+      self.sync(
+        filteredFields.keys(),
+        ignoreValid=True,
+        ignoreWithUpdate=True,
+        backgroundPull=False
+      )
 
-    for field in sgFields:
-      fieldObj = self.field(field)
+      result = {}
 
-      if fieldObj == None:
-        continue
+      entityFieldTypes = [
+        ShotgunORM.SgField.RETURN_TYPE_ENTITY,
+        ShotgunORM.SgField.RETURN_TYPE_MULTI_ENTITY
+      ]
 
-      result[field] = fieldObj.value()
+      entityFields = []
 
-    return result
+      for name, field in filteredFields.items():
+        if field.returnType() in entityFieldTypes:
+          entityFields.append(field)
+
+          continue
+
+        result[name] = field.value()
+
+      if len(entityFields) >= 1:
+        qEngine = self.connection().queryEngine()
+
+        qEngine.block()
+
+        try:
+          for field in entityFields:
+            result[field.name()] = field.value()
+        finally:
+          qEngine.unblock()
+
+      return result
 
   def hasField(self, sgField):
     '''
@@ -799,19 +970,21 @@ class SgEntity(object):
 
     return self._fields.has_key(sgField)
 
-  def hasFieldUpdates(self):
+  def hasCommit(self):
     '''
-    Returns True if any fields for the Entity have not yet been published to the
-    Shotgun database.
+    Returns True in any of the following cases.
+
+      1: The Entity has yet to be created in Shotgun.
+      2: The Entity has been marked for deletion.
+      3: One or more fields are flaged as having pending updates.
     '''
 
-    # Bail early if the Entity does not have an ID because it does yet exist
-    # in the Shotgun db.
-    if not self.exists():
+    # Bail early if the Entity does not have an ID or it is marked for deletion.
+    if not self.exists() or self.isMarkedForDeletion():
       return True
 
-    for field in self._fields.values():
-      if field.hasUpdate():
+    for field in self.fields().values():
+      if field.hasCommit():
         return True
 
     return False
@@ -822,6 +995,13 @@ class SgEntity(object):
     '''
 
     return self.__classinfo__
+
+  def isBuildingFields(self):
+    '''
+    Returns True when the Entity is building its fields.
+    '''
+
+    return not self._hasBuiltFields
 
   def isCommitting(self):
     '''
@@ -837,13 +1017,13 @@ class SgEntity(object):
 
     return self.info().isCustom()
 
-  def isFetching(self):
+  def isMarkedForDeletion(self):
     '''
-    Returns True if the Entity is currently retrieving field values from the
-    Shotgun database.
+    Returns True if the Entity has been marked for deletion but has not yet
+    pushed the commit to Shotgun.
     '''
 
-    return self._isFetching
+    return self._markedForDeletion
 
   def label(self):
     '''
@@ -864,172 +1044,261 @@ class SgEntity(object):
     if not self.exists():
       return None
 
-    session = self.session()
+    connection = self.connection()
 
     filters = [
-      ['entity', 'is', self.toEntityFieldData()],
+      [
+        'entity',
+        'is',
+        self.toEntityFieldData()
+      ]
     ]
 
-    order = [{'field_name':'created_at','direction':'desc'}]
+    order = [
+      {
+        'field_name': 'created_at',
+        'direction':'desc'
+      }
+    ]
 
     if sgEventType != None:
-      filters.append(['event_type', 'is', sgEventType])
+      filters.append(
+        [
+          'event_type',
+          'is',
+          sgEventType
+        ]
+      )
 
-    result = session.findOne('EventLogEntry', filters=filters, order=order)
+    result = connection.findOne(
+      'EventLogEntry',
+      filters=filters,
+      order=order
+    )
 
     return result
 
-  def revert(self, sgFields=None):
+  def _makeWidget(self):
     '''
-    Reverts any uncommited fields to their Shotgun db value.
+    Subclass portion of SgEntity.makeWidget().
+    '''
 
-    Returns True if any fields were invalidated else returns False.
+    return False
+
+  def makeWidget(self):
+    '''
+    Creates the GUI widget for the Entity.
+
+    If the widget already has been created this immediately returns.
+    '''
+
+    with self:
+      if self.widget() != None:
+        return True
+
+      return self._makeWidget()
+
+  def _onFieldChanged(self, sgField):
+    '''
+    Subclass portion of SgEntity.onFieldChanged().
+
+    Called when a field changes values.
+    '''
+
+    pass
+
+  def onFieldChanged(self, sgField):
+    '''
+    Called when a field changes values.
+
+    If SgEntity.widget() is not None then SgEntity.widget().onFieldChanged()
+    will be called as well.
+
+    Args:
+      * (SgField) sgField:
+        Field that changed.
+    '''
+
+    ShotgunORM.LoggerEntity.debug('%(entity)s.onFieldChanged()', {'entity': self})
+    ShotgunORM.LoggerEntity.debug('    * sgField: %(sgField)s', {'sgField': sgField})
+
+    self._onFieldChanged(sgField)
+
+    w = self.widget()
+
+    if w != None:
+      w.onFieldChanged(sgField)
+
+    if not self.isBuildingFields() and self._createCompleted:
+      ShotgunORM.onFieldChanged(sgField)
+
+  def revert(self, sgFields=None, ignoreValid=False, ignoreWithUpdate=False):
+    '''
+    Reverts all fields to their Shotgun db value.
+
+    Returns True if any fields were invalidated.
 
     Args:
       * (list) sgFields:
         List of field names to revert.  When specified only those select fields
         will be reverted. All others will be left un-touched.
+
+      * (bool) ignoreValid:
+        Ignores fields that valid() returns True.
+
+      * (bool) ignoreWithUpdate:
+        Ignores fields that have pending updates and leaves them untouched by
+        the revert operation.
     '''
 
-    self._lock()
-
-    try:
+    with self:
       result = False
 
-      if sgFields == None:
-        sgFields = self.fieldNames()
-      else:
-        if isinstance(sgFields, str):
-          sgFields = [sgFields]
-        elif not isinstance(sgFields, (list, set, tuple)):
-          raise TypeError('expected a list for sgFields, got "%s"' % sgFields.__name__)
-
-      for field in sgFields:
-        fieldObj = self.field(field)
-
-        if fieldObj == None or fieldObj.hasUpdate():
+      for field in self.fields(sgFields).values():
+        if not field.isValid():
           continue
 
-        fieldObj.invalidate()
+        if (field.isValid() and ignoreValid) or (field.hasCommit() and ignoreWithUpdate):
+          continue
+
+        field.invalidate()
 
         result = True
 
       return result
-    finally:
-      self._release()
 
   def revive(self):
     '''
     Revives the Entity.
     '''
 
-    return self.session().revive(self)
+    with self:
+      if not self.exists():
+        raise RuntimeError('entity does not exist, can not generate request data for type revive')
 
-  def session(self):
+      self.connection().revive(self)
+
+  def sync(self, sgFields=None, ignoreValid=False, ignoreWithUpdate=True, backgroundPull=True):
     '''
-    Returns the SgSession the Entity belongs to.
-    '''
+    Syncs the Entity with Shotgun and pulls down the specified field values.
+    Immediately returns if the Entity doesn't exist in Shotgun.
 
-    return self._session
+    Returns True if any fields synced with Shotgun.
 
-  def sync(self, sgFields=None):
-    '''
-    Syncs the Entity with Shotgun so future calls to field values re-query the
-    Shotgun database.  Immediately returns if the Entity doesn't exist in Shotgun.
-
-    Returns True if any fields were set to sync.
+    Note:
+      Non-querable fields are immediately validated during this function even if
+      the arg "backgroundPull" is set to True.
 
     Args:
       * (list) sgFields:
         List of field names to sync.  When specified only those select fields
         will be synced.
+
+      * (bool) ignoreValid:
+        Ignores fields that are marked as valid and leaves them untouched by
+        the sync operation.
+
+      * (bool) ignoreWithUpdate:
+        Ignores fields that have pending updates and leaves them untouched by
+        the sync operation.
+
+      * (bool) backgroundPull:
+        Fields that SgField.isQueryable() returns True for will pull their value
+        down in a background process.
     '''
 
-    self._lock()
-
-    try:
+    with self:
       if not self.exists():
         return False
 
-      if sgFields == None or sgFields == []:
-        count = 0
+      result = False
 
-        for field in self._fields.values():
-          fieldName = field.name()
+      pullFields = []
+      nonQueryableFields = []
 
-          # Do NOT invalidate the id field!
-          if fieldName == 'id' or field.hasUpdate():
-            continue
+      for field in self.fields(sgFields).values():
+        if (ignoreWithUpdate and field.hasCommit()) or (ignoreValid and field.isValid()) or (field.hasSyncUpdate() or field.isSyncUpdating()):
+          continue
 
-          field.invalidate()
+        field.invalidate()
 
-          count += 1
+        if not field.isQueryable():
+          nonQueryableFields.append(field)
+        else:
+          pullFields.append(field.name())
 
-        return count >= 1
-      else:
-        count = 0
+        result = True
 
-        if isinstance(sgFields, str):
-          sgFields = [sgFields]
-        elif not isinstance(sgFields, (list, set, tuple)):
-          raise TypeError('expected a list for sgFields, got "%s"' % sgFields.__name__)
+      if len(pullFields) >= 1:
+        # Only pull if the Entity exists in Shotgun!
+        if backgroundPull and self.exists():
+          self.connection().queryEngine().addQueue(self, pullFields)
+        else:
+          values = self.valuesSg(pullFields)
 
-        sgFields = set(sgFields)
+          for field, value in values.items():
+            fieldObj = self.field(field)
 
-        for field in sgFields:
-          fieldObj = self.field(field)
+            fieldObj._updateValue = value
+            fieldObj.setHasSyncUpdate(True)
 
-          if fieldObj == None or field == 'id' or fieldObj.hasUpdate():
-            continue
+            # Don't slow down the sync process by calling validate!
+            #fieldObj.validate()
 
-          fieldObj.invalidate()
-
-          count += 1
-
-        return count >= 1
-    finally:
-      self._release()
-
-  def toBatchFieldData(self):
-    '''
-    Returns the Shotgun formatted dict of the Entity that would be used in a
-    SgSession.batch() submit.
-
-    Returns None if the Entity has nothing for batch.
-    '''
-
-    if self._markedForDeletion:
-      if not self.exists():
-        raise RuntimeError('entity does not exist, can not generate request data for type delete')
-
-      result = {
-        'request_type': 'delete',
-        'entity_type': self.type,
-        'entity_id': self['id']
-      }
+      if len(nonQueryableFields) >= 1:
+        for field in nonQueryableFields:
+          field.validate()
 
       return result
 
-    data = self.toFieldUpdateData()
+  def toBatchData(self, sgFields=None):
+    '''
+    Returns a list of batch commands that can be fed to a SgConnection._batch()
+    call.
+
+    The returned list may contain multiple entries in cases where
+    isMarkedForDeletion() is True and fields contain pending updates.
+
+    Returns an empty list when nothing is to be done.
+
+    Args:
+      * (list) sgFields:
+        List of fields to return batch data for.
+    '''
+
+    result = []
+
+    if self._markedForDeletion:
+      result.append(
+        {
+          'request_type': 'delete',
+          'entity_type': self.type,
+          'entity_id': self['id']
+        }
+      )
+
+    data = self.toFieldUpdateData(sgFields)
 
     if len(data) <= 0:
-      return None
-
-    result = None
+      return result
 
     if not self.exists():
-      result = {
-        'request_type': 'create',
-        'entity_type': self.type,
-        'data': data
-      }
+      result.append(
+        {
+          'request_type': 'create',
+          'entity_type': self.type,
+          'data': data
+        }
+      )
     else:
-      result = {
-        'request_type': 'update',
-        'entity_type': self.type,
-        'entity_id': self['id'],
-        'data': data
-      }
+      result.append(
+        {
+          'request_type': 'update',
+          'entity_type': self.type,
+          'entity_id': self['id'],
+          'data': data
+        }
+      )
 
     return result
 
@@ -1040,17 +1309,31 @@ class SgEntity(object):
     '''
 
     if not self.exists():
-      raise RuntimeError('can not build field pattern for an un-commited Entity')
+      raise RuntimeError('can not build search pattern for an Entity that does not exist in Shotgun')
 
-    return {'type': self.type, 'id': self['id']}
+    return {
+      'type': self.type,
+      'id': self['id']
+    }
 
   def toEntitySearchPattern(self):
     '''
     Returns a Shotgun formatted search pattern that can be used to find this
     Entity in a find() and findOne() call.
+
+    If the Entity does not exist then None is returned.
     '''
 
-    return [['id', 'is', self['id']]]
+    if not self.exists():
+      raise RuntimeError('can not build search pattern for an Entity that does not exist in Shotgun')
+
+    return [
+      [
+        'id',
+        'is',
+        self['id']
+      ]
+    ]
 
   def toFieldData(self, sgFields=None):
     '''
@@ -1064,23 +1347,16 @@ class SgEntity(object):
 
     if sgFields == None:
       sgFields = self.fieldNames()
-    else:
-      if isinstance(sgFields, str):
-        sgFields = [sgFields]
-      elif not isinstance(sgFields, (list, set, tuple)):
-        raise TypeError('expected a list for sgFields, got "%s"' % sgFields.__name__)
+    elif isinstance(sgFields, str):
+      sgFields = [sgFields]
 
-    self.fetch(sgFields)
+    with self:
+      result = {}
 
-    result = {}
+      self.sync(sgFields, ignoreValid=True, ignoreWithUpdate=True)
 
-    for field in sgFields:
-      fieldObj = self.field(field)
-
-      if fieldObj == None:
-        continue
-
-      result[field] = field.toFieldData()
+      for fieldName, field in self.fields(sgFields).items():
+        result[fieldName] = field.toFieldData()
 
     return result
 
@@ -1091,54 +1367,74 @@ class SgEntity(object):
 
     Returns an empty dict when no fields contain a pending commit.
 
+    Note:
+      Fields which return False for isCommittable() are ommited from the result.
+
     Args:
       * (list) sgFields:
-        List of field names to sync.  When specified only those select fields
-        will be returned.
+        List of fields to process.  When specified only those select fields will
+        be returned.
     '''
+
+    result = {}
+
+    for fieldName, field in self.fields(sgFields).items():
+      if field.hasCommit() and field.isCommittable():
+        result[fieldName] = field.toFieldData()
+
+    return result
+
+  def valuesSg(self, sgFields):
+    '''
+    Returns field values from Shotgun for the specified fields.
+
+    Note:
+      Fields which isQueryable() returns False will not be returned in the
+      result!
+
+    Args:
+      * (list) sgFields:
+        List of fields to fetch from Shotgun.
+    '''
+
+    ShotgunORM.LoggerEntity.debug('%(entity)s.valuesSg()', {'entity': self})
+    ShotgunORM.LoggerEntity.debug('    * requested: %(sgFields)s', {'sgFields': sgFields})
+
+    if not self.exists():
+      return {}
 
     if sgFields == None:
       sgFields = self.fieldNames()
-    else:
-      if isinstance(sgFields, str):
-        sgFields = [sgFields]
-      elif not isinstance(sgFields, (list, set, tuple)):
-        raise TypeError('expected a list for sgFields, got "%s"' % sgFields.__name__)
+    elif isinstance(sgFields, str):
+      sgFields = [sgFields]
 
-    sgFields = set(sgFields)
+    pullFields = []
 
-    self._lock()
+    for fieldName, field in self.fields(sgFields).items():
+      if not field.isQueryable():
+        continue
 
-    try:
-      result = {}
+      pullFields.append(field.name())
 
-      if len(sgFields) <= 0:
-        return result
+    result = self.connection()._sg_find_one(
+      self.type,
+      self.toEntitySearchPattern(),
+      pullFields
+    )
 
-      for field in sgFields:
-        fieldObj = self.field(field)
+    del result['type']
 
-        if fieldObj == None:
-          continue
+    if not 'id' in pullFields:
+      del result['id']
 
-        if fieldObj.hasUpdate():
-          result[field] = fieldObj.toFieldData()
-
-      return result
-    finally:
-      self._release()
-
-  @property
-  def type(self):
-    '''
-    Returns the Entities type.
-    '''
-
-    return self.info().name()
+    return result
 
   def webUrl(self, openInBrowser=False):
     '''
     Returns the Shotgun URL of the Entity.
+
+    When the Entity does not yet exist in Shotgun the returned URL will be a
+    link to the "entity_type" page.
 
     Args:
       * (bool) openInBrowser:
@@ -1146,11 +1442,11 @@ class SgEntity(object):
         default web-browser.
     '''
 
-    id = self['id']
+    iD = self['id']
 
-    url = self.session().connection().url()
+    url = self.connection().url()
 
-    if id == None:
+    if iD <= -1:
       url += '/page/project_default?entity_type=%s' % self.type
 
       if self.hasField('project'):
@@ -1166,9 +1462,20 @@ class SgEntity(object):
 
         url += '&project_id=%d' % projectId
     else:
-      url += '/detail/%s/%d' % (self.type, self['id'])
+      url += '/detail/%s/%d' % (self.type, iD)
 
     if openInBrowser:
       webbrowser.open(url)
 
     return url
+
+  def widget(self):
+    '''
+    Subclasses can implement makeWidget so this returns some type of GUI widget
+    for the Entity.
+
+    Default returns None.
+    '''
+
+    with self:
+      return self._widget

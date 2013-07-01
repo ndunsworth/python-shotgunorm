@@ -25,22 +25,31 @@
 #
 
 __all__ = [
+  'COMMIT_TYPE_NONE',
   'COMMIT_TYPE_CREATE',
   'COMMIT_TYPE_DELETE',
   'COMMIT_TYPE_REVIVE',
   'COMMIT_TYPE_UPDATE',
-  'ON_ENTITY_COMMIT_CBS',
+  'AFTER_ENTITY_COMMIT_CBS',
+  'BEFORE_ENTITY_COMMIT_CBS',
   'ON_ENTITY_CREATE_CBS',
   'ON_FIELD_CHANGED_CBS',
-  'addOnEntityCommit',
+  'ON_SCHEMA_CHANGED_CBS',
+  'addAfterEntityCommit',
+  'addBeforeEntityCommit',
   'addOnEntityCreate',
   'addOnFieldChanged',
-  'appendOnEntityCommit',
+  'addOnSchemaChanged',
+  'appendAfterEntityCommit',
+  'appendBeforeEntityCommit',
   'appendOnEntityCreate',
   'appendOnFieldChanged',
-  'onEntityCommit',
+  'appendOnSchemaChanged',
+  'afterEntityCommit',
+  'beforeEntityCommit',
   'onEntityCreate',
-  'onFieldChanged'
+  'onFieldChanged',
+  'onSchemaChanged'
 ]
 
 # Python imports
@@ -48,21 +57,35 @@ import os
 import socket
 
 # This module imports
-from ShotgunORM import LoggerCallback
+import ShotgunORM
 
-COMMIT_TYPE_CREATE = 0
-COMMIT_TYPE_DELETE = 1
-COMMIT_TYPE_REVIVE = 2
-COMMIT_TYPE_UPDATE = 3
+COMMIT_TYPE_NONE = 0
+COMMIT_TYPE_CREATE = 1
+COMMIT_TYPE_DELETE = 2
+COMMIT_TYPE_REVIVE = 3
+COMMIT_TYPE_UPDATE = 4
 
-def _defaultOnEntityCommit(sgEntity, sgCommitType):
-  LoggerCallback.debug('onEntityCommit: %s %d' % (sgEntity.__repr__(), sgCommitType))
+def _defaultAfterEntityCommit(sgEntity, sgBatchData, sgBatchResult, sgCommitData, sgCommitError):
+  ShotgunORM.LoggerCallback.debug('afterEntityCommit: %s' % sgEntity)
+
+def _defaultBeforeEntityCommit(sgEntity, sgBatchData, sgCommitData):
+  ShotgunORM.LoggerCallback.debug('beforeEntityCommit: %s' % sgEntity)
 
 def _defaultOnEntityCreate(sgEntity):
-  LoggerCallback.debug('onEntityCreate: %s' % sgEntity.__repr__())
+  ShotgunORM.LoggerCallback.debug('onEntityCreate: %s' % sgEntity)
 
-def _defaultOnFieldChangedCb(sgEntityField):
-  LoggerCallback.debug('onFieldChanged: %s' % sgEntityField.__repr__())
+def _defaultOnFieldChanged(sgField):
+  ShotgunORM.LoggerCallback.debug('onFieldChanged: %s' % sgField)
+
+def _defaultOnSchemaChanged(sgSchema):
+  ShotgunORM.LoggerCallback.debug('onSchemaChanged: %s' % sgSchema)
+
+  url = sgSchema.url()
+
+  connections = ShotgunORM.SgConnection.__metaclass__.connections(url)
+
+  for connection in connections:
+    connection.schemaChanged()
 
 #def _defaultOnFieldChangedCb(sgEntityField):
 #  soc = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -86,10 +109,19 @@ def _defaultOnFieldChangedCb(sgEntityField):
 #
 #  soc.close()
 
-ON_ENTITY_COMMIT_CBS = {
+AFTER_ENTITY_COMMIT_CBS = {
   '*': [
     {
-      'cb': _defaultOnEntityCommit,
+      'cb': _defaultAfterEntityCommit,
+      'description': 'default_cb'
+    }
+  ]
+}
+
+BEFORE_ENTITY_COMMIT_CBS = {
+  '*': [
+    {
+      'cb': _defaultBeforeEntityCommit,
       'description': 'default_cb'
     }
   ]
@@ -107,33 +139,29 @@ ON_ENTITY_CREATE_CBS = {
 ON_FIELD_CHANGED_CBS = {
   '*': [
     {
-      'cb': _defaultOnFieldChangedCb,
+      'cb': _defaultOnFieldChanged,
       'description': 'default_cb'
     }
   ]
 }
 
-def addOnEntityCommit(cb, filterName='*', description=''):
+ON_SCHEMA_CHANGED_CBS = {
+  '*': []
+}
+
+def addAfterEntityCommit(cb, filterName='*', description=''):
   '''
+  Adds the callback and places it at the front of the afterEntityCommit
+  callback list.
 
-  '''
+  This callback will be executed after an Entity is committed to Shotgun.
 
-  if filterName in [None, '']:
-    filterName = '*'
+  Note:
+    The callback must contain 5 args.  See the documentation for
+    ShotgunORM.afterEntityCommit() for detailed arg information.
 
-  data = {
-    'cb': cb,
-    'description': description
-  }
-
-  try:
-    ON_ENTITY_COMMIT_CBS[filterName].insert(0, data)
-  except:
-    ON_ENTITY_COMMIT_CBS[filterName] = [data]
-
-def appendOnEntityCommit(cb, filterName='*', description=''):
-  '''
-
+    def myCallback(sgEntity, sgBatchData, sgBatchResult, sgCommitData, sgCommitError):
+      ...
   '''
 
   if filterName in [None, '']:
@@ -145,13 +173,107 @@ def appendOnEntityCommit(cb, filterName='*', description=''):
   }
 
   try:
-    ON_ENTITY_COMMIT_CBS[filterName].append(data)
+    AFTER_ENTITY_COMMIT_CBS[filterName].insert(0, data)
   except:
-    ON_ENTITY_COMMIT_CBS[filterName] = [data]
+    AFTER_ENTITY_COMMIT_CBS[filterName] = [data]
+
+def appendAfterEntityCommit(cb, filterName='*', description=''):
+  '''
+  Adds the callback and places it at the end of the afterEntityCommit
+  callback list.
+
+  This callback will be executed after an Entity is committed to Shotgun.
+
+  Note:
+    The callback must contain 5 args.  See the documentation for
+    ShotgunORM.afterEntityCommit() for detailed arg information.
+
+    def myCallback(sgEntity, sgBatchData, sgBatchResult, sgCommitData, sgCommitError):
+      ...
+  '''
+
+  if filterName in [None, '']:
+    filterName = '*'
+
+  data = {
+    'cb': cb,
+    'description': description
+  }
+
+  try:
+    AFTER_ENTITY_COMMIT_CBS[filterName].append(data)
+  except:
+    AFTER_ENTITY_COMMIT_CBS[filterName] = [data]
+
+def addBeforeEntityCommit(cb, filterName='*', description=''):
+  '''
+  Adds the callback and places it at the front of the beforeEntityCommit
+  callback list.
+
+  This callback will be executed before an Entity is committed to Shotgun.
+
+  Note:
+    The callback must contain 3 args.  See the documentation for
+    ShotgunORM.beforeEntityCommit() for detailed arg information.
+
+    def myCallback(sgEntity, sgBatchData, sgCommitData):
+      ...
+  '''
+
+  if filterName in [None, '']:
+    filterName = '*'
+
+  data = {
+    'cb': cb,
+    'description': description
+  }
+
+  try:
+    BEFORE_ENTITY_COMMIT_CBS[filterName].insert(0, data)
+  except:
+    BEFORE_ENTITY_COMMIT_CBS[filterName] = [data]
+
+def appendBeforeEntityCommit(cb, filterName='*', description=''):
+  '''
+  Adds the callback and places it at the end of the beforeEntityCommit
+  callback list.
+
+  This callback will be executed before an Entity is committed to Shotgun.
+
+  Note:
+    The callback must contain 3 args.  See the documentation for
+    ShotgunORM.beforeEntityCommit() for detailed arg information.
+
+    def myCallback(sgEntity, sgBatchData, sgCommitData):
+      ...
+  '''
+
+  if filterName in [None, '']:
+    filterName = '*'
+
+  data = {
+    'cb': cb,
+    'description': description
+  }
+
+  try:
+    BEFORE_ENTITY_COMMIT_CBS[filterName].append(data)
+  except:
+    BEFORE_ENTITY_COMMIT_CBS[filterName] = [data]
 
 def addOnEntityCreate(cb, filterName='*', description=''):
   '''
+  Adds the callback and places it at the front of the onEntityCreate callback
+  list.
 
+  This callback will be executed anytime an Entity object is created.
+
+  Note:
+    The callback must contain 1 args.  See the documentation for
+    ShotgunORM.onEntityCreate() for detailed arg information.
+
+    def myCallback(sgEntity):
+      ...
   '''
 
   if filterName in [None, '']:
@@ -169,7 +291,17 @@ def addOnEntityCreate(cb, filterName='*', description=''):
 
 def appendOnEntityCreate(cb, filterName='*', description=''):
   '''
+  Adds the callback and places it at the end of the onEntityCreate callback
+  list.
 
+  This callback will be executed anytime an Entity object is created.
+
+  Note:
+    The callback must contain 1 args.  See the documentation for
+    ShotgunORM.onEntityCreate() for detailed arg information.
+
+    def myCallback(sgEntity):
+      ...
   '''
 
   if filterName in [None, '']:
@@ -187,7 +319,17 @@ def appendOnEntityCreate(cb, filterName='*', description=''):
 
 def addOnFieldChanged(cb, filterName='*', description=''):
   '''
+  Adds the callback and places it at the front of the onFieldChanged callback
+  list.
 
+  This callback will be executed anytime an Entity objects field is modified.
+
+  Note:
+    The callback must contain 1 args.  See the documentation for
+    ShotgunORM.onFieldChanged() for detailed arg information.
+
+    def myCallback(sgField):
+      ...
   '''
 
   if filterName in [None, '']:
@@ -205,7 +347,17 @@ def addOnFieldChanged(cb, filterName='*', description=''):
 
 def appendOnFieldChanged(cb, filterName='*', description=''):
   '''
+  Adds the callback and places it at the end of the onFieldChanged callback
+  list.
 
+  This callback will be executed anytime an Entity objects field is modified.
+
+  Note:
+    The callback must contain 1 args.  See the documentation for
+    ShotgunORM.onFieldChanged() for detailed arg information.
+
+    def myCallback(sgField):
+      ...
   '''
 
   if filterName in [None, '']:
@@ -221,27 +373,131 @@ def appendOnFieldChanged(cb, filterName='*', description=''):
   except:
     ON_FIELD_CHANGED_CBS[filterName] = [data]
 
-def onEntityCommit(sgEntity, sgCommitType):
+def addOnSchemaChanged(cb, filterName='*', description=''):
+  '''
+  Adds the callback and places it at the front of the onSchemaChanged callback
+  list.
+
+  This callback will be executed anytime a schema object initializes or rebuilds.
+
+  Note:
+    The callback must contain 1 args.  See the documentation for
+    ShotgunORM.onSchemaChanged() for detailed arg information.
+
+    def myCallback(sgSchema):
+      ...
   '''
 
+  if filterName in [None, '']:
+    filterName = '*'
+
+  data = {
+    'cb': cb,
+    'description': description
+  }
+
+  try:
+    ON_SCHEMA_CHANGED_CBS[filterName].insert(0, data)
+  except:
+    ON_SCHEMA_CHANGED_CBS[filterName] = [data]
+
+def appendOnSchemaChanged(cb, filterName='*', description=''):
+  '''
+  Adds the callback and places it at the end of the onSchemaChanged callback
+  list.
+
+  This callback will be executed anytime a schema object initializes or rebuilds.
+
+  Note:
+    The callback must contain 1 args.  See the documentation for
+    ShotgunORM.onSchemaChanged() for detailed arg information.
+
+    def myCallback(sgSchema):
+      ...
+  '''
+
+  if filterName in [None, '']:
+    filterName = '*'
+
+  data = {
+    'cb': cb,
+    'description': description
+  }
+
+  try:
+    ON_SCHEMA_CHANGED_CBS[filterName].append(data)
+  except:
+    ON_SCHEMA_CHANGED_CBS[filterName] = [data]
+
+def afterEntityCommit(sgEntity, sgBatchData, sgBatchResult, sgCommitData, sgCommitError):
+  '''
+  This function is called after an Entity has been committed to Shotgun.
+
+  Args:
+    * (SgEntity) sgEntity:
+      Entity that is committing.
+
+    * (dict) sgBatchData:
+      Shotgun formatted batch dictionary of the Entities commit data.
+
+    * (list) sgBatchResult:
+      Result returned from Shotgun for the commit.
+
+    * (dict) sgCommitData:
+      Dictionary used to pass data user between beforeCommit() and
+      afterCommit().
+
+    * (Exception) sgCommitError:
+      Exception raised anytime during the commit process.  When this is not None
+      perform cleanup operations because the commit failed.
   '''
 
   entityType = sgEntity.type
 
-  if ON_ENTITY_COMMIT_CBS.has_key(entityType):
-    cbs = ON_ENTITY_COMMIT_CBS[entityType]
+  if AFTER_ENTITY_COMMIT_CBS.has_key(entityType):
+    cbs = AFTER_ENTITY_COMMIT_CBS[entityType]
 
     for i in cbs:
-      i['cb'](sgEntity, sgCommitType)
+      i['cb'](sgEntity, sgBatchData, sgBatchResult, sgCommitData, sgCommitError)
 
-  cbs = ON_ENTITY_COMMIT_CBS['*']
+  cbs = AFTER_ENTITY_COMMIT_CBS['*']
 
   for i in cbs:
-    i['cb'](sgEntity, sgCommitType)
+    i['cb'](sgEntity, sgBatchData, sgBatchResult, sgCommitData, sgCommitError)
+
+def beforeEntityCommit(sgEntity, sgBatchData, sgCommitData):
+  '''
+  This function is called before an Entity has been committed to Shotgun.
+
+  Args:
+    * (SgEntity) sgEntity:
+      Entity that is committing.
+
+    * (dict) sgBatchData:
+      Shotgun formatted batch dictionary of the Entities commit data.
+
+    * (dict) sgCommitData:
+      Dictionary used to pass data user between beforeCommit() and
+      afterCommit().
+  '''
+
+  entityType = sgEntity.type
+
+  if BEFORE_ENTITY_COMMIT_CBS.has_key(entityType):
+    cbs = BEFORE_ENTITY_COMMIT_CBS[entityType]
+
+    for i in cbs:
+      i['cb'](sgEntity, sgCommitType, sgCommitData)
+
+  cbs = BEFORE_ENTITY_COMMIT_CBS['*']
+
+  for i in cbs:
+    i['cb'](sgEntity, sgBatchData, sgCommitData)
 
 def onEntityCreate(sgEntity):
   '''
-
+  This function is called anytime an Entity object is created.  Not to be
+  confused with when an Entity is created in the Shotgun database.
   '''
 
   entityType = sgEntity.type
@@ -257,20 +513,54 @@ def onEntityCreate(sgEntity):
   for i in cbs:
     i['cb'](sgEntity)
 
-def onFieldChanged(sgEntityField):
+def onFieldChanged(sgField):
+  '''
+  This function is called anytime an Entity fields value changes.
+
+  Called during:
+    1: When a field validates itself.
+    2: When a field is set to a new value.
+    3: When a field is set to cache data.
+    4: When a fields SgField.changed() function is called.
   '''
 
-  '''
-
-  entityFieldName = sgEntityField.parentEntity().type + '.' + sgEntityField.name()
+  entityFieldName = sgField.parentEntity().type + '.' + sgField.name()
 
   if ON_FIELD_CHANGED_CBS.has_key(entityFieldName):
     cbs = ON_FIELD_CHANGED_CBS[entityFieldName]
 
     for i in cbs:
-      i['cb'](sgEntityField)
+      i['cb'](sgField)
+
+  entityFieldName = sgField.name()
+
+  if ON_FIELD_CHANGED_CBS.has_key(entityFieldName):
+    cbs = ON_FIELD_CHANGED_CBS[entityFieldName]
+
+    for i in cbs:
+      i['cb'](sgField)
 
   cbs = ON_FIELD_CHANGED_CBS['*']
 
   for i in cbs:
-    i['cb'](sgEntityField)
+    i['cb'](sgField)
+
+def onSchemaChanged(sgSchema):
+  '''
+  Called whenever a SgSchema initializes or rebuilds.
+  '''
+
+  url = sgSchema.url()
+
+  _defaultOnSchemaChanged(sgSchema)
+
+  if ON_SCHEMA_CHANGED_CBS.has_key(url):
+    cbs = ON_SCHEMA_CHANGED_CBS[url]
+
+    for i in cbs:
+      i['cb'](sgSchema)
+
+  cbs = ON_SCHEMA_CHANGED_CBS['*']
+
+  for i in cbs:
+    i['cb'](sgSchema)

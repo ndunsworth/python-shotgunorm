@@ -26,7 +26,8 @@
 
 __all__ = [
   'SgField',
-  'SgFieldInfo'
+  'SgFieldInfo',
+  'SgUserField'
 ]
 
 # Python imports
@@ -56,8 +57,12 @@ class SgFieldQueryProfiler(object):
       return
 
     entity = sgField.parentEntity()
+
+    if entity == None:
+      return
+
     entityType = entity.type
-    url = entity.session().connection().url().lower()
+    url = entity.connection().url().lower()
 
     field = sgField.name()
 
@@ -85,9 +90,6 @@ class SgFieldInfo(object):
   '''
   Class that represents a Shotgun Entities field information.
   '''
-
-  def __str__(self):
-    return self.name()
 
   def __repr__(self):
     return '<%s.%s name:%s, label:%s, valueTypes:%s>' % (
@@ -130,8 +132,8 @@ class SgFieldInfo(object):
       'required': sgSchema['mandatory']['value'],
       'return_type': FIELD_RETURN_TYPES.get(
         sgSchema['data_type']['value'],
-        SgField.RETURN_TYPE_UNSUPPORTED)
-      ,
+        SgField.RETURN_TYPE_UNSUPPORTED
+      ),
       'return_type_name': sgSchema['data_type']['value'],
       'summary_info': None,
       'value_types': None,
@@ -314,7 +316,7 @@ class SgFieldInfo(object):
       required=required,
       return_type=return_type,
       return_type_name=return_type_name,
-      summary_info = summary_info,
+      summary_info=summary_info,
       value_types=value_types,
       valid_values=valid_values
     )
@@ -369,6 +371,9 @@ class SgField(object):
   RETURN_TYPE_TEXT = 15
   RETURN_TYPE_URL = 16
 
+  # Custom return types should start at 201.
+  RETURN_TYPE_RESERVED = 200
+
   __fieldclasses__ = {
     'default': {
       RETURN_TYPE_UNSUPPORTED: None
@@ -381,20 +386,45 @@ class SgField(object):
   def __repr__(self):
     return '<%s>' % ShotgunORM.mkEntityFieldString(self)
 
-  def __str__(self):
-    return self.name()
+  def __enter__(self):
+    # Grab the parent immediately and dont use self.hasParentEntity() because
+    # field parents are weakref'd and you might lose the Entity.
+    parent = self.parentEntity()
+
+    # Lock the parent if the field has one.
+    if parent != None:
+      parent._SgEntity__lock.acquire()
+
+  def __exit__(self, exc_type, exc_value, traceback):
+    # Grab the parent immediately and dont use self.hasParentEntity() because
+    # field parents are weakref'd and you might lose the Entity.
+    parent = self.parentEntity()
+
+    # Lock the parent if the field has one.
+    if parent != None:
+      parent._SgEntity__lock.release()
+
+    return False
 
   def __init__(self, parentEntity, fieldInfo):
     self._parent = weakref.ref(parentEntity)
     self._info = fieldInfo
+    self._widget = None
 
     self._value = fieldInfo.defaultValue()
+    self._updateValue = None
 
-    self._hasCommit = False
-    self._valid = False
+    self.__hasCommit = False
+    self.__hasSyncUpdate = False
+    self.__valid = False
+
+    self.__isCommitting = False
+    self.__isUpdatingEvent = threading.Event(verbose=True)
+
+    self.__isUpdatingEvent.set()
 
   @classmethod
-  def registerFieldClass(self, sgFieldReturnType, sgFieldClass):
+  def registerFieldClass(cls, sgFieldReturnType, sgFieldClass):
     '''
     Registers a field class.
 
@@ -406,7 +436,39 @@ class SgField(object):
         Class to use for the field return type.
     '''
 
-    self.__fieldclasses__[sgFieldReturnType] = sgFieldClass
+    cls.__fieldclasses__[sgFieldReturnType] = sgFieldClass
+
+  def canSync(self):
+    '''
+    Returns True if the field is in a state that can be updated by a sync call.
+
+    Fields that return False for isQueryable() will always cause this to return
+    False.
+    '''
+
+    parent = self.parentEntity()
+
+    if not self.isQueryable() or parent == None or not parent.exists():
+      return False
+
+    return not (self.isValid() or self.hasSyncUpdate() or self.isSyncUpdating())
+
+  def changed(self):
+    '''
+    Called whenever the fields value changes.
+
+    This calls updateWidget() and if the field has a parent Entity it calls
+    the Entities onFieldChanged() with self.
+    '''
+
+    self.updateWidget()
+
+    parent = self.parentEntity()
+
+    if parent == None:
+      return
+
+    parent.onFieldChanged(self)
 
   def defaultValue(self):
     '''
@@ -414,6 +476,31 @@ class SgField(object):
     '''
 
     return self.info().defaultValue()
+
+  def _deleteWidget(self):
+    '''
+    Sub-class portion of SgField.deleteWidget().
+
+    Note:
+      This is only called by deleteWidget() if widget() is not None.
+    '''
+
+    pass
+
+  def deleteWidget(self):
+    '''
+    Deletes the widget of the field.
+
+    Returns True if the widget existed and was in fact deleted.
+    '''
+
+    with self:
+      if self.widget() != None:
+        self._deleteWidget()
+
+        return True
+
+      return False
 
   def doc(self):
     '''
@@ -424,7 +511,10 @@ class SgField(object):
 
   def eventLogs(self, sgEventType=None, sgRecordLimit=0):
     '''
-    Returns the event log Entities for this field.
+    Returns the event log Entities for the field.
+
+    When the field has no parent or the parent Entity does not yet exist in
+    Shotgun an empty list is returned.
 
     Args:
       * (str) sgEventType:
@@ -436,71 +526,67 @@ class SgField(object):
 
     parent = self.parentEntity()
 
-    if not parent.exists():
+    # If the parent is none or if the parent does not exist, meaning you can't
+    # do any queries for event info, bail.
+    if parent == None or not parent.exists():
       return []
 
-    session = parent.session()
+    connection = parent.connection()
 
     filters = [
-      ['entity', 'is', parent],
-      ['attribute_name', 'is', self.name()]
+      [
+        'entity',
+        'is',
+        parent
+      ],
+      [
+        'attribute_name',
+        'is',
+        self.name()
+      ]
     ]
 
-    order = [{'field_name':'created_at','direction':'desc'}]
+    order = [
+      {
+        'field_name': 'created_at',
+        'direction': 'desc'
+      }
+    ]
 
     if sgEventType != None:
-      filters.append(['event_type', 'is', sgEventType])
+      filters.append(
+        [
+          'event_type',
+          'is',
+          sgEventType
+        ]
+      )
 
-    result = session.find('EventLogEntry', filters, order=order, limit=sgRecordLimit)
+    result = connection.find(
+      'EventLogEntry',
+      filters,
+      order=order,
+      limit=sgRecordLimit
+    )
 
     return result
 
-  def _fetch(self):
-    '''
-    Internal function do not call!
-
-    SgField.value() calls this when the field is not valid.  Subclasses can
-    override this function to define how to retrieve their value.
-
-    Default function calls fetch() on the parent Entity.
-
-    If you do not call fetch() on the parent Entity you must lock the parent
-    down first before setting this._value.
-
-    For an example of a custom fetch see the SgFieldSummary class.
-    '''
-
-    return self.parentEntity().fetch([self.name()])
-
-  def fetch(self, thread=False):
-    '''
-    Retrieves the fields value from Shotgun.
-
-    Args:
-      * (bool) thread:
-        Forks the call to Shotgun so this returns immediately.  Returns the
-        Thread object.
-    '''
-
-    ShotgunORM.LoggerEntityField.debug('%(field)s.fetch()', {'field': self.__repr__()})
-
-    if thread:
-      ShotgunORM.LoggerEntityField.debug('    * thread: %(thread)s', {'thread': thread})
-
-      t = threading.Thread(target=self.fetch)
-
-      t.start()
-
-      return t
-
-    return self._fetch()
-
   def _fromFieldData(self, sgData):
     '''
-    Subclass portion of SgField.fromFieldData().
+    Sub-class portion of SgField.fromFieldData().
 
     Note:
-    Do not call this directly!
+      Sub-classes only need to convert the incoming data to their internal
+      format and return True.
+
+      You should check if the incoming value is the same as the current value
+      and in those cases do nothing and return False.
+
+      valid() and hasCommit() are set based upon the return result of True/False.
+
+    Args:
+      * (dict) sgData:
+        Dict of Shotgun formatted Entity field values.
     '''
 
     return False
@@ -509,37 +595,63 @@ class SgField(object):
     '''
     Sets the fields value from data returned by a Shotgun query.
 
-    Returns True if any fields were set.
+    Returns True on success.
 
     Args:
       * (dict) sgData:
         Dict of Shotgun formatted Entity field values.
     '''
 
-    parent = self.parentEntity()
+    with self:
+      ShotgunORM.LoggerField.debug('%(sgField)s.fromFieldData()', {'sgField': self})
+      ShotgunORM.LoggerField.debug('    * sgData: %(sgData)s', {'sgData': sgData})
 
-    parent._lock()
+      parent = self.parentEntity()
 
-    try:
       if not self.isEditable():
         raise RuntimeError('%s is not editable!' % ShotgunORM.mkEntityFieldString(self))
 
-      ShotgunORM.LoggerEntityField.debug('%(sgField)s.fromFieldData()', {'sgField': self.__repr__()})
-      ShotgunORM.LoggerEntityField.debug('    * sgData: %(sgData)s', {'sgData': sgData})
+      self.validate()
 
-      return self._fromFieldData(sgData)
-    except:
-      raise
-    finally:
-      parent._release()
+      result = self._fromFieldData(sgData)
 
-  def hasUpdate(self):
+      if not result:
+        return False
+
+      self.setValid(True)
+      self.setHasCommit(True)
+
+      self.changed()
+
+      return True
+
+  def hasCommit(self):
     '''
     Returns True if the fields value has changed but it has not been published
     to the Shotgun database.
     '''
 
-    return self._hasCommit
+    return self.__hasCommit
+
+  def hasParentEntity(self):
+    '''
+    Returns True if the field has a parent Entity.
+
+    Note:
+      Because fields weakref their parent you should not use this as a test if
+      its safe to call SgField.parentEntity() as it might have been gc'd
+      inbetween the two calls.
+    '''
+
+    return self.parentEntity() != None
+
+  def hasSyncUpdate(self):
+    '''
+    Returns True if the fields value was retrieved from Shotgun and is awaiting
+    validate to set value to it.
+    '''
+
+    return self.__hasSyncUpdate
 
   def info(self):
     '''
@@ -548,29 +660,64 @@ class SgField(object):
 
     return self._info
 
+  def _invalidate(self):
+    '''
+    Sub-class portion of SgField.invalidate().
+    '''
+
+    pass
+
   def invalidate(self):
     '''
-    Invalidates the stored value of the field so that the next call to
-    this.value() will force a Shotgun db query for the value.
-
-    Note:
-    Do not call this esp in a threaded env unless you know what you are doing!
+    Invalidates the stored value of the field so that the next call to value()
+    will force a re-evaluate its value.
     '''
 
-    parent = self.parentEntity()
+    with self:
+      ShotgunORM.LoggerField.debug('%(sgField)s.invalidate()', {'sgField': self})
 
-    parent._lock()
+      self.__isUpdatingEvent.wait()
 
-    try:
-      # You must not invalidate an ID knob!
-      if self.name() == 'id':
-        return
+      self.setHasCommit(False)
+      self.setHasSyncUpdate(False)
+      self.setValid(False)
 
-      self._value = None
-      self._hasCommit = False
-      self._valid = False
-    finally:
-      parent._release()
+      self._value = self.defaultValue()
+      self._updateValue = None
+
+      self._invalidate()
+
+  def isCacheable(self):
+    '''
+    Returns True if the field is cacheable.
+
+    Default returns the value of...
+
+    hasCommit() and (isValid() or hasSyncUpdate())
+
+    This is queried when a an Entities __del__ is called.  If True then the
+    Entity will cache the fields value on the SgConnection.
+    '''
+
+    return not self.hasCommit() and (self.isValid() or self.hasSyncUpdate())
+
+  def isCommitting(self):
+    '''
+    Returns True if the field is currently being commited to Shotgun.
+
+    When this is True the field is locked and unable to change its value.
+    '''
+
+    return self._isCommitting
+
+  def isCommittable(self):
+    '''
+    Returns True if the field is allowed to make commits to Shotgun.
+
+    Default returns self.isQueryable()
+    '''
+
+    return self.isQueryable()
 
   def isCustom(self):
     '''
@@ -582,18 +729,45 @@ class SgField(object):
   def isEditable(self):
     '''
     Returns True if the field is editable in Shotgun.
+
+    When the parent Entity does not exist in Shotgun non-editable fields are
+    modifyable.
     '''
 
-    return self.info().isEditable()
+    parent = self.parentEntity()
+
+    if parent == None:
+      return self.info().isEditable()
+    else:
+      return self.info().isEditable() or not parent.exists()
+
+  def isQueryable(self):
+    '''
+    Returns True if the field is queryable in Shotgun.
+
+    Default returns True.
+    '''
+
+    return True
+
+  def isSyncUpdating(self):
+    '''
+    Returns True if the field is retrieving its value from Shotgun.
+
+    When this is True the field is locked and unable to change its value.
+    '''
+
+    return not self.__isUpdatingEvent.isSet()
 
   def isValid(self):
     '''
-    Returns True if the field is valid.  This returns false when the field
-    hasn't yet performed a query to Shotgun for its value or invalidate has
-    been called.
+    Returns True if the field is valid.
+
+    This returns False when the field hasn't yet performed a query to Shotgun
+    for its value or invalidate has been called.
     '''
 
-    return self._valid
+    return self.__valid
 
   def label(self):
     '''
@@ -606,6 +780,9 @@ class SgField(object):
     '''
     Returns the last event log Entity for this field.
 
+    If no event log exists or the Entity contains no parent or the parent does
+    not yet exist in Shotgun None is returned.
+
     Args:
       * (str) sgEventType:
         Event type filter such as "Shotgun_Asset_Change".
@@ -613,28 +790,71 @@ class SgField(object):
 
     parent = self.parentEntity()
 
-    if not parent.exists():
+    if parent == None or not parent.exists():
       return None
 
-    session = parent.session()
+    connection = parent.connection()
 
     filters = [
-      ['entity', 'is', parent],
-      ['attribute_name', 'is', self.name()]
+      [
+        'entity',
+        'is',
+        parent
+      ],
+      [
+        'attribute_name',
+        'is',
+        self.name()
+      ]
     ]
 
-    order = [{'field_name':'created_at','direction':'desc'}]
+    order = [
+      {
+        'field_name': 'created_at',
+        'direction': 'desc'
+      }
+    ]
 
     if sgEventType != None:
-      filters.append(['event_type', 'is', sgEventType])
+      filters.append(
+        [
+          'event_type',
+          'is',
+          sgEventType
+        ]
+      )
 
-    result = session.findOne('EventLogEntry', filters, order=order)
+    result = connection.findOne(
+      'EventLogEntry',
+      filters,
+      order=order
+    )
 
     return result
 
+  def _makeWidget(self):
+    '''
+    Sub-class portion of SgField.makeWidget().
+    '''
+
+    return False
+
+  def makeWidget(self):
+    '''
+    Creates the GUI widget for the field.
+
+    If the widget already has been created this immediately returns.
+    '''
+
+    with self:
+      if self.widget() != None:
+        return True
+
+      return self._makeWidget()
+
   def name(self):
     '''
-    Returns the Shotgun api string used to reference the field on an Entity.
+    Returns the Shotgun API string used to reference the field on an Entity.
     '''
 
     return self.info().name()
@@ -642,7 +862,17 @@ class SgField(object):
   def parentEntity(self):
     '''
     Returns the parent SgEntity that the field is attached to.
+
+    Fields only weakref their parent Entity so this may return None if the
+    Entity has fallen out of scope.  You should always check if the returned
+    result is None before doing anything.
+
+    In the future fields may also be allowed to exist without an Entity so this
+    may possibly return None.
     '''
+
+    if self._parent == None:
+      return None
 
     return self._parent()
 
@@ -653,61 +883,164 @@ class SgField(object):
 
     return self.info().returnType()
 
-  def _setValue(self, sgData):
+  def setHasCommit(self, valid):
     '''
-    Subclass portion of SgField.setValue().
+    Sets the commit state of the field to "valid".
 
     Note:
-    Do not call this directly!
+      Not thread safe!
+
+    Args:
+      * (bool) valid:
+        Value of state.
     '''
 
-    return False
+    self.__hasCommit = bool(valid)
 
-  def setValue(self, sgData):
+  def setHasSyncUpdate(self, valid):
     '''
-    Set the value of the field to the Shotgun formatted dict passed through arg
-    "sgData".
+    Sets the update state of the field to "valid".
 
-    Returns True on success.
+    Note:
+      Not thread safe!
+
+    Args:
+      * (bool) valid:
+        Value of state.
+    '''
+
+    self.__hasSyncUpdate = bool(valid)
+
+  def setIsCommitting(self, valid):
+    '''
+    Sets the commit state of the field to "valid".
+
+    Note:
+      Not thread safe!
+
+    Args:
+      * (bool) valid:
+        Value of state.
+    '''
+
+    self._isCommitting = bool(valid)
+
+  def setValid(self, valid):
+    '''
+    Sets the valid state of the field to "valid".
+
+    Note:
+      Not thread safe!
+
+    Args:
+      * (bool) valid:
+        Value of state.
+    '''
+
+    self.__valid = bool(valid)
+
+  def _setValue(self, sgData):
+    '''
+    Sub-class portion of SgField.setValue().
+
+    Default function returns False.
+
+    Note:
+      Fields store their value in the property self._value.  Do not attempt to
+      store the value for the field in another property on the class as SgField
+      assumes this is the location of its value and other functions interact
+      with it.
+
+      Sub-classes only need to convert the incoming data to their internal
+      format and return True.
+
+      You should check if the incoming value is the same as the current value
+      and return False without modfiying the fields value.
+
+      valid() and hasCommit() are set based upon the return result of True/False.
 
     Args:
       * (dict) sgData:
         Dict of Shotgun formatted Entity field value.
     '''
 
-    parent = self.parentEntity()
+    return False
 
-    parent._lock()
+  def setValue(self, sgData):
+    '''
+    Set the value of the field.
 
-    try:
+    Returns True on success.
+
+    Args:
+      * (object) sgData:
+        New field value.
+    '''
+
+    with self:
+      ShotgunORM.LoggerField.debug('%(sgField)s.setValue(...)', {'sgField': self})
+      ShotgunORM.LoggerField.debug('    * sgData: %(sgData)s', {'sgData': sgData})
+
       if not self.isEditable():
         raise RuntimeError('%s is not editable!' % ShotgunORM.mkEntityFieldString(self))
 
-      ShotgunORM.LoggerEntityField.debug('%(entity)s.setValue(...)', {'entity': self.__repr__()})
-      ShotgunORM.LoggerEntityField.debug('    * sgData: %(sgData)s', {'sgData': sgData})
+      self.validate()
+
+      if sgData == None:
+        sgData = self.defaultValue()
 
       updateResult = self._setValue(sgData)
 
       if not updateResult:
+        if not self.isValid():
+          self.setValid(True)
+
         return False
 
-      self._valid = True
-      self._hasCommit = True
+      self.setValid(True)
+      self.setHasCommit(True)
 
-      ShotgunORM.onFieldChanged(self)
+      self.changed()
 
       return True
-    except:
-      raise
-    finally:
-      parent._release()
 
-  def _toFieldData(self, sgData):
+  def setValueFromShotgun(self):
     '''
-    Subclass portion of SgField.toFieldData().
+    Sets the fields value to its value in the Shotgun database.
 
-    Note:
-    Do not call this directly!
+    This sets isValid() to True and hasCommit() to False.  This will clear any
+    previous modifications to the field.
+    '''
+
+    with self:
+      ShotgunORM.LoggerField.debug('%(sgField)s.setValueFromShotgun()', {'sgField': self})
+
+      self.invalidate()
+
+      self._fromFieldData(self.valueSg())
+
+      self.setValid(True)
+
+      self.__profiler__.profile(self)
+
+      self.changed()
+
+      return True
+
+  def setValueToDefault(self):
+    '''
+    Sets the fields value its default.
+
+    This calls SgField.fromFieldData(self.defaultValue())
+
+    Returns True on success.
+    '''
+
+    return self.setValue(self.defaultValue())
+
+  def _toFieldData(self):
+    '''
+    Sub-class portion of SgField.toFieldData().
     '''
 
     return self._value
@@ -715,28 +1048,139 @@ class SgField(object):
   def toFieldData(self):
     '''
     Returns the value of the Entity field formated for Shotgun.
+
+    Note:
+      In a multi-threaded env isValid() may be True however another thread may
+      change / invalidate the field during the course of this function.  If
+      you absolutely want to grab a valid value lock the Entity / field down
+      before calling toFieldData.
     '''
 
-    if self.isValid() or self.name() == 'id':
+    with self:
+      self.validate()
+
       return self._toFieldData()
 
-    self.fetch()
+  def updateWidget(self):
+    '''
+    Tells the fields widget that it should update itself.
+    '''
 
-    return self._toFieldData()
+    widget = self.widget()
+
+    if widget == None:
+      return
+
+    widget.update()
+
+  def validate(self):
+    '''
+    Validates the field so that isValid() returns True.
+
+    If the field has not yet pulled its value from Shotgun validate() will do
+    the pull.
+
+    Note:
+      When isValid() is already True then this function returns immediately.
+    '''
+
+    with self:
+      if self.isValid():
+        return False
+
+      ShotgunORM.LoggerField.debug('%(sgField)s.validate(curState=%(state)s)', {
+        'sgField': self,
+        'state': self.isValid()
+      })
+
+      self.__isUpdatingEvent.wait()
+
+      # isSyncUpdating() might be True but if the search raised an exception it
+      # didnt flag hasSyncUpdate() so fall back to just pulling from Shotgun
+      # manually with setValueFromShotgun().
+      if self.hasSyncUpdate():
+        ShotgunORM.LoggerField.debug('    * hasSyncUpdate()')
+
+        try:
+          self._fromFieldData(self._updateValue)
+
+          ShotgunORM.LoggerField.debug('        + Successful!')
+        except:
+          ShotgunORM.LoggerField.debug('        + Failed!')
+        finally:
+          self.setHasSyncUpdate(False)
+
+          self._updateValue = None
+
+        self.setValid(True)
+        self.setHasCommit(False)
+
+        self.changed()
+      else:
+        self.setValueFromShotgun()
+
+      return True
+
+  def _Value(self):
+    '''
+    Sub-class portion of SgField.value().
+
+    This allows sub-classes to return a copy of their value so modifications
+    can't be done to the internal value.
+
+    Default returns SgField._value unchanged.
+    '''
+
+    return self._value
 
   def value(self):
     '''
     Returns the value of the Entity field.
+
+    If the field has not yet been pulled from Shotgun it will call validate()
+    which will pull the fields value before returning.
     '''
 
-    if self.isValid() or self.name() == 'id':
-      return self._value
+    with self:
+      if self.isValid():
+        return self._Value()
 
-    self.fetch()
+      self.validate()
 
-    self.__profiler__.profile(self)
+      return self._Value()
 
-    return self._value
+  def _valueSg(self):
+    '''
+    Sub-class portion of SgField.valueSg().
+
+    Sub-classes can override this function to define how to retrieve their value
+    from Shotgun.
+
+    Default function calls valueSg() on the parent Entity.
+
+    For an example of a custom valueSg see the SgFieldSummary class.
+    '''
+
+    result = self.parentEntity().valuesSg([self.name()])
+
+    if result.has_key(self.name()):
+      return result[self.name()]
+    else:
+      return None
+
+  def valueSg(self):
+    '''
+    Returns the fields value from Shotgun.
+    '''
+
+    ShotgunORM.LoggerField.debug('%(field)s.valueSg()', {'field': self})
+
+    parent = self.parentEntity()
+
+    if parent == None or not parent.exists():
+      return None
+
+    return self._valueSg()
 
   def validValues(self):
     '''
@@ -751,6 +1195,109 @@ class SgField(object):
     '''
 
     return self.info().valueTypes()
+
+  def widget(self):
+    '''
+    Sub-classes can implement makeWidget so this returns some type of GUI widget
+    for the field.
+
+    Default returns None.
+    '''
+
+    with self:
+      return self._widget
+
+class SgUserField(SgField):
+  '''
+  A Class that represents a Shotgun Entity field.
+
+  This field differs from SgField in that it does not represent a field which
+  exists as part of an Entities schema.
+
+  User fields are additional fields that can be added to an Entity that are not
+  stored in the Shotgun database.
+
+  A couple examples of a SgUserField are Entities "id" and "type" fields.  See
+  SgFields.py.
+  '''
+
+  def hasCommit(self):
+    '''
+    This should always return False so that when an Entity is commited the value
+    of this field is not added to the commit.
+    '''
+
+    return False
+
+  def eventLogs(self, sgEventType=None, sgRecordLimit=0):
+    '''
+    Sub-classes can implement this to mimic event log Entities for the field.
+
+    Default returns an empty list.
+
+    Args:
+      * (str) sgEventType:
+        Event type filter such as "Shotgun_Asset_Change".
+
+      * (int) sgRecordLimit:
+        Limits the amount of returned events.
+    '''
+
+    return []
+
+  def isCommittable(self):
+    '''
+    Returns False.
+    '''
+
+    return False
+
+  def isQueryable(self):
+    '''
+    This should always return False because UserField objects do not represent
+    fields in the Shotgun database.
+    '''
+
+    return False
+
+  def lastEventLog(self, sgEventType=None):
+    '''
+    Sub-classes can implement this to mimic event log Entities for the field.
+
+    Default returns None.
+
+    Args:
+      * (str) sgEventType:
+        Event type filter such as "Shotgun_Asset_Change".
+    '''
+
+    return None
+
+  def setHasCommit(self, valid):
+    '''
+    This should never set hasCommit() to True
+    '''
+
+    pass
+
+  def setValueFromShotgun(self):
+    '''
+    Sub-classes can implement this to mimic setting the fields value from
+    Shotgun.
+
+    Default does nothing and returns False.
+    '''
+
+    return False
+
+  def _valueSg(self):
+    '''
+    Sub-classes can implement this to mimic a pull from Shotgun.
+
+    Default returns an empty dict.
+    '''
+
+    return {}
 
 FIELD_RETURN_TYPES = {
   'unsupported': SgField.RETURN_TYPE_UNSUPPORTED,

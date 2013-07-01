@@ -174,8 +174,6 @@ ShotgunORM.SgSchema.registerDefaultQueryFields(
   sgFields=[
     'description',
     'display_name',
-    'file_extension',
-    'file_size',
     'filename',
     'project',
     'sg_type',
@@ -265,9 +263,6 @@ ShotgunORM.SgSchema.registerDefaultQueryFields(
   sgEntityType='Note',
   sgQueryTemplates=['default'],
   sgFields=[
-    'addressings_cc',
-    'addressings_to',
-    'attachments',
     'content',
     'created_at',
     'created_by',
@@ -275,7 +270,6 @@ ShotgunORM.SgSchema.registerDefaultQueryFields(
     'project',
     'replies',
     'reply_content',
-    'sg_note_type',
     'subject',
     'tasks',
     'user'
@@ -342,9 +336,6 @@ ShotgunORM.SgSchema.registerDefaultQueryFields(
   sgQueryTemplates=['default'],
   sgFields=[
     'code',
-    'description',
-    'image',
-    'notes',
     'project',
     'versions'
   ]
@@ -355,8 +346,7 @@ ShotgunORM.SgSchema.registerDefaultQueryFields(
   sgQueryTemplates=['default'],
   sgFields=[
     'name',
-    'phases',
-    'users'
+    'phases'
   ]
 )
 
@@ -375,10 +365,9 @@ ShotgunORM.SgSchema.registerDefaultQueryFields(
   sgEntityType='Sequence',
   sgQueryTemplates=['default'],
   sgFields=[
-    'description',
+    'code',
     'project',
-    'shots',
-    'tasks'
+    'shots'
   ]
 )
 
@@ -501,11 +490,11 @@ ShotgunORM.SgSchema.registerDefaultQueryFields(
 #
 #ShotgunORM.LoggerCallback.setLevel(logging.DEBUG)
 #ShotgunORM.LoggerEntity.setLevel(logging.DEBUG)
-#ShotgunORM.LoggerEntityField.setLevel(logging.DEBUG)
+#ShotgunORM.LoggerField.setLevel(logging.DEBUG)
 #ShotgunORM.LoggerFactory.setLevel(logging.DEBUG)
+#ShotgunORM.LoggerQueryEngine.setLevel(logging.DEBUG)
 #ShotgunORM.LoggerSchema.setLevel(logging.DEBUG)
 #ShotgunORM.LoggerScriptEngine.setLevel(logging.DEBUG)
-#ShotgunORM.LoggerSession.setLevel(logging.DEBUG)
 
 ################################################################################
 #

@@ -33,11 +33,13 @@ __all__ = [
   'SgFieldEntity',
   'SgFieldEntityMulti',
   'SgFieldFloat',
+  'SgFieldID',
   'SgFieldImage',
   'SgFieldInt',
   'SgFieldSelectionList',
   'SgFieldTagList',
   'SgFieldText',
+  'SgFieldType',
   'SgFieldUrl'
 ]
 
@@ -57,21 +59,26 @@ class SgFieldCheckbox(ShotgunORM.SgField):
   Entity field that stores a bool value for a checkbox.
   '''
 
-  def _setValue(self, sgData):
+  def _fromFieldData(self, sgData):
     try:
       sgData = bool(sgData)
     except:
-      raise TypeError('%s invalid value type "%s", expected a bool' % (self.__repr__(), type(sgData).__name__))
+      raise TypeError('%s invalid value type "%s", expected a bool' % (self, type(sgData).__name__))
 
-    if sgData == self._value:
+    if self._value == sgData:
       return False
 
     self._value = sgData
 
     return True
 
-  def _fromFieldData(self, sgData):
-    if sgData == self._value:
+  def _setValue(self, sgData):
+    try:
+      sgData = bool(sgData)
+    except:
+      raise TypeError('%s invalid value type "%s", expected a bool' % (self, type(sgData).__name__))
+
+    if self._value == sgData:
       return False
 
     self._value = sgData
@@ -88,49 +95,71 @@ class SgFieldColor(ShotgunORM.SgField):
   Example: [128, 128, 128]
   '''
 
-  def _setValue(self, sgData):
-    if sgData == self._value:
+  REGEXP_COLOR = re.compile(r'(\d+,\d+,\d+)')
+
+  def _fromFieldData(self, sgData):
+    if sgData == None:
+      result = self._value == sgData
+
+      if not result:
+        self._value = None
+
+      return result
+
+    try:
+      if not self.REGEXP_COLOR.match(sgData):
+        raise ValueError('invalid value %s' % sgData)
+    except Exception, e:
+      ShotgunORM.LoggerField.error('%(field)s: %(error)s', {
+        'field': self,
+        'error': e
+      })
+
+      raise ValueError('%s invalid data from Shotgun "%s", expected a list of ints' % (self, sgData))
+
+    if self._value == sgData:
       return False
-
-    if sgData != None:
-      try:
-        if len(sgData) != 3:
-          raise RuntimeError('')
-
-        sgData = [int(sgData[0]), int(sgData[1]), int(sgData[2])]
-      except:
-        raise TypeError('%s invalid value "%s", expected a list of three ints' % (self.__repr__(), sgData))
 
     self._value = sgData
 
     return True
 
-  def _fromFieldData(self, sgData):
+  def _setValue(self, sgData):
+    if sgData == None:
+      result = self._value == sgData
+
+      if not result:
+        self._value = sgData
+
+      return result
+
     try:
-      if sgData != None:
-        sgData = sgData.split(',')
+      if isinstance(sgData, str):
+        if not self.REGEXP_COLOR.match(sgData):
+          raise ValueError('invalid value %s' % sgData)
+      else:
+        if len(sgData != 3):
+          raise ValueError('invalid value %s' % sgData)
 
-        if len(sgData) != 3:
-          raise RuntimeError('')
+        sgData = '%d,%d,%d' % (sgData[0], sgData[1], sgData[2])
+    except:
+      raise TypeError('%s invalid value "%s", expected a list of three ints' % (self, sgData))
 
-        sgData = [int(sgData[0]), int(sgData[1]), int(sgData[2])]
+    if self._value == sgData:
+      return False
 
-      if sgData == self._value:
-        return False
+    self._value = sgData
 
-      self._value = sgData
-
-      return True
-    except Exception, e:
-      ShotgunORM.LoggerEntityField.error(e)
-
-      raise ValueError('%s invalid data from Shotgun "%s", expected a list of ints' % (self.__repr__(), sgData))
+    return True
 
   def _toFieldData(self):
+    return self._value
+
+  def _Value(self):
     if self._value == None:
       return None
 
-    return '%d,%d,%d' % (self._value[0], self._value[1], self._value[2])
+    return self._value.split(',')
 
 class SgFieldColor2(ShotgunORM.SgField):
   '''
@@ -160,39 +189,24 @@ class SgFieldColor2(ShotgunORM.SgField):
       self._linkString = 'project'
       self._linkField= 'project'
 
-  def value(self):
-    '''
-    Returns the value of the color field as a list of ints.
+  def _fromFieldData(self, sgData):
+    if sgData == None:
+      result = self._value == sgData
 
-    When the color field is set to "pipeline_step" then the value of the color
-    field on the Pipeline step is returned.
-    '''
+      if not result:
+        self._value = None
 
-    parent = self.parentEntity()
+      return result
 
-    parent._lock()
+    if not self._regexp.match(sgData):
+      raise ValueError('%s invalid color value "%s", expected format is "255,255,255" or "%s"' % (self, sgData, self._linkString))
 
-    try:
-      parent._fetch([self.name(), self._linkField])
+    if self._value == sgData:
+      return False
 
-      if self._value == None:
-        return None
+    self._value = sgData
 
-      if self._value == self._linkString:
-        fieldObj = self.parentEntity().field(self._linkField)
-
-        if fieldObj == None:
-          return None
-
-        return fieldObj.value(sgFields=['color'])
-      else:
-        s = self._value.split(',')
-
-        return [int(s[0]), int(s[1]), int(s[2])]
-    except:
-      raise
-    finally:
-      parent._release()
+    return True
 
   def _setValue(self, sgData):
     if sgData == None:
@@ -204,51 +218,52 @@ class SgFieldColor2(ShotgunORM.SgField):
 
     if isinstance(sgData, str):
       if not self._regexp.match(sgData):
-        raise ValueError('%s invalid color value "%s", expected format is "255,255,255" or "%s"' % (self.__repr__(), sgData, self._linkString))
+        raise ValueError('%s invalid color value "%s", expected format is "255,255,255" or "%s"' % (self, sgData, self._linkString))
     else:
       if not isinstance(sgData, (tuple, list)):
-        raise TypeError('%s invalid value type "%s", expected a list' % (self.__repr__(), type(sgData).__name__))
+        raise TypeError('%s invalid value type "%s", expected a list' % (self, type(sgData).__name__))
 
       if len(sgData) != 3:
-        raise ValueError('%s list len is not 3' % self.__repr__())
+        raise ValueError('%s list len is not 3' % self)
 
       newData = []
 
       try:
         sgData = '%d,%d,%d' % tuple(sgData)
       except:
-        raise ValueError('%s invalid color values %s' % (self.__repr__(), sgData))
+        raise ValueError('%s invalid color values %s' % (self, sgData))
 
-    # Link the field if its the same as the link fields color.
-    # Lame as hell to support this bs but alas I digress :(.
-    try:
-      if sgData == self.parentEntity()[self._linkField]['color']:
-        sgData = self._linkString
-    except:
-      pass
-
-    if sgData == self._value:
+    if self._value == sgData:
       return False
 
     self._value = sgData
 
     return True
 
-  def _fromFieldData(self, sgData):
-    if sgData == None:
-      result = self._value == sgData
-
-      self._value = None
-
-      return result
-
-    if sgData == self._value:
-      return False
-
-    self._value = sgData
-
   def _toFieldData(self):
     return self._value
+
+  def _Value(self):
+    if self._value == None:
+      return None
+
+    parent = self.parentEntity()
+
+    if parent == None:
+      if self._value == self._linkString:
+        return None
+
+      return self._value.split(',')
+
+    if self._value == self._linkString:
+      linkObj = self.parentEntity()[self._linkField]
+
+      if linkObj == None:
+        return None
+
+      return linkObj['color']
+    else:
+      return self._value.split(',')
 
 class SgFieldDate(ShotgunORM.SgField):
   '''
@@ -259,31 +274,31 @@ class SgFieldDate(ShotgunORM.SgField):
 
   REGEXP = re.compile(r'^\d{4}-\d{2}-\d{2}')
 
-  def _setValue(self, sgData):
+  def _fromFieldData(self, sgData):
     if sgData != None:
-      if not isinstance(sgData, (str, unicode)):
-        raise TypeError('%s invalid type "%s", expected a string' % (self.__repr__(), type(sgData).__name__))
-
       sgData = str(sgData)
 
       if not self.REGEXP.match(sgData):
-        raise ValueError('%s invalid date string "%s"' % (self.__repr__(), sgData))
+        raise ValueError('%s invalid date string from Shotgun "%s"' % (self, sgData))
 
-    if sgData == self._value:
+    if self._value == sgData:
       return False
 
     self._value = sgData
 
     return True
 
-  def _fromFieldData(self, sgData):
+  def _setValue(self, sgData):
     if sgData != None:
+      if not isinstance(sgData, (str, unicode)):
+        raise TypeError('%s invalid type "%s", expected a string' % (self, type(sgData).__name__))
+
       sgData = str(sgData)
 
       if not self.REGEXP.match(sgData):
-        raise ValueError('%s invalid date string from Shotgun "%s"' % (self.__repr__(), sgData))
+        raise ValueError('%s invalid date string "%s"' % (self, sgData))
 
-    if sgData == self._value:
+    if self._value == sgData:
       return False
 
     self._value = sgData
@@ -298,25 +313,25 @@ class SgFieldDateTime(ShotgunORM.SgField):
   Entity field that stores a python datetime object.
   '''
 
-  def _setValue(self, sgData):
+  def _fromFieldData(self, sgData):
     if sgData != None:
-      if not isinstance(sgData, datetime.datetime):
-        raise TypeError('%s invalid type "%s", expected a datetime obj' % (self.__repr__(), type(sgData).__name__))
-
       sgData = datetime.datetime(*sgData.timetuple()[:6], tzinfo=sgData.tzinfo)
 
-    if sgData == self._value:
+    if self._value == sgData:
       return False
 
     self._value = sgData
 
     return True
 
-  def _fromFieldData(self, sgData):
+  def _setValue(self, sgData):
     if sgData != None:
+      if not isinstance(sgData, datetime.datetime):
+        raise TypeError('%s invalid type "%s", expected a datetime obj' % (self, type(sgData).__name__))
+
       sgData = datetime.datetime(*sgData.timetuple()[:6], tzinfo=sgData.tzinfo)
 
-    if sgData == self._value:
+    if self._value == sgData:
       return False
 
     self._value = sgData
@@ -331,61 +346,13 @@ class SgFieldDateTime(ShotgunORM.SgField):
 
     return datetime.datetime(*result.timetuple()[:6], tzinfo=result.tzinfo)
 
+  def _Value(self):
+    return self._toFieldData()
+
 class SgFieldEntity(ShotgunORM.SgField):
   '''
   Entity field that stores a link to another Entity.
   '''
-
-  def value(self, sgFields=None):
-    result = super(SgFieldEntity, self).value()
-
-    if result == None:
-      return None
-
-    session = self.parentEntity().session()
-
-    return session._createEntities(
-      [result],
-      sgFields={result['type']: sgFields}
-    )[0]
-
-  def _setValue(self, sgData):
-    if sgData == None:
-      result = self._value != None
-
-      self._value = None
-
-      return result
-
-    if not isinstance(sgData, ShotgunORM.SgEntity):
-      raise TypeError('%s invalid value type "%s", expected a SgEntity' % (self.__repr__(), type(sgData).__name__))
-
-    valueTypes = self.valueTypes()
-
-    if valueTypes != None:
-      if len(valueTypes) > 0:
-        if not sgData.type in valueTypes:
-          raise ValueError('not a valid value Entiy type: %s, valid=%s' % (sgData.type, valueTypes))
-
-    if sgData['id'] == None:
-      raise RuntimeError('can not set field value to a Entity that has not been created in Shotgun yet')
-
-    parent = self.parentEntity()
-    session = parent.session()
-    connection = session.connection()
-
-    # Lord knows you shouldn't do this but if you build it people will try!
-    if connection.url() != sgData.session().connection().url():
-      raise ValueError('%s passed an Entity from another url' % self.__repr__())
-
-    newValue = sgData.toEntityFieldData()
-
-    if newValue == self._value:
-      return False
-
-    self._value = newValue
-
-    return True
 
   def _fromFieldData(self, sgData):
     # Dont check for valid value types since this function is only given data
@@ -405,14 +372,58 @@ class SgFieldEntity(ShotgunORM.SgField):
         'id': sgData['id']
       }
     except Exception, e:
-      ShotgunORM.LoggerEntityField.error(e)
+      ShotgunORM.LoggerField.error('%(field)s: %(error)s', {
+        'field': self,
+        'error': e
+      })
 
-      raise ValueError('%s invalid data from Shotgun "%s", expected a Shotgun formated Entity dict' % (self.__repr__(), sgData))
+      raise ValueError('%s invalid data from Shotgun "%s", expected a Shotgun formated Entity dict' % (self, sgData))
 
     if newValue == self._value:
       return False
 
+    parent = self.parentEntity()
+
     self._value = newValue
+
+    return True
+
+  def _setValue(self, sgData):
+    if sgData == None:
+      result = self._value != None
+
+      self._value = None
+
+      return result
+
+    if not isinstance(sgData, ShotgunORM.SgEntity):
+      raise TypeError('%s invalid value type "%s", expected a SgEntity' % (self, type(sgData).__name__))
+
+    valueTypes = self.valueTypes()
+
+    if valueTypes != None:
+      if len(valueTypes) > 0:
+        if not sgData.type in valueTypes:
+          raise ValueError('not a valid value Entiy type: %s, valid=%s' % (sgData.type, valueTypes))
+
+    if sgData['id'] == None:
+      raise RuntimeError('can not set field value to a Entity that has not been created in Shotgun yet')
+
+    parent = self.parentEntity()
+
+    if parent == None:
+      raise RuntimeError('field does not have a parent')
+
+    connection = parent.connection()
+
+    # Lord knows you shouldn't do this but if you build it people will try!
+    if connection.url() != sgData.connection().url():
+      raise ValueError('%s passed an Entity from another url' % self)
+
+    if self._value == sgData:
+      return False
+
+    self._value = sgData.toEntityFieldData()
 
     return True
 
@@ -422,6 +433,51 @@ class SgFieldEntity(ShotgunORM.SgField):
 
     return dict(self._value)
 
+  def value(self, sgSyncFields=None):
+    v = super(SgFieldEntity, self).value()
+
+    parent = self.parentEntity()
+
+    if v == None or parent == None:
+      return None
+
+    connection = parent.connection()
+
+    if sgSyncFields == None:
+      sgSyncFields = connection.defaultEntityQueryFields(v['type'])
+
+      if len(sgSyncFields) <= 0:
+        sgSyncFields = None
+    else:
+      pullFields = []
+
+      if isinstance(sgSyncFields, str):
+        pullFields = set([sgSyncFields])
+      else:
+        pullFields = set(sgSyncFields)
+
+      extraFields = set([])
+
+      if 'default' in pullFields:
+        pullFields.pop('default')
+
+        extraFields = connection.defaultEntityQueryFields(v['type'])
+
+      pullFields.update(extraFields)
+
+      if len(pullFields) >= 1:
+        sgSyncFields = list(pullFields)
+      else:
+        sgSyncFields = None
+
+    result = connection._createEntity(
+      v['type'],
+      v,
+      sgSyncFields=sgSyncFields
+    )
+
+    return result
+
 class SgFieldEntityMulti(ShotgunORM.SgField):
   '''
   Entity field that stores a list of links to other Entities.
@@ -429,81 +485,21 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
   Example: [Entity01, Entity02, ...]
   '''
 
-  def value(self, sgFields=None):
-    value = super(SgFieldEntityMulti, self).value()
-
-    if value in [None, []]:
-      return value
-
-    session = self.parentEntity().session()
-
-    result = session._createEntities(value, sgFields=sgFields)
-
-    return result
-
-  def _setValue(self, sgData):
-    if sgData == None or len(sgData) <= 0:
-      result = self._value != None and self._value != []
-
-      self._value = []
-
-      return result
-
-    if isinstance(sgData, ShotgunORM.SgEntity):
-      sgData = [sgData]
-    elif not isinstance(sgData, list):
-      raise TypeError('%s invalid value type "%s", expected a SgEntity or list' % (self.__repr__(), type(sgData).__name__))
-    else:
-      for i in sgData:
-        if not isinstance(i, ShotgunORM.SgEntity):
-          raise TypeError('%s invalid value type "%s", expected a SgEntity' % (self.__repr__(), type(i).__name__))
-
-    valueTypes = self.valueTypes()
-
-    if valueTypes != None:
-      if len(valueTypes) > 0:
-        for i in sgData:
-          if not i.type in valueTypes:
-            raise ValueError('not a valid value type: %s, valid=%s' % (i.type, valueTypes))
-
-    parent = self.parentEntity()
-    session = parent.session()
-    connection = session.connection()
-
-    newValue = []
-
-    for i in sgData:
-      if i['id'] == None:
-        raise RuntimeError('can not set field value to a SgEntity that has not been created in Shotgun yet')
-
-      # Lord knows you shouldn't do this but if you build it people will try!
-      if connection.url() != i.session().connection().url():
-        raise ValueError('%s passed an Entity from another url' % self.__repr__())
-
-      newValue.append(i.toEntityFieldData())
-
-    if self._value != None:
-      if set(newValue) == set(self._value):
-        return False
-
-    self._value = newValue
-
-    return True
-
   def _fromFieldData(self, sgData):
     # Dont check for valid value types since this function is only given data
     # straight from the Shotgun db.  Fail on Shotguns part if they should ever
     # pass you something that is not a valid value type.
 
-    if sgData == None or len(sgData) <= 0:
-      result = self._value != None and self._value != []
+    if isinstance(sgData, (tuple, set)):
+      sgData = list(sgData)
 
-      self._value = []
+    if sgData in [None, []]:
+      result = self._value in [None, []]
+
+      if result:
+        self._value = self.defaultValue()
 
       return result
-
-    parent = self.parentEntity()
-    session = parent.session()
 
     newValue = []
 
@@ -514,15 +510,90 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
           'id': i['id']
         }
 
+        if e in newValue:
+          continue
+
         newValue.append(e)
     except Exception, e:
-      ShotgunORM.LoggerEntityField.error(e)
+      ShotgunORM.LoggerField.error('%(field)s: %(error)s', {
+        'field': self,
+        'error': e
+      })
 
-      raise ValueError('%s invalid data from Shotgun "%s", expected a Shotgun formated Entity dict' % (self.__repr__(), sgData))
+      raise ValueError('%s invalid data from Shotgun "%s", expected a Shotgun formated Entity dict' % (self, sgData))
 
-    if self._value != None and len(self._value) >= 1:
-      if set(self._value) == set(newValue):
-        return False
+    if self._value == newValue:
+      return False
+
+    self._value = newValue
+
+    return True
+
+  def _setValue(self, sgData):
+    if isinstance(sgData, (tuple, set)):
+      sgData = list(sgData)
+
+    if sgData in [None, []]:
+      result = self._value in [None, []]
+
+      if result:
+        self._value = self.defaultValue()
+
+      return result
+
+    if isinstance(sgData, ShotgunORM.SgEntity):
+      sgData = [sgData]
+    elif not isinstance(sgData, list):
+      raise TypeError('%s invalid value type "%s", expected a SgEntity or list' % (self, type(sgData).__name__))
+    else:
+      for i in sgData:
+        if not isinstance(i, ShotgunORM.SgEntity):
+          raise TypeError('%s invalid value type "%s", expected a SgEntity' % (self, type(i).__name__))
+
+    valueTypes = self.valueTypes()
+
+    if valueTypes != None:
+      if len(valueTypes) > 0:
+        for i in sgData:
+          if not i.type in valueTypes:
+            raise ValueError('not a valid value type: %s, valid=%s' % (i.type, valueTypes))
+
+    parent = self.parentEntity()
+
+    newValue = []
+
+    if parent == None:
+      for i in sgData:
+        if i['id'] == None:
+          raise RuntimeError('can not set field value to a SgEntity that has not been created in Shotgun yet')
+
+        edata = i.toEntityFieldData()
+
+        if edata in newValue:
+          continue
+
+        newValue.append(edata)
+    else:
+      connection = parent.connection()
+
+
+      for i in sgData:
+        if i['id'] == None:
+          raise RuntimeError('can not set field value to a SgEntity that has not been created in Shotgun yet')
+
+        # Lord knows you shouldn't do this but if you build it people will try!
+        if connection.url() != i.connection().url():
+          raise ValueError('%s passed an Entity from another url' % self)
+
+        edata = i.toEntityFieldData()
+
+        if edata in newValue:
+          continue
+
+        newValue.append(edata)
+
+    if self._value == newValue:
+      return False
 
     self._value = newValue
 
@@ -539,33 +610,104 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
 
     return result
 
+  def value(self, sgSyncFields=None):
+    result = super(SgFieldEntityMulti, self).value()
+
+    if result in [None, []]:
+      return result
+
+    parent = self.parentEntity()
+
+    if parent == None:
+      return copy.deepcopy(result)
+
+    connection = parent.connection()
+
+    tmp = []
+
+    qEng = connection.queryEngine()
+
+    qEng.block()
+
+    try:
+      for i in result:
+        t = i['type']
+
+        iSyncFields = None
+
+        if sgSyncFields != None:
+          if sgSyncFields.has_key(t):
+            iFields = sgFields[t]
+
+            if iFields == None:
+              iSyncFields = connection.defaultEntityQueryFields(t)
+
+              if len(iFields) <= 0:
+                iSyncFields = None
+            else:
+              pullFields = []
+
+              if isinstance(iFields, str):
+                pullFields = set([iFields])
+              else:
+                pullFields = set(iFields)
+
+              extraFields = set([])
+
+              if 'default' in pullFields:
+                pullFields.pop('default')
+
+                extraFields = connection.defaultEntityQueryFields(result.type)
+
+              pullFields.update(extraFields)
+
+              if len(pullFields) >= 1:
+                iSyncFields = list(pullFields)
+              else:
+                iSyncFields = None
+          else:
+            iSyncFields = connection.defaultEntityQueryFields(t)
+
+            if len(iFields) <= 0:
+              iSyncFields = None
+        else:
+          iSyncFields = connection.defaultEntityQueryFields(t)
+
+        entity = connection._createEntity(t, i, sgSyncFields=iSyncFields)
+
+        tmp.append(entity)
+    finally:
+      qEng.unblock()
+
+    return tmp
+
 class SgFieldFloat(ShotgunORM.SgField):
   '''
   Entity field that stores a float.
   '''
-
-  def _setValue(self, sgData):
-    if sgData != None:
-      try:
-        sgData = float(sgData)
-      except:
-        raise TypeError('%s invalid value type "%s", expected a float' % (self.__repr__(), type(sgData).__name__))
-
-    if sgData == self._value:
-      return False
-
-    self._value = sgData
-
-    return True
 
   def _fromFieldData(self, sgData):
     if sgData != None:
       try:
         sgData = float(sgData)
       except:
-        raise ValueError('%s invalid data from Shotgun "%s", expected a float' % (self.__repr__(), sgData))
+        raise ValueError('%s invalid data from Shotgun "%s", expected a float' % (self, sgData))
 
-    if sgData == self._value:
+    if self._value == sgData:
+      return False
+
+    self._value = sgData
+
+    return True
+
+  def _setValue(self, sgData):
+    if sgData != None:
+      try:
+        sgData = float(sgData)
+      except:
+        raise TypeError('%s invalid value type "%s", expected a float' % (self, type(sgData).__name__))
+
+    if self._value == sgData:
       return False
 
     self._value = sgData
@@ -580,28 +722,28 @@ class SgFieldInt(ShotgunORM.SgField):
   Entity field that stores an integer.
   '''
 
-  def _setValue(self, sgData):
-    if sgData != None and sgData != '':
+  def _fromFieldData(self, sgData):
+    if sgData != None:
       try:
         sgData = int(sgData)
       except:
-        raise TypeError('%s invalid value type "%s", expected a int' % (self.__repr__(), type(sgData).__name__))
+        raise ValueError('%s invalid data from Shotgun "%s", expected a int' % (self, sgData))
 
-    if sgData == self._value:
+    if self._value == sgData:
       return False
 
     self._value = sgData
 
     return True
 
-  def _fromFieldData(self, sgData):
-    if sgData != None and sgData != '':
+  def _setValue(self, sgData):
+    if sgData != None:
       try:
         sgData = int(sgData)
       except:
-        raise ValueError('%s invalid data from Shotgun "%s", expected a int' % (self.__repr__(), sgData))
+        raise TypeError('%s invalid value type "%s", expected a int' % (self, type(sgData).__name__))
 
-    if sgData == self._value:
+    if self._value == sgData:
       return False
 
     self._value = sgData
@@ -619,50 +761,48 @@ class SgFieldSelectionList(ShotgunORM.SgField):
   compared and an Exception thrown when the value is not a valid one.
   '''
 
-  def _setValue(self, sgData):
-    if sgData == None:
-      result = self._value != None
-
-      self._value = None
-
-      return result
-
-    if not isinstance(sgData, (str, unicode)):
-      raise TypeError('%s invalid type "%s", expected a string' % (self.__repr__(), type(sgData).__name__))
-
-    sgData = str(sgData)
-
-    if sgData == self._value:
-      return False
-
-    validValues = self.validValues()
-
-    if len(validValues) > 0:
-      if not sgData in validValues:
-        raise ValueError('%s invalid value "%s"' % (self.__repr__(), sgData))
-
-    self._value = sgData
-
-    return True
-
-    self._value = updateData
-
-    return True
-
   def _fromFieldData(self, sgData):
     # Dont check for valid values since this function is only given data
     # straight from the Shotgun db.  Fail on Shotguns part if they should ever
     # pass you something that is not a valid value type.
 
     if sgData == None:
-      result = self._value != None
+      result = self._value == sgData
 
-      self._value = None
+      if not result:
+        self._value = None
 
       return result
 
-    if sgData == self._value:
+    if self._value == sgData:
       return False
+
+    self._value = sgData
+
+    return True
+
+  def _setValue(self, sgData):
+    if sgData == None:
+      result = self._value == sgData
+
+      if result:
+        self._value = None
+
+      return result
+
+    if not isinstance(sgData, (str, unicode)):
+      raise TypeError('%s invalid type "%s", expected a string' % (self, type(sgData).__name__))
+
+    sgData = str(sgData)
+
+    if self._value == sgData:
+      return False
+
+    validValues = self.validValues()
+
+    if len(validValues) > 0:
+      if not sgData in validValues:
+        raise ValueError('%s invalid value "%s"' % (self, sgData))
 
     self._value = sgData
 
@@ -676,29 +816,43 @@ class SgFieldSerializable(ShotgunORM.SgField):
   Entity field that stores serializable data.
   '''
 
-  def _setValue(self, sgData):
-    if sgData != None:
-      if not isinstance(sgData, dict):
-        raise TypeError('%s invalid value type "%s", expected a dict' % (self.__repr__(), type(sgData).__name__))
+  def _fromFieldData(self, sgData):
+    if sgData in [None, {}]:
+      result = self._value in [None, {}]
 
-      sgData = copy.deepcopy(sgData)
+      if result:
+        self._value = None
 
-    if sgData == self._value:
+      return result
+
+    if not isinstance(sgData, dict):
+      raise ValueError('%s invalid data from Shotgun "%s", expected a dict' % (self, sgData))
+
+    if self._value == sgData:
       return False
+
+    sgData = copy.deepcopy(sgData)
 
     self._value = sgData
 
     return True
 
-  def _fromFieldData(self, sgData):
-    if sgData != None:
-      if not isinstance(sgData, dict):
-        raise ValueError('%s invalid data from Shotgun "%s", expected a dict' % (self.__repr__(), sgData))
+  def _setValue(self, sgData):
+    if sgData == None:
+      result = self._value == sgData
 
-      sgData = copy.deepcopy(sgData)
+      if result:
+        self._value = None
 
-    if sgData == self._value:
+      return result
+
+    if not isinstance(sgData, dict):
+      raise TypeError('%s invalid value type "%s", expected a dict' % (self, type(sgData).__name__))
+
+    if self._value == sgData:
       return False
+
+    sgData = copy.deepcopy(sgData)
 
     self._value = sgData
 
@@ -710,13 +864,8 @@ class SgFieldSerializable(ShotgunORM.SgField):
 
     return copy.deepcopy(self._value)
 
-  def value(self):
-    result = super(SgFieldSerializable, self).value()
-
-    if result == None:
-      return None
-
-    return copy.deepcopy(result)
+  def _Value(self):
+    return self._toFieldData()
 
 class SgFieldSummary(ShotgunORM.SgField):
   '''
@@ -738,6 +887,7 @@ class SgFieldSummary(ShotgunORM.SgField):
     self._summaryType = summaryInfo['summary_type']
     self._summaryField = summaryInfo['summary_field']
     self._summaryValue = summaryInfo['summary_value']
+
     self._searchFilter = None
 
   def _buildLogicalOp(self, conditions, info):
@@ -748,7 +898,7 @@ class SgFieldSummary(ShotgunORM.SgField):
     result = []
 
     parent = self.parentEntity()
-    session = parent.session()
+    connection = parent.connection()
 
     for c in conditions:
       if c.has_key('logical_operator'):
@@ -826,7 +976,7 @@ class SgFieldSummary(ShotgunORM.SgField):
               newValues.append(parent.toEntityFieldData())
             elif v['name'] == 'Me':
               login = os.getenv('USERNAME')
-              user = session.findOne('HumanUser', [['login', 'is', login]], ['login'])
+              user = connection.findOne('HumanUser', [['login', 'is', login]], ['login'])
 
               if user == None:
                 raise RuntimError('summary field unable to find user "%s" in Shotgun' % login)
@@ -851,32 +1001,113 @@ class SgFieldSummary(ShotgunORM.SgField):
 
     '''
 
-    if self._searchFilter != None:
-      return self._searchFilter
-
     opsRaw = copy.deepcopy(self._filtersRaw)
 
     logicalOps = {
       'conditions': self._buildLogicalOp(
         opsRaw['conditions'],
-        self.parentEntity().session().connection().schema().entityInfo(self.entityType())
+        self.parentEntity().connection().schema().entityInfo(self.entityType())
       ),
       'logical_operator': opsRaw['logical_operator']
     }
 
     self._searchFilter = logicalOps
 
-    return self._searchFilter
-
-  def _fetch(self):
+  def _fromFieldData(self, sgData):
     '''
-    Internal function do not call!
+    Always return False for summary fields, they can not be set.
     '''
 
-    if not self.parentEntity().exists():
-      return
+    if self._value == sgData:
+      return False
 
-    searchExp = self._buildSearchFilter()
+    self._value = sgData
+
+    return True
+
+  def _toFieldData(self):
+    result = self._value
+
+    if result == None:
+      return None
+
+    if isinstance(result, dict):
+      return copy.deepcopy(result)
+
+    return result
+
+  def entityType(self):
+    '''
+    Returns the type of Entity the summary field will return.
+    '''
+
+    return self._entityType
+
+  def hasCommit(self):
+    '''
+    Always returns False for summary fields.
+    '''
+
+    return False
+
+  def _invalidate(self):
+    '''
+    Deletes the search filter so its built again.
+    '''
+
+    self._searchFilter = None
+
+  def isEditable(self):
+    '''
+    Always return False for summary fields.
+    '''
+
+    return False
+
+  def isQueryable(self):
+    '''
+    Even though summary fields can be queried from Shotgun return False.
+    '''
+
+    return False
+
+  def setHasCommit(self, valid):
+    '''
+    Summary fields can't be committed, always returns False.
+    '''
+
+    return False
+
+  def setHasSyncUpdate(self, valid):
+    '''
+    Summary fields cant be queried so thus they can not be background pulled.
+
+    Always returns False.
+    '''
+
+    return False
+
+  def _setValue(self, value):
+    '''
+    Always return False for summary fields, they can not be set.
+    '''
+
+    return False
+
+  def _valueSg(self):
+    parent = self.parentEntity()
+
+    if parent == None or not parent.exists():
+      return None
+
+    connection = parent.connection()
+
+    if self._searchFilter == None:
+      self._buildSearchFilter()
+
+    searchExp = self._searchFilter
+
+    result = None
 
     ############################################################################
     #
@@ -891,7 +1122,7 @@ class SgFieldSummary(ShotgunORM.SgField):
         }
       ]
 
-      self._value = self.parentEntity().session().findOne(self.entityType(), searchExp, order=order)
+      result = connection._sg_find_one(self.entityType(), searchExp, order=order)
 
     ############################################################################
     #
@@ -899,11 +1130,11 @@ class SgFieldSummary(ShotgunORM.SgField):
     #
     ############################################################################
     elif self._summaryType.startswith('status_'):
-      sgSearch = self.parentEntity().session().find(self.entityType(), searchExp, fields=[self._summaryField])
+      sgSearch = connection.find(self.entityType(), searchExp, fields=[self._summaryField])
 
       if self._summaryType == 'status_percentage':
         if len(sgSearch) <= 0:
-          self._value = 0
+          result = 0
         else:
           validCount = 0
 
@@ -914,12 +1145,12 @@ class SgFieldSummary(ShotgunORM.SgField):
               validCount += 1
 
           if validCount <= 0:
-            self._value = 0.0
+            result = 0.0
           else:
-            self._value = float(validCount) / len(sgSearch)
+            result = float(validCount) / len(sgSearch)
       elif self._summaryType == 'status_list':
         if len(sgSearch) <= 0:
-          self._value = 'ip'
+          result = 'ip'
         else:
           value = sgSearch[0].field(self._summaryField).value()
 
@@ -933,7 +1164,7 @@ class SgFieldSummary(ShotgunORM.SgField):
 
               break
 
-          self._value = value
+          result = value
 
     ############################################################################
     #
@@ -943,9 +1174,9 @@ class SgFieldSummary(ShotgunORM.SgField):
     elif self._summaryType == 'record_count':
       # Dont use the orm for this search, waste to build the classes when all
       # we are doing is getting a len on the search result.
-      sgSearch = self.parentEntity().session()._sg_find(self.entityType(), searchExp)
+      sgSearch = connection._sg_find(self.entityType(), searchExp)
 
-      self._value = len(sgSearch)
+      result = len(sgSearch)
     elif self._summaryType == 'count':
       searchExp = {
         'conditions': [
@@ -962,9 +1193,9 @@ class SgFieldSummary(ShotgunORM.SgField):
 
       # Dont use the orm for this search, waste to build the classes when all
       # we are doing is getting a len on the search result.
-      sgSearch = self.parentEntity().session()._sg_find(self.entityType(), searchExp, fields=[])
+      sgSearch = connection._sg_find(self.entityType(), searchExp, fields=[])
 
-      self._value = len(sgSearch)
+      result = len(sgSearch)
 
     ############################################################################
     #
@@ -972,10 +1203,10 @@ class SgFieldSummary(ShotgunORM.SgField):
     #
     ############################################################################
     elif self._summaryType == 'sum':
-      sgSearch = self.parentEntity().session().find(self.entityType(), searchExp, fields=[self._summaryField])
+      sgSearch = connection.find(self.entityType(), searchExp, fields=[self._summaryField])
 
       if len(sgSearch) <= 0:
-        self._value = 0
+        result = 0
       else:
         value = 0
 
@@ -985,7 +1216,7 @@ class SgFieldSummary(ShotgunORM.SgField):
           if v != None:
             value += v
 
-        self._value = value
+        result = value
 
     ############################################################################
     #
@@ -993,10 +1224,10 @@ class SgFieldSummary(ShotgunORM.SgField):
     #
     ############################################################################
     elif self._summaryType == 'min':
-      sgSearch = self.parentEntity().session().find(self.entityType(), searchExp, fields=[self._summaryField])
+      sgSearch = connection.find(self.entityType(), searchExp, fields=[self._summaryField])
 
       if len(sgSearch) <= 0:
-        self._value = None
+        result = None
       else:
         value = sgSearch[0].field(self._summaryField).value()
 
@@ -1006,7 +1237,7 @@ class SgFieldSummary(ShotgunORM.SgField):
           if v != None:
             value = min(v, value)
 
-        self._value = value
+        result = value
 
     ############################################################################
     #
@@ -1014,10 +1245,10 @@ class SgFieldSummary(ShotgunORM.SgField):
     #
     ############################################################################
     elif self._summaryType == 'max':
-      sgSearch = self.parentEntity().session().find(self.entityType(), searchExp, fields=[self._summaryField])
+      sgSearch = connection.find(self.entityType(), searchExp, fields=[self._summaryField])
 
       if len(sgSearch) <= 0:
-        self._value = None
+        result = None
       else:
         value = sgSearch[0].field(self._summaryField).value()
 
@@ -1027,7 +1258,7 @@ class SgFieldSummary(ShotgunORM.SgField):
           if v != None:
             value = max(v, value)
 
-        self._value = value
+        result = value
 
     ############################################################################
     #
@@ -1035,10 +1266,10 @@ class SgFieldSummary(ShotgunORM.SgField):
     #
     ############################################################################
     elif self._summaryType == 'avg':
-      sgSearch = self.parentEntity().session().find(self.entityType(), searchExp, fields=[self._summaryField])
+      sgSearch = connection.find(self.entityType(), searchExp, fields=[self._summaryField])
 
       if len(sgSearch) <= 0:
-        self._value = 0
+        result = 0
       else:
         value = sgSearch[0].field(self._summaryField).value()
 
@@ -1050,7 +1281,7 @@ class SgFieldSummary(ShotgunORM.SgField):
 
         value = float(value) / len(sgSearch)
 
-        self._value = value
+        result = value
 
     ############################################################################
     #
@@ -1058,10 +1289,10 @@ class SgFieldSummary(ShotgunORM.SgField):
     #
     ############################################################################
     elif self._summaryType == 'percentage':
-      sgSearch = self.parentEntity().session().find(self.entityType(), searchExp, fields=[self._summaryField])
+      sgSearch = connection.find(self.entityType(), searchExp, fields=[self._summaryField])
 
       if len(sgSearch) <= 0:
-        self._value = 0
+        result = 0
       else:
         value = 0
 
@@ -1072,50 +1303,19 @@ class SgFieldSummary(ShotgunORM.SgField):
         if value >= 1:
           value = float(value) / len(sgSearch)
 
-        self._value = value
-
-    self._valid = True
-
-  def _fromFieldData(self, sgData):
-    '''
-    Does nothing.
-    '''
-
-    return False
-
-  def _toFieldData(self):
-    value = self.value()
-
-    if value == None:
-      return None
-
-    result = []
-
-    for i in value:
-      result.append(i.toEntityFieldData())
+        result = value
 
     return result
 
-  def entityType(self):
-    '''
-    Returns the type of Entity the summary field will return.
-    '''
+  def _Value(self):
+    if self._value == None:
+      return None
 
-    return self._entityType
+    if isinstance(self._value, dict):
+      return connection._createEntity(self._value['type'], self._value)
 
-  def hasUpdate(self):
-    '''
-    Always returns False for summary fields.
-    '''
+    return self._value
 
-    return False
-
-  def setValue(self, value):
-    '''
-    Does nothing.
-    '''
-
-    return False
 
 class SgFieldTagList(ShotgunORM.SgField):
   '''
@@ -1125,100 +1325,109 @@ class SgFieldTagList(ShotgunORM.SgField):
   compared and an Exception thrown when the value is not a valid one.
   '''
 
-  def _setValue(self, sgData):
-    if sgData == None or len(sgData) <= 0:
-      result = self._value != None and self._value != []
+  def _fromFieldData(self, sgData):
+    if isinstance(sgData, (tuple, set)):
+      sgData = list(sgData)
 
-      self._value = []
+    if sgData in [None, []]:
+      result = self._value in [None, []]
 
-      return result
-
-    if isinstance(sgData, str):
-      sgData = [sgData]
-    elif not isinstance(sgData, list):
-      raise TypeError('%s invalid type "%s", expected a list' % (self.__repr__(), type(sgData).__name__))
-
-    if len(sgData) <= 0:
-      result = self._value != None and self._value != []
-
-      self._value = []
+      if result:
+        self._value = self.defaultValue()
 
       return result
-
-    newValue = []
 
     for i in sgData:
       if not isinstance(i, str):
-        raise TypeError('%s invalid type "%s" in value "%s", expected a string' % (self.__repr__(), type(i).__name__, sgData))
+        raise TypeError('%s invalid type "%s" in value "%s", expected a string' % (self, type(i).__name__, sgData))
 
-      newValue.append(i)
-
-    if self._value != None:
-      if set(newValue) == set(self._value):
-        return False
+    sgData = list(set(sgData))
 
     validValues = self.validValues()
 
     if len(validValues) > 0:
-      for i in newValue:
+      for i in sgData:
         if not i in validValues:
-          ValueError('%s invalid value "%s", valid %s' % (self.__repr__(), i, validValues))
+          ValueError('%s invalid value "%s", valid %s' % (self, i, validValues))
 
-    self._value = newValue
+    if self._value == sgData:
+      return False
+
+    self._value = sgData
 
     return True
 
-  def _fromFieldData(self, sgData):
-    # Dont check for valid values since this function is only given data
-    # straight from the Shotgun db.  Fail on Shotguns part if they should ever
-    # pass you something that is not a valid value type.
+  def _setValue(self, sgData):
+    if isinstance(sgData, (tuple, set)):
+      sgData = list(sgData)
 
-    if sgData == None or len(sgData) <= 0:
-      result = self._value != None and self._value != []
+    if sgData in [None, []]:
+      result = self._value in [None, []]
 
-      self._value = []
+      if result:
+        self._value = self.defaultValue()
 
       return result
 
-    if self._value != None:
-      if set(newValue) == set(self._value):
-        return False
+    for i in sgData:
+      if not isinstance(i, str):
+        raise TypeError('%s invalid type "%s" in value "%s", expected a string' % (self, type(i).__name__, sgData))
 
-    self._value = list(sgData)
+    sgData = list(set(sgData))
+
+    validValues = self.validValues()
+
+    if len(validValues) > 0:
+      for i in sgData:
+        if not i in validValues:
+          ValueError('%s invalid value "%s", valid %s' % (self, i, validValues))
+
+    if self._value == sgData:
+      return False
+
+    self._value = sgData
 
     return True
 
   def _toFieldData(self):
-    return self._value
+    result = self._value
+
+    if result == None:
+      return None
+
+    return list(result)
+
+  def _Value(self):
+    return self.toFieldData()
 
 class SgFieldText(ShotgunORM.SgField):
   '''
   Entity field that stores a str.
   '''
 
+  def _fromFieldData(self, sgData):
+    if self._value == sgData:
+      return False
+
+    self._value = sgData
+
+    return True
+
   def _setValue(self, sgData):
     if sgData != None:
       if not isinstance(sgData, (str, unicode)):
-        raise TypeError('%s invalid value type "%s", expected a str' % (self.__repr__(), type(sgData).__name__))
+        raise TypeError('%s invalid value type "%s", expected a str' % (self, type(sgData).__name__))
 
       sgData = str(sgData)
 
-    if sgData == self._value:
+    if self._value == sgData:
       return False
 
     self._value = sgData
 
     return True
 
-  def _fromFieldData(self, sgData):
-    if sgData == self._value:
-      return False
-
-    self._value = sgData
-
-    return True
-
-  def toFieldData(self):
+  def _toFieldData(self):
     return self._value
 
 class SgFieldImage(SgFieldText):
@@ -1234,7 +1443,7 @@ class SgFieldImage(SgFieldText):
     url = self.value()
 
     if url == None or url == '':
-      raise ValueError('%s value is empty' % self.__repr__())
+      raise ValueError('%s value is empty' % self)
 
     if os.path.exists(path) and os.path.isdir(path):
       raise OSError('output path "%s" is a directory' % path)
@@ -1248,9 +1457,12 @@ class SgFieldImage(SgFieldText):
 
       f.close()
     except Exception, e:
-      ShotgunORM.LoggerEntityField.error(e)
+      ShotgunORM.LoggerField.error('%(field)s: %(error)s', {
+        'field': self,
+        'error': e
+      })
 
-      raise RuntimeError('%s an error occured while downloading the file' % self.__repr__())
+      raise RuntimeError('%s an error occured while downloading the file' % self)
 
     return True
 
@@ -1278,21 +1490,23 @@ class SgFieldImage(SgFieldText):
     if not parent.exists():
       raise RuntimeError('parent entity does not exist')
 
-    parent._lock()
-
-    try:
-      if self.hasUpdate():
+    with self:
+      if self.hasCommit():
         raise RuntimeError('can not upload a new thumbnail while the image field has an un-commited update')
 
-      sgconnection = parent.session().connection().connection()
+      parent = self.parentEntity()
 
-      sgResult = sgconnection.upload_thumbnail(parent.type, parent['id'], path)
+      if parent == None or not parent.exist():
+        raise RuntimeError('parent entity does not exists')
+
+      sgconnection = parent.connection().connection()
+
+      with ShotgunORM.SHOTGUN_API_LOCK:
+        sgResult = sgconnection.upload_thumbnail(parent.type, parent['id'], path)
 
       parent.sync([self.name()])
 
       return sgResult
-    finally:
-      parent._release()
 
   def uploadFilmstripThumbnail(self, path):
     '''
@@ -1305,29 +1519,25 @@ class SgFieldImage(SgFieldText):
     This function is only valid for Version Entities.
     '''
 
-    parent = self.parentEntity()
-
-    if not parent.type == 'Version':
-      raise RuntimeError('only valid on Version Entities')
-
-    if not parent.exists():
-      raise RuntimeError('parent entity does not exist')
-
-    parent._lock()
-
-    try:
-      if self.hasUpdate():
+    with self:
+      if self.hasCommit():
         raise RuntimeError('can not upload a new thumbnail while the image field has an un-commited update')
 
-      sgconnection = parent.session().connection().connection()
+      parent = self.parentEntity()
+
+      if not parent.type == 'Version':
+        raise RuntimeError('only valid on Version Entities')
+
+      if parent == None or not parent.exist():
+        raise RuntimeError('parent entity does not exists')
+
+      sgconnection = parent.connection().connection()
 
       sgResult = sgconnection.upload_filmstrip_thumbnail(parent.type, parent['id'], path)
 
       parent.sync([self.name()])
 
       return sgResult
-    finally:
-      parent._release()
 
 class SgFieldUrl(ShotgunORM.SgField):
   '''
@@ -1340,6 +1550,67 @@ class SgFieldUrl(ShotgunORM.SgField):
     'url': 'http://www.owned.com/bob.jpg'
   }
   '''
+
+  def _fromFieldData(self, sgData):
+    result = {}
+
+    if sgData == None:
+      result = self._value == None
+
+      if not result:
+        self._value = None
+
+      return result
+
+    if isinstance(sgData, str):
+      sgData = {
+        'content_type': None,
+        'link_type': 'web',
+        'name': os.path.basename(sgData),
+        'url': sgData
+      }
+    elif not isinstance(sgData, dict):
+      raise TypeError('%s invalid sgData "%s", expected a dict or string' % (self, sgData))
+
+    try:
+      result['url'] = sgData['url']
+      result['name'] = sgData.get('name', os.path.basename(result['url']))
+      result['content_type'] = sgData.get('content_type', None)
+
+      defaultLinkType = 'web'
+
+      if result['url'].lower().startswith('file:'):
+        defaultLinkType = 'local'
+
+      result['link_type'] = sgData.get('link_type', defaultLinkType).lower()
+    except:
+      raise TypeError('%s invalid sgData dict "%s"' % (self, sgData))
+
+    if not result['link_type'] in ['local', 'upload', 'web']:
+      raise ValueError('%s invalid link_type "%s"' % (self, result['link_type']))
+
+    #if result['link_type'] == 'upload':
+    #  ctype = result['content_type']
+    #
+    #  if ctype == None:
+    #    raise ValueError('%s content_type can not be None when link_type is upload' % self)
+    #
+    #  if not ctype.startswith('image/'):
+    #    raise ValueError('%s invalid content_type "%s"' % (self, ctype))
+
+    return result
+
+  def setValue(self, sgData):
+    return self.fromFieldData(sgData)
+
+  def _toFieldData(self):
+    if self._value == None:
+      return None
+
+    return copy.deepcopy(self._value)
+
+  def _Value(self):
+    return self.toFieldData()
 
   def url(self, openInBrowser=False):
     '''
@@ -1366,66 +1637,6 @@ class SgFieldUrl(ShotgunORM.SgField):
 
     return result
 
-  def _setvalue(self, sgData):
-    updateData = self.fromFieldData(sgData)
-
-    if updateData == self._value:
-      return False
-
-    self._value = updateData
-
-    return True
-
-  def _fromFieldData(self, sgData):
-    result = {}
-
-    if sgData == None:
-      return None
-
-    if isinstance(sgData, str):
-      sgData = {
-        'content_type': None,
-        'link_type': 'web',
-        'name': os.path.basename(sgData),
-        'url': sgData
-      }
-    elif not isinstance(sgData, dict):
-      raise TypeError('%s invalid sgData "%s", expected a dict or string' % (self.__repr__(), sgData))
-
-    try:
-      result['url'] = sgData['url']
-      result['name'] = sgData.get('name', os.path.basename(result['url']))
-      result['content_type'] = sgData.get('content_type', None)
-
-      defaultLinkType = 'web'
-
-      if result['url'].lower().startswith('file:'):
-        defaultLinkType = 'local'
-
-      result['link_type'] = sgData.get('link_type', defaultLinkType).lower()
-    except:
-      raise TypeError('%s invalid sgData dict "%s"' % (self.__repr__(), sgData))
-
-    if not result['link_type'] in ['local', 'upload', 'web']:
-      raise ValueError('%s invalid link_type "%s"' % (self.__repr__(), result['link_type']))
-
-    #if result['link_type'] == 'upload':
-    #  ctype = result['content_type']
-    #
-    #  if ctype == None:
-    #    raise ValueError('%s content_type can not be None when link_type is upload' % self.__repr__())
-    #
-    #  if not ctype.startswith('image/'):
-    #    raise ValueError('%s invalid content_type "%s"' % (self.__repr__(), ctype))
-
-    return result
-
-  def _toFieldData(self):
-    if self._value == None:
-      return None
-
-    return copy.deepcopy(self._value)
-
 # Register the fields.
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_CHECKBOX, SgFieldCheckbox)
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_COLOR, SgFieldColor)
@@ -1444,3 +1655,208 @@ ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_SUMMARY, Sg
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_TAG_LIST, SgFieldTagList)
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_TEXT, SgFieldText)
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_URL, SgFieldUrl)
+
+################################################################################
+#
+# Custom user fields
+#
+################################################################################
+
+class SgFieldID(ShotgunORM.SgUserField):
+  '''
+  Field that returns the parent Entities Type.
+  '''
+
+  # Do not allow the field to lock, no point in it.
+  def __enter__(self):
+    pass
+
+  def __exit__(self, exc_type, exc_value, traceback):
+    return False
+
+  def __init__(self, parentEntity):
+    info = ShotgunORM.SgFieldInfo(
+      {
+        'default_value': None,
+        'doc': '',
+        'editable': False,
+        'label': 'Id',
+        'name': 'id',
+        'parent': parentEntity.info().name(),
+        'required': False,
+        'return_type': ShotgunORM.SgField.RETURN_TYPE_INT,
+        'return_type_name': 'number',
+        'summary_info': None,
+        'value_types': None,
+        'valid_values': None
+      }
+    )
+
+    super(SgFieldID, self).__init__(parentEntity, info)
+
+    self._valid = True
+
+  def invalidate(self):
+    '''
+    Does nothing for ID fields.
+    '''
+
+    return False
+
+  def isCacheable(self):
+    '''
+    Always returns False for ID fields.
+    '''
+
+    return False
+
+  def isEditable(self):
+    '''
+    Always returns False for ID fields.
+    '''
+
+    return False
+
+  def setHasSyncUpdate(self, valid):
+    '''
+    Always returns False for ID fields.
+    '''
+
+    return False
+
+  def setValid(self, valid):
+    '''
+    Always returns False for ID fields.
+    '''
+
+    return False
+
+  def setValueFromShotgun(self):
+    '''
+    Always returns False for ID fields.
+    '''
+
+    return False
+
+  def validate(self):
+    '''
+    Always returns False for ID fields.
+    '''
+
+    return False
+
+  def value(self):
+    '''
+    Returns the value of the ID field.
+    '''
+
+    return self._value
+
+  def _valueSg(self):
+    '''
+    Returns the value of the ID field.
+
+    For ID fields this will never query Shotgun.
+    '''
+
+    return self._value
+
+class SgFieldType(ShotgunORM.SgUserField):
+  '''
+  Field that returns the parent Entities Type.
+  '''
+
+  # Do not allow the field to lock, no point in it.
+  def __enter__(self):
+    pass
+
+  def __exit__(self, exc_type, exc_value, traceback):
+    return False
+
+  def __init__(self, parentEntity):
+    info = ShotgunORM.SgFieldInfo(
+      {
+        'default_value': None,
+        'doc': '',
+        'editable': False,
+        'label': 'Type',
+        'name': 'type',
+        'parent': parentEntity.info().name(),
+        'required': False,
+        'return_type': ShotgunORM.SgField.RETURN_TYPE_TEXT,
+        'return_type_name': 'text',
+        'summary_info': None,
+        'value_types': None,
+        'valid_values': None
+      }
+    )
+
+    super(SgFieldType, self).__init__(parentEntity, info)
+
+    self._value = info.parentEntity()
+    self._valid = True
+
+  def invalidate(self):
+    '''
+    Always returns False for Type fields.
+    '''
+
+    return False
+
+  def isCacheable(self):
+    '''
+    Always returns False for Type fields.
+    '''
+
+    return False
+
+  def isEditable(self):
+    '''
+    Always returns False for Type fields.
+    '''
+
+    return False
+
+  def setHasSyncUpdate(self, valid):
+    '''
+    Always returns False for Type fields.
+    '''
+
+    return False
+
+  def setValid(self, valid):
+    '''
+    Always returns False for Type fields.
+    '''
+
+    return False
+
+  def setValueFromShotgun(self):
+    '''
+    Always returns False for Type fields.
+    '''
+
+    return False
+
+  def validate(self):
+    '''
+    Always returns False for Type fields.
+    '''
+
+    return False
+
+  def value(self):
+    '''
+    Returns the Entity type the field belongs to.
+    '''
+
+    return self._value
+
+  def _valueSg(self):
+    '''
+    Returns the Entity type the field belongs to.
+
+    For Type fields this will never query Shotgun.
+    '''
+
+    return self._value

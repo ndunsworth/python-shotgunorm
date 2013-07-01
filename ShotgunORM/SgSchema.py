@@ -134,48 +134,76 @@ class SgSchema(object):
   '''
 
   __lock__ = threading.RLock()
+  __cache__ = {}
 
-  __schemas__ = {}
   __querytemplates__ = {
     'default': {}
   }
 
+  def __enter__(self):
+    self.__lock.acquire()
+
+  def __exit__(self, exc_type, exc_value, traceback):
+    self.__lock.release()
+
+  def __repr__(self):
+    return '<%s(url:"%s")>' % (self.__class__.__name__, self.url())
+
+  def __init__(self, url):
+    self.__lock = threading.RLock()
+
+    self._schema = {}
+    self._url = url
+
+    self._valid = False
+
   @classmethod
-  def createSchema(self, sgSchemaName, sgConnection):
+  def createSchema(cls, url):
     '''
-    Creates and registers a new schema.
+    Creates a new schema for the specified URL and stores it in the global list
+    of URL schemas.
+
+    If a schema for the specified URL already exists then it will be returned
+    instead.
     '''
 
-    self.__lock__.acquire()
+    with cls.__lock__:
+      cached = cls.findSchema(url)
 
-    try:
-      sgSchemaNameLower = sgSchemaName.lower()
+      if cached != None:
+        return cached
 
-      try:
-        return self.__schemas__[sgSchemaNameLower]
-      except:
-        pass
+      result = cls(url)
 
-      result = self()
+      urlLower = result.url().lower()
 
-      result._url = sgSchemaName
-      result._connections[id(sgConnection)] = sgConnection
-
-      self.__schemas__[sgSchemaNameLower] = result
+      cls.__cache__[urlLower] = result
 
       return result
-    finally:
-      self.__lock__.release()
 
   @classmethod
-  def registerDefaultQueryFields(self, sgEntityType, sgQueryTemplates, sgFields):
+  def findSchema(cls, url):
+    '''
+    Returns the already created Schema of the specified URL.
+
+    If a Schema does not exist for the URL then None is returned.
+    '''
+
+    with cls.__lock__:
+      urlLower = url.lower()
+
+      try:
+        return cls.__cache__[urlLower]
+      except KeyError:
+        return None
+
+  @classmethod
+  def registerDefaultQueryFields(cls, sgEntityType, sgQueryTemplates, sgFields):
     '''
 
     '''
 
-    self.__lock__.acquire()
-
-    try:
+    with cls.__lock__:
       if isinstance(sgQueryTemplates, str):
         sgQueryTemplates = [sgQueryTemplates]
 
@@ -183,41 +211,31 @@ class SgSchema(object):
         sgFields = set(sgFields)
 
       for t in sgQueryTemplates:
-        if not self.__querytemplates__.has_key(t):
-          self.__querytemplates__[t] = {}
+        if not cls.__querytemplates__.has_key(t):
+          cls.__querytemplates__[t] = {}
 
         if not isinstance(t, str):
           raise TypeError('expected a str in entity type list, got %s' % t)
 
-        self.__querytemplates__[t][sgEntityType] = set(sgFields)
-    finally:
-      self.__lock__.release()
+        cls.__querytemplates__[t][sgEntityType] = set(sgFields)
 
   @classmethod
-  def defaultEntityQueryFields(self, sgQueryFieldTemplate, sgEntityType, fallBackTo='default'):
+  def defaultEntityQueryFields(cls, sgQueryFieldTemplate, sgEntityType, fallBackTo='default'):
     '''
-
+    Returns the list of default query fields for the specified Entity type and
+    query template.
     '''
 
     try:
-      return self.__querytemplates__[sgQueryFieldTemplate][sgEntityType]
-    except:
+      return cls.__querytemplates__[sgQueryFieldTemplate][sgEntityType]
+    except KeyError:
       if fallBackTo != None:
         try:
-          return self.__querytemplates__[fallBackTo][sgEntityType]
-        except:
+          return cls.__querytemplates__[fallBackTo][sgEntityType]
+        except KeyError:
           return []
       else:
         return []
-
-  def __init__(self):
-    self._lock = threading.RLock()
-    self._connections = weakref.WeakValueDictionary()
-
-    self._schema = {}
-    self._url = ''
-
-    self._valid = False
 
   def _fromXML(self, path):
     '''
@@ -266,8 +284,9 @@ class SgSchema(object):
 
     ShotgunORM.LoggerSchema.debug('    * Pulling schema from Shotgun')
 
-    sgEntitySchemas = sgConnection.connection().schema_entity_read()
-    sgEntityFieldSchemas = sgConnection.connection().schema_read()
+    with ShotgunORM.SHOTGUN_API_LOCK:
+      sgEntitySchemas = sgConnection.connection().schema_entity_read()
+      sgEntityFieldSchemas = sgConnection.connection().schema_read()
 
     entityInfos = {}
 
@@ -291,6 +310,78 @@ class SgSchema(object):
     ShotgunORM.LoggerSchema.debug('    * Building schema from Shotgun completed!')
 
     return entityInfos
+
+  def build(self, sgConnection):
+    '''
+    Builds the schema.
+
+    If the schema has previously been built this will cause the schema to
+    rebuild itself.
+
+    See SgSchema.initialize() if you only want to make sure the schema is built.
+    '''
+
+    with self:
+      ShotgunORM.LoggerSchema.debug('# BUILDING SCHEMA "%(url)s"', {'url': self._url})
+
+      loadedCache = False
+
+      schemaCachePath = SCHEMA_CACHE_DIR
+
+      newSchema = {}
+
+      url = self.url()
+      urlLower = url.lower()
+
+      if sgConnection.url().lower() != url:
+        raise RuntimeError('connections url does not match schemas')
+
+      if url.startswith('https://'):
+        schemaCachePath += '/' + url[8:] + '.xml'
+      else:
+        schemaCachePath += '/' + url.lower() + '.xml'
+
+      if os.path.exists(schemaCachePath):
+        ShotgunORM.LoggerSchema.debug('    * Schema cache path found: "%(cachePath)s"', {'cachePath': schemaCachePath})
+
+        try:
+          newSchema = self._fromXML(schemaCachePath)
+
+          loadedCache = True
+        except Exception, e:
+          ShotgunORM.LoggerSchema.error('        - Error loading XML, falling back to Shotgun database')
+          ShotgunORM.LoggerSchema.error(e)
+
+      if loadedCache == False:
+        newSchema = self._fromSG(sgConnection)
+
+      _entityFix(newSchema)
+
+      self._schema = newSchema
+
+      self._valid = True
+
+      self.changed()
+
+  def _changed(self):
+    '''
+    Sub-class portion of changed().
+
+    Default does nothing.
+    '''
+
+    pass
+
+  def changed(self):
+    '''
+    Called whenever the schemas info changes.
+
+    Calls SgSchema._changed() and then ShotgunORM.onSchemaChanged() callback.
+    '''
+
+    self._changed()
+
+    ShotgunORM.onSchemaChanged(self)
 
   def entityApiName(self, sgEntityType):
     '''
@@ -357,9 +448,7 @@ class SgSchema(object):
     Exports the schema to the specified XML file.
     '''
 
-    self._lock.acquire()
-
-    try:
+    with self:
       if not self._valid:
         raise RuntimeError('schema has not been initialized')
 
@@ -370,83 +459,24 @@ class SgSchema(object):
       tree.write(path)
 
       return True
-    finally:
-      self._lock.release()
 
   def initialize(self, sgConnection):
     '''
-    Builds the schema.
+    Builds the schema if it has not previously been built.
     '''
 
-    self._lock.acquire()
-
-    try:
+    with self:
       if self.isInitialized():
         return True
 
-      self.rebuild(sgConnection)
-
-      self._valid = True
-    finally:
-      self._lock.release()
+      self.build(sgConnection)
 
   def isInitialized(self):
     '''
-
+    Returns True if the schema is initialized.
     '''
 
     return self._valid
-
-  def rebuild(self, sgConnection):
-    '''
-
-    '''
-
-    self._lock.acquire()
-
-    try:
-      ShotgunORM.LoggerSchema.debug('# BUILDING SCHEMA "%(url)s"', {'url': self._url})
-
-      schemaCachePath = None
-
-      loadedCache = False
-
-      schemaCachePath = SCHEMA_CACHE_DIR
-
-      newSchema = {}
-
-      if self._url.lower().startswith('https://'):
-        schemaCachePath += '/' + self._url.lower()[8:] + '.xml'
-      else:
-        schemaCachePath += '/' + self._url.lower() + '.xml'
-
-      if os.path.exists(schemaCachePath):
-        ShotgunORM.LoggerSchema.debug('    * Schema cache path found: "%(cachePath)s"', {'cachePath': schemaCachePath})
-
-        try:
-          newSchema = self._fromXML(schemaCachePath)
-
-          loadedCache = True
-        except Exception, e:
-          ShotgunORM.LoggerSchema.error('        - Error loading XML, falling back to Shotgun database')
-          ShotgunORM.LoggerSchema.error(e)
-
-      if loadedCache == False:
-        newSchema = self._fromSG(sgConnection)
-
-      _entityFix(newSchema)
-
-      self._schema = newSchema
-
-      for cId, cConnection in self._connections.items():
-        if cConnection == None:
-          continue
-
-        cConnection.classFactory().build(self._schema)
-
-      ShotgunORM.LoggerSchema.debug('# BUILDING SCHEMA "%(url)s" COMPLETE!', {'url': self._url})
-    finally:
-      self._lock.release()
 
   def toXML(self):
     '''
@@ -480,7 +510,7 @@ class SgSchema(object):
 
   def url(self):
     '''
-
+    Returns the Shotgun url the schema represents.
     '''
 
     return self._url

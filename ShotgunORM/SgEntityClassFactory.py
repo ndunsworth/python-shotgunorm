@@ -31,6 +31,7 @@ __all__ = [
 # Python imports
 import os
 import threading
+import weakref
 
 # This module imports
 import ShotgunORM
@@ -40,51 +41,35 @@ class SgEntityClassFactory(object):
   Class factory for building a SgConnections Entity objects.
   '''
 
-  __lock__ = threading.RLock()
+  def __enter__(self):
+    self.__lock.acquire()
 
-  __factories__ = {}
+  def __exit__(self, exc_type, exc_value, traceback):
+    self.__lock.release()
 
-  @classmethod
-  def createFactory(self, sgFactoryName, sgEntityClasses={}):
-    '''
-    Creates and registers a new class factory.
-    '''
+    return False
 
-    self.__lock__.acquire()
+  def __init__(self, sgConnection, sgEntityClasses={}):
+    self.__lock = threading.RLock()
 
-    try:
-      sgFactoryName = sgFactoryName.lower()
-
-      try:
-        return self.__factories__[sgFactoryName]
-      except:
-        pass
-
-      result = self(sgEntityClasses)
-
-      self.__factories__[sgFactoryName] = result
-
-      return result
-    finally:
-      self.__lock__.release()
-
-  def __init__(self, sgEntityClasses={}):
-    self._lock = threading.RLock()
+    self.__connection = weakref.ref(sgConnection)
 
     self._localEntityClasses = dict(sgEntityClasses)
     self._classCache = {}
 
     self._valid = False
 
-  def build(self, sgEntityInfos):
+  def build(self):
+    '''
+    Builds the factory.
     '''
 
-    '''
-
-    self._lock.acquire()
-
-    try:
+    with self:
       ShotgunORM.LoggerFactory.debug('# BUILDING CLASS FACTORY')
+
+      sgSchema = self.connection().schema()
+
+      sgEntityInfos = sgSchema.entityInfos()
 
       newClassCache = {}
 
@@ -138,34 +123,35 @@ class SgEntityClassFactory(object):
       self._classCache = newClassCache
 
       ShotgunORM.LoggerFactory.debug('# BUILDING CLASS FACTORY COMPLETE!')
-    finally:
-      self._lock.release()
 
-  def initialize(self, sgSchema):
+      self._valid = True
+
+  def connection(self):
+    '''
+    Returns the SgConnection the factory belongs to.
+    '''
+
+    return self.__connection()
+
+  def initialize(self):
     '''
     Builds the factory.
     '''
 
-    self._lock.acquire()
-
-    try:
+    with self:
       if self.isInitialized():
         return True
 
-      self.rebuild(sgSchema)
-
-      self._valid = True
-    finally:
-      self._lock.release()
+      self.build()
 
   def isInitialized(self):
     '''
-
+    Returns True if the factory has been built.
     '''
 
     return self._valid
 
-  def createEntity(self, sgSession, sgEntityType, sgData):
+  def createEntity(self, sgConnection, sgEntityType, sgData):
     '''
     Creates a new Entity object of type sgEntityType.
     '''
@@ -175,12 +161,12 @@ class SgEntityClassFactory(object):
     if entityClass == None:
       raise RuntimeError('unknown Entity type "%s"' % sgEntityType)
 
-    result = entityClass(sgSession)
+    result = entityClass(sgConnection)
 
     result.buildFields()
     result._fromFieldData(sgData)
 
-    ShotgunORM.onEntityCreate(result)
+    result._createCompleted = True
 
     return result
 
@@ -189,7 +175,8 @@ class SgEntityClassFactory(object):
     Returns the class used by the specified Entity type.
     '''
 
-    try:
-      return self._classCache[sgEntityType]
-    except:
+    if not self._classCache.has_key(sgEntityType):
       raise RuntimeError('unknown Entity type "%s"' % sgEntityType)
+
+    return self._classCache[sgEntityType]
+
