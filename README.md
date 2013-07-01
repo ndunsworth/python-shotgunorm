@@ -1,4 +1,4 @@
-[[/images/shotgunorm_terminal.png]]
+![ShotgunORM Terminal](https://github.com/ndunsworth/python-shotgunorm/wiki/images/shotgunorm_terminal.png)
 
 The ShotgunORM Python library is an object relational mapping package for Shotgun Software's Shotgun web database.
 
