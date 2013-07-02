@@ -85,9 +85,6 @@ class SgFieldCheckbox(ShotgunORM.SgField):
 
     return True
 
-  def _toFieldData(self):
-    return self._value
-
 class SgFieldColor(ShotgunORM.SgField):
   '''
   Entity field that stores a list of 3 ints that represent a rgb color 0-255.
@@ -151,9 +148,6 @@ class SgFieldColor(ShotgunORM.SgField):
     self._value = sgData
 
     return True
-
-  def _toFieldData(self):
-    return self._value
 
   def _Value(self):
     if self._value == None:
@@ -240,9 +234,6 @@ class SgFieldColor2(ShotgunORM.SgField):
 
     return True
 
-  def _toFieldData(self):
-    return self._value
-
   def _Value(self):
     if self._value == None:
       return None
@@ -304,9 +295,6 @@ class SgFieldDate(ShotgunORM.SgField):
     self._value = sgData
 
     return True
-
-  def _toFieldData(self):
-    return self._value
 
 class SgFieldDateTime(ShotgunORM.SgField):
   '''
@@ -714,9 +702,6 @@ class SgFieldFloat(ShotgunORM.SgField):
 
     return True
 
-  def _toFieldData(self):
-    return self._value
-
 class SgFieldInt(ShotgunORM.SgField):
   '''
   Entity field that stores an integer.
@@ -749,9 +734,6 @@ class SgFieldInt(ShotgunORM.SgField):
     self._value = sgData
 
     return True
-
-  def _toFieldData(self):
-    return self._value
 
 class SgFieldSelectionList(ShotgunORM.SgField):
   '''
@@ -807,9 +789,6 @@ class SgFieldSelectionList(ShotgunORM.SgField):
     self._value = sgData
 
     return True
-
-  def _toFieldData(self):
-    return self._value
 
 class SgFieldSerializable(ShotgunORM.SgField):
   '''
@@ -1398,7 +1377,7 @@ class SgFieldTagList(ShotgunORM.SgField):
     return list(result)
 
   def _Value(self):
-    return self.toFieldData()
+    return self._toFieldData()
 
 class SgFieldText(ShotgunORM.SgField):
   '''
@@ -1426,9 +1405,6 @@ class SgFieldText(ShotgunORM.SgField):
     self._value = sgData
 
     return True
-
-  def _toFieldData(self):
-    return self._value
 
 class SgFieldImage(SgFieldText):
   '''
@@ -1598,7 +1574,12 @@ class SgFieldUrl(ShotgunORM.SgField):
     #  if not ctype.startswith('image/'):
     #    raise ValueError('%s invalid content_type "%s"' % (self, ctype))
 
-    return result
+    if self._value == result:
+      return False
+
+    self._value = result
+
+    return True
 
   def setValue(self, sgData):
     return self.fromFieldData(sgData)
@@ -1610,7 +1591,7 @@ class SgFieldUrl(ShotgunORM.SgField):
     return copy.deepcopy(self._value)
 
   def _Value(self):
-    return self.toFieldData()
+    return self._toFieldData()
 
   def url(self, openInBrowser=False):
     '''
