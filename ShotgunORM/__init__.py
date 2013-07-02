@@ -174,4 +174,10 @@ from callbacks import *
 
 import config
 
-SHOTGUN_API = __import__(config.SHOTGUNAPI_NAME)
+try:
+  SHOTGUN_API = __import__(config.SHOTGUNAPI_NAME)
+except Exception, e:
+  if e.message == 'No module named %s' % config.SHOTGUNAPI_NAME:
+    raise ImportError('ShotgunORM unable to find Shotgun Python API module "%s", check "./ShotgunORM/__init__.SHOTGUNAPI_NAME" or sys.path' % config.SHOTGUNAPI_NAME)
+  else:
+    raise e
