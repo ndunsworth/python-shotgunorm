@@ -1,9 +1,9 @@
 
 ==============================
-The ShotgunApi licensing terms
+The ShotgunORM licensing terms
 ==============================
 
-The ShotgunApi is released under the The BSD 3-Clause License.
+The ShotgunORM is released under the The BSD 3-Clause License.
 
 Copyright (c) 2013, NFXPlugins
 All rights reserved.
