@@ -444,10 +444,17 @@ class SgFieldEntity(ShotgunORM.SgField):
       else:
         pullFields = set(sgSyncFields)
 
-      extraFields = set([])
+      extraFields = []
 
-      if 'default' in pullFields:
-        pullFields.pop('default')
+      if 'all' in pullFields:
+        pullFields.remove('all')
+
+        extraFields = parent.fieldNames()
+
+        if 'default' in pullFields:
+          pullFields.remove('default')
+      elif 'default' in pullFields:
+        pullFields.remove('default')
 
         extraFields = connection.defaultEntityQueryFields(v['type'])
 
@@ -625,7 +632,7 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
 
         if sgSyncFields != None:
           if sgSyncFields.has_key(t):
-            iFields = sgFields[t]
+            iFields = sgSyncFields[t]
 
             if iFields == None:
               iSyncFields = connection.defaultEntityQueryFields(t)
@@ -640,10 +647,17 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
               else:
                 pullFields = set(iFields)
 
-              extraFields = set([])
+              extraFields = []
 
-              if 'default' in pullFields:
-                pullFields.pop('default')
+              if 'all' in pullFields:
+                pullFields.remove('all')
+
+                extraFields = parent.fieldNames()
+
+                if 'default' in pullFields:
+                  pullFields.remove('default')
+              elif 'default' in pullFields:
+                pullFields.remove('default')
 
                 extraFields = connection.defaultEntityQueryFields(result.type)
 
