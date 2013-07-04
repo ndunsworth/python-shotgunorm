@@ -423,7 +423,27 @@ class SgEntity(object):
     '''
     Sub-class portion of SgEntity.afterCommit().
 
+    When sgCommitError is not None perform any cleanup but do not raise the
+    exception object as that will happen later by the ShotgunORM.
+
+    This function will always be called even when the commit to Shotgun raises
+    an Exception.
+
     ** The Entity is still locked down when this is called **
+
+    Args:
+      * (dict) sgBatchData:
+        Shotgun formatted batch dictionary of the Entities commit data.
+
+      * (list) sgBatchResult:
+        The result returned from Shotgun.
+
+      * (dict) sgCommitData:
+        Dictionary used to pass data user between beforeCommit() and
+        afterCommit().
+
+      * (Exception) sgCommitError:
+        The Exception object if the commit raised an error.
     '''
 
     pass
@@ -432,7 +452,24 @@ class SgEntity(object):
     '''
     Called in the moments immediately after the call to Shotgun has returned.
 
+    This function will always be called even when the commit to Shotgun raises
+    an Exception.
+
     ** The Entity is still locked down when this is called **
+
+    Args:
+      * (dict) sgBatchData:
+        Shotgun formatted batch dictionary of the Entities commit data.
+
+      * (list) sgBatchResult:
+        The result returned from Shotgun.
+
+      * (dict) sgCommitData:
+        Dictionary used to pass data user between beforeCommit() and
+        afterCommit().
+
+      * (Exception) sgCommitError:
+        The Exception object if the commit raised an error.
     '''
 
     ShotgunORM.LoggerEntity.debug('%(entity)s.afterCommit()', {'entity': self})
@@ -496,6 +533,14 @@ class SgEntity(object):
     Subclass portion of SgEntity.beforeCommit().
 
     ** The Entity is locked down when this is called **
+
+    Args:
+      * (dict) sgBatchData:
+        Shotgun formatted batch dictionary of the Entities commit data.
+
+      * (dict) sgCommitData:
+        Dictionary used to pass data user between beforeCommit() and
+        afterCommit().
     '''
 
     pass

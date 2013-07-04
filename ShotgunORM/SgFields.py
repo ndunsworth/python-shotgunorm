@@ -444,10 +444,17 @@ class SgFieldEntity(ShotgunORM.SgField):
       else:
         pullFields = set(sgSyncFields)
 
-      extraFields = set([])
+      extraFields = []
 
-      if 'default' in pullFields:
-        pullFields.pop('default')
+      if 'all' in pullFields:
+        pullFields.remove('all')
+
+        extraFields = parent.fieldNames()
+
+        if 'default' in pullFields:
+          pullFields.remove('default')
+      elif 'default' in pullFields:
+        pullFields.remove('default')
 
         extraFields = connection.defaultEntityQueryFields(v['type'])
 
@@ -625,7 +632,7 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
 
         if sgSyncFields != None:
           if sgSyncFields.has_key(t):
-            iFields = sgFields[t]
+            iFields = sgSyncFields[t]
 
             if iFields == None:
               iSyncFields = connection.defaultEntityQueryFields(t)
@@ -640,10 +647,17 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
               else:
                 pullFields = set(iFields)
 
-              extraFields = set([])
+              extraFields = []
 
-              if 'default' in pullFields:
-                pullFields.pop('default')
+              if 'all' in pullFields:
+                pullFields.remove('all')
+
+                extraFields = parent.fieldNames()
+
+                if 'default' in pullFields:
+                  pullFields.remove('default')
+              elif 'default' in pullFields:
+                pullFields.remove('default')
 
                 extraFields = connection.defaultEntityQueryFields(result.type)
 
@@ -882,7 +896,7 @@ class SgFieldSummary(ShotgunORM.SgField):
     for c in conditions:
       if c.has_key('logical_operator'):
         logicalOp = {
-          'conditions': self._buildLogicalOp(c),
+          'conditions': self._buildLogicalOp(c['conditions'], info),
           'logical_operator': c['logical_operator']
         }
 
@@ -1291,6 +1305,13 @@ class SgFieldSummary(ShotgunORM.SgField):
       return None
 
     if isinstance(self._value, dict):
+      parent = self.parentEntity()
+
+      if parent == None:
+        return None
+
+      connection = parent.connection()
+
       return connection._createEntity(self._value['type'], self._value)
 
     return self._value
