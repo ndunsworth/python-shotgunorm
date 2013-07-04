@@ -105,7 +105,7 @@ class SgConnectionMeta(type):
       else:
         factory = result.classFactory()
 
-        facory.initialize()
+        factory.initialize()
 
       result.queryEngine().start()
 
