@@ -882,7 +882,7 @@ class SgFieldSummary(ShotgunORM.SgField):
     for c in conditions:
       if c.has_key('logical_operator'):
         logicalOp = {
-          'conditions': self._buildLogicalOp(c),
+          'conditions': self._buildLogicalOp(c['conditions'], info),
           'logical_operator': c['logical_operator']
         }
 
@@ -1291,6 +1291,13 @@ class SgFieldSummary(ShotgunORM.SgField):
       return None
 
     if isinstance(self._value, dict):
+      parent = self.parentEntity()
+
+      if parent == None:
+        return None
+
+      connection = parent.connection()
+
       return connection._createEntity(self._value['type'], self._value)
 
     return self._value
