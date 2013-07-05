@@ -790,7 +790,7 @@ class SgConnection(SgConnectionPriv):
     )
 
     if result == set(['all']):
-      result = set(schema.entityInfo(sgEntityType).fields())
+      result = set(schema.entityInfo(sgEntityType).fieldNames())
     elif result == set(['none']):
       result = set([])
 
@@ -902,7 +902,7 @@ class SgConnection(SgConnectionPriv):
       if 'all' in fields:
         fields.discard('all')
 
-        fields.update(schema.entityInfo(entity_type).fields())
+        fields.update(schema.entityInfo(entity_type).fieldNames())
 
     ShotgunORM.LoggerConnection.debug('%(sgConnection)s.find(...)', {'sgConnection': self})
     ShotgunORM.LoggerConnection.debug('    * entity_type: %(entityType)s', {'entityType': entity_type})
