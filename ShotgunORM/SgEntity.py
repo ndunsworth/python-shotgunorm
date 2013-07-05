@@ -126,19 +126,54 @@ class SgEntityInfo(object):
 
     return self._fieldInfos.get(sgField, None)
 
-  def fieldInfos(self):
+  def fieldInfos(self, sgReturnTypes=None):
     '''
     Returns a list of ShotgunORM.SgFieldInfo objects used by the Entity.
+
+    Args:
+      * (list) sgReturnTypes:
+        List of specific field return types to filter by.
     '''
 
-    return dict(self._fieldInfos)
+    if sgReturnTypes == None:
+      return dict(self._fieldInfos)
+    elif not isinstance(sgReturnTypes, (list, tuple, set)):
+      sgReturnTypes = set([sgReturnTypes])
+    else:
+      sgReturnTypes = set(sgReturnTypes)
 
-  def fields(self):
+    result = {}
+
+    for name, info in self._fieldInfos.items():
+      if not info.returnType() in sgReturnTypes:
+        continue
+
+      result[name] = info
+
+    return result
+
+  def fieldNames(self, sgReturnTypes=None):
     '''
     Returns a list of field names.
     '''
 
-    return sorted(self._fieldInfos.keys())
+    return sorted(self.fieldInfos(sgReturnTypes).keys())
+
+  def fieldLabels(self, sgReturnTypes=None):
+    '''
+    Returns a list of field labels.
+    '''
+
+    infos = self.fieldInfos(sgReturnTypes)
+
+    result = []
+
+    for field in sorted(infos.keys()):
+      result.append(
+        infos[field].label()
+      )
+
+    return result
 
   def hasField(self, sgField):
     '''

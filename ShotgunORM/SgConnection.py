@@ -381,7 +381,10 @@ class SgConnection(SgConnectionPriv):
         #data['id'] = sgEntity['id']
         #data['type'] = sgEntity['type']
 
-      self.__entityCache[sgEntity.type][sgEntity['id']]['cache'] = data
+      cache = self.__entityCache[sgEntity.type][sgEntity['id']]
+
+      cache['cache'] = data
+      cache['entity'] = None
 
   def _createEntity(self, sgEntityType, sgData, sgSyncFields=None):
     '''
@@ -428,7 +431,10 @@ class SgConnection(SgConnectionPriv):
       # have data contained in the passed sgData.  If not found create the
       # Entity and add it to the cache.]
       if self.__entityCache[sgEntityType].has_key(eId):
-        result = self.__entityCache[sgEntityType][eId]['entity']()
+        result = self.__entityCache[sgEntityType][eId]['entity']
+
+        if result != None:
+          result = result()
 
         if result == None:
           cacheData = self.__entityCache[sgEntityType][eId]['cache']
@@ -453,7 +459,7 @@ class SgConnection(SgConnectionPriv):
           for field, value in sgData.items():
             fieldObj = result.field(field)
 
-            if fieldObj.isValid() or fieldObj.hasCommit():
+            if fieldObj.isValid() or fieldObj.hasCommit() or fieldObj.hasSyncUpdate():
               continue
 
             fieldObj.invalidate()
@@ -461,8 +467,6 @@ class SgConnection(SgConnectionPriv):
             fieldObj._updateValue = value
 
             fieldObj.setHasSyncUpdate(True)
-
-            fieldObj.validate()
       else:
         result = factory.createEntity(self, sgEntityType, sgData)
 
@@ -790,7 +794,7 @@ class SgConnection(SgConnectionPriv):
     )
 
     if result == set(['all']):
-      result = set(schema.entityInfo(sgEntityType).fields())
+      result = set(schema.entityInfo(sgEntityType).fieldNames())
     elif result == set(['none']):
       result = set([])
 
@@ -902,7 +906,7 @@ class SgConnection(SgConnectionPriv):
       if 'all' in fields:
         fields.discard('all')
 
-        fields.update(schema.entityInfo(entity_type).fields())
+        fields.update(schema.entityInfo(entity_type).fieldNames())
 
     ShotgunORM.LoggerConnection.debug('%(sgConnection)s.find(...)', {'sgConnection': self})
     ShotgunORM.LoggerConnection.debug('    * entity_type: %(entityType)s', {'entityType': entity_type})
