@@ -453,7 +453,7 @@ class SgConnection(SgConnectionPriv):
           for field, value in sgData.items():
             fieldObj = result.field(field)
 
-            if fieldObj.isValid() or fieldObj.hasCommit():
+            if fieldObj.isValid() or fieldObj.hasCommit() or fieldObj.hasSyncUpdate():
               continue
 
             fieldObj.invalidate()
@@ -462,7 +462,7 @@ class SgConnection(SgConnectionPriv):
 
             fieldObj.setHasSyncUpdate(True)
 
-            fieldObj.validate()
+            #fieldObj.validate()
       else:
         result = factory.createEntity(self, sgEntityType, sgData)
 
