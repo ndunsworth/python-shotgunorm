@@ -381,7 +381,10 @@ class SgConnection(SgConnectionPriv):
         #data['id'] = sgEntity['id']
         #data['type'] = sgEntity['type']
 
-      self.__entityCache[sgEntity.type][sgEntity['id']]['cache'] = data
+      cache = self.__entityCache[sgEntity.type][sgEntity['id']]
+
+      cache['cache'] = data
+      cache['entity'] = None
 
   def _createEntity(self, sgEntityType, sgData, sgSyncFields=None):
     '''
@@ -428,7 +431,10 @@ class SgConnection(SgConnectionPriv):
       # have data contained in the passed sgData.  If not found create the
       # Entity and add it to the cache.]
       if self.__entityCache[sgEntityType].has_key(eId):
-        result = self.__entityCache[sgEntityType][eId]['entity']()
+        result = self.__entityCache[sgEntityType][eId]['entity']
+
+        if result != None:
+          result = result()
 
         if result == None:
           cacheData = self.__entityCache[sgEntityType][eId]['cache']
@@ -461,8 +467,6 @@ class SgConnection(SgConnectionPriv):
             fieldObj._updateValue = value
 
             fieldObj.setHasSyncUpdate(True)
-
-            #fieldObj.validate()
       else:
         result = factory.createEntity(self, sgEntityType, sgData)
 
