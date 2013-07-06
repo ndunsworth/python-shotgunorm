@@ -873,6 +873,8 @@ class SgFieldSummary(ShotgunORM.SgField):
   def __init__(self, parentEntity, fieldInfo):
     super(SgFieldSummary, self).__init__(parentEntity, fieldInfo)
 
+    self.__buildLock = threading.Lock()
+
     summaryInfo = fieldInfo.summaryInfo()
 
     self._entityType = summaryInfo['entity_type']
@@ -1095,8 +1097,9 @@ class SgFieldSummary(ShotgunORM.SgField):
 
     connection = parent.connection()
 
-    if self._searchFilter == None:
-      self._buildSearchFilter()
+    with self.__buildLock:
+      if self._searchFilter == None:
+        self._buildSearchFilter()
 
     searchExp = self._searchFilter
 
@@ -1304,18 +1307,17 @@ class SgFieldSummary(ShotgunORM.SgField):
     if self._value == None:
       return None
 
-    if isinstance(self._value, dict):
+    if self._summaryType == 'single_record':
       parent = self.parentEntity()
 
       if parent == None:
-        return None
+        return copy.deepcopy(self._value)
 
       connection = parent.connection()
 
       return connection._createEntity(self._value['type'], self._value)
 
-    return self._value
-
+    return copy.deepcopy(self._value)
 
 class SgFieldTagList(ShotgunORM.SgField):
   '''
