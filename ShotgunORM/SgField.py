@@ -459,7 +459,7 @@ class SgField(object):
     Called whenever the fields value changes.
 
     This calls updateWidget() and if the field has a parent Entity it calls
-    the Entities onFieldChanged() with self.
+    the Entities fieldChanged() with self.
     '''
 
     # Do not do anything if the field is validating, validate will call changed
@@ -474,7 +474,7 @@ class SgField(object):
     if parent == None:
       return
 
-    parent.onFieldChanged(self)
+    parent.fieldChanged(self)
 
   def defaultValue(self):
     '''
