@@ -370,7 +370,7 @@ class SgEntity(object):
     self._fields = {}
 
     self._markedForDeletion = False
-    self._isCommitting = False
+    self.__isCommitting = False
 
     self._hasBuiltFields = False
     self._createCompleted = False
@@ -513,7 +513,7 @@ class SgEntity(object):
     ShotgunORM.LoggerEntity.debug('    * sgCommitData: %(value)s', {'value': sgCommitData})
     ShotgunORM.LoggerEntity.debug('    * sgCommitError: %(value)s', {'value': sgCommitError})
 
-    self._isCommitting = False
+    self.__isCommitting = False
 
     if sgCommitError == None:
       for batch, result in map(None, sgBatchData, sgBatchResult):
@@ -601,7 +601,7 @@ class SgEntity(object):
     ShotgunORM.LoggerEntity.debug('    * sgBatchData: %(value)s', {'value': sgBatchData})
     ShotgunORM.LoggerEntity.debug('    * sgCommitData: %(value)s', {'value': sgCommitData})
 
-    self._isCommitting = True
+    self.__isCommitting = True
 
     for batch in sgBatchData:
       commitType = batch['request_type']
@@ -1088,7 +1088,7 @@ class SgEntity(object):
     Returns True if the Entity is currently commiting to Shotgun.
     '''
 
-    return self._isCommitting
+    return self.__isCommitting
 
   def isCustom(self):
     '''
