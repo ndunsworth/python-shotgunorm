@@ -1743,7 +1743,7 @@ class SgFieldID(ShotgunORM.SgUserField):
 
     return False
 
-  def validate(self):
+  def validate(self, force=False):
     '''
     Always returns False for ID fields.
     '''
@@ -1843,7 +1843,7 @@ class SgFieldType(ShotgunORM.SgUserField):
 
     return False
 
-  def validate(self):
+  def validate(self, force=False):
     '''
     Always returns False for Type fields.
     '''
