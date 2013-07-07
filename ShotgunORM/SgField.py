@@ -417,6 +417,7 @@ class SgField(object):
     self.__hasCommit = False
     self.__hasSyncUpdate = False
     self.__valid = False
+    self.__isValidating = False
 
     self.__isCommitting = False
     self.__isUpdatingEvent = threading.Event(verbose=True)
@@ -460,6 +461,11 @@ class SgField(object):
     This calls updateWidget() and if the field has a parent Entity it calls
     the Entities onFieldChanged() with self.
     '''
+
+    # Do not do anything if the field is validating, validate will call changed
+    # on its own!
+    if self.__isValidating:
+      return
 
     self.updateWidget()
 
@@ -708,7 +714,7 @@ class SgField(object):
     When this is True the field is locked and unable to change its value.
     '''
 
-    return self._isCommitting
+    return self.__isCommitting
 
   def isCommittable(self):
     '''
@@ -923,7 +929,7 @@ class SgField(object):
         Value of state.
     '''
 
-    self._isCommitting = bool(valid)
+    self.__isCommitting = bool(valid)
 
   def setValid(self, valid):
     '''
@@ -1073,7 +1079,51 @@ class SgField(object):
 
     widget.update()
 
-  def validate(self):
+  def _validate(self):
+    '''
+    Sub-class portion of SgField.validate().
+
+    SgField.changed() and SgField.setValid() are called by the main validate()
+    call so you do not need to set them in _validate().
+
+    For sub-classes that do not plan on implementing the setting of the fields
+    value, make sure to call the base classes _validate() function.
+    '''
+
+    ShotgunORM.LoggerField.debug('%(sgField)s._validate()', {
+      'sgField': self
+    })
+
+    validSyncUpdate = False
+
+    if self.hasSyncUpdate():
+      ShotgunORM.LoggerField.debug('    * hasSyncUpdate()')
+
+      # isSyncUpdating() might be True but if the search raised an exception it
+      # didnt flag hasSyncUpdate() so fall back to just pulling from Shotgun
+      # manually with setValueFromShotgun().
+
+      try:
+        self._fromFieldData(self._updateValue)
+
+        validSyncUpdate = True
+
+        ShotgunORM.LoggerField.debug('        + Successful!')
+      except:
+        ShotgunORM.LoggerField.debug('        + Failed!')
+      finally:
+        self._updateValue = None
+
+        self.setHasSyncUpdate(False)
+
+      if not validSyncUpdate:
+        self.setValueFromShotgun()
+    elif self.hasCommit():
+      pass
+    else:
+      self.setValueFromShotgun()
+
+  def validate(self, force=False):
     '''
     Validates the field so that isValid() returns True.
 
@@ -1082,10 +1132,16 @@ class SgField(object):
 
     Note:
       When isValid() is already True then this function returns immediately.
+
+    Args:
+      * (bool) force:
+        Forces validate to execute even if isValid() is True.
     '''
 
     with self:
-      if self.isValid():
+      self.__isValidating = True
+
+      if self.isValid() and not force:
         return False
 
       ShotgunORM.LoggerField.debug('%(sgField)s.validate(curState=%(state)s)', {
@@ -1095,29 +1151,15 @@ class SgField(object):
 
       self.__isUpdatingEvent.wait()
 
-      # isSyncUpdating() might be True but if the search raised an exception it
-      # didnt flag hasSyncUpdate() so fall back to just pulling from Shotgun
-      # manually with setValueFromShotgun().
-      if self.hasSyncUpdate():
-        ShotgunORM.LoggerField.debug('    * hasSyncUpdate()')
+      # Don't allow __isValidating to remain True!
+      try:
+        self._validate()
+      finally:
+        self.__isValidating = False
 
-        try:
-          self._fromFieldData(self._updateValue)
+      self.setValid(True)
 
-          ShotgunORM.LoggerField.debug('        + Successful!')
-        except:
-          ShotgunORM.LoggerField.debug('        + Failed!')
-        finally:
-          self.setHasSyncUpdate(False)
-
-          self._updateValue = None
-
-        self.setValid(True)
-        self.setHasCommit(False)
-
-        self.changed()
-      else:
-        self.setValueFromShotgun()
+      self.changed()
 
       return True
 
