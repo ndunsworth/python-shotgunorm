@@ -1464,7 +1464,7 @@ class SgEntity(object):
 
     return result
 
-  def valuesSg(self, sgFields):
+  def valuesSg(self, sgFields=None):
     '''
     Returns field values from Shotgun for the specified fields.
 
