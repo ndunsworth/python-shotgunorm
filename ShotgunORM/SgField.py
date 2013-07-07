@@ -714,7 +714,7 @@ class SgField(object):
     When this is True the field is locked and unable to change its value.
     '''
 
-    return self._isCommitting
+    return self.__isCommitting
 
   def isCommittable(self):
     '''
@@ -929,7 +929,7 @@ class SgField(object):
         Value of state.
     '''
 
-    self._isCommitting = bool(valid)
+    self.__isCommitting = bool(valid)
 
   def setValid(self, valid):
     '''
