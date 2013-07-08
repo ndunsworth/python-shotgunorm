@@ -155,7 +155,7 @@ class SgSchema(object):
     self._schema = {}
     self._url = url
 
-    self._valid = False
+    self.__valid = False
 
   @classmethod
   def createSchema(cls, url):
@@ -359,7 +359,7 @@ class SgSchema(object):
 
       self._schema = newSchema
 
-      self._valid = True
+      self.__valid = True
 
       self.changed()
 
@@ -391,7 +391,7 @@ class SgSchema(object):
     into their Shotgun api name.
     '''
 
-    if not self._valid:
+    if not self.isInitialized():
       raise RuntimeError('schema has not been initialized')
 
     info = self.entityInfo(sgEntityType)
@@ -406,7 +406,7 @@ class SgSchema(object):
     Returns the SgEntityInfo for the specified Entity type.
     '''
 
-    if not self._valid:
+    if not self.isInitialized():
       raise RuntimeError('schema has not been initialized')
 
     return self._schema.get(sgEntityType, None)
@@ -416,7 +416,7 @@ class SgSchema(object):
     Returns a dict containing all the Entity infos contained in the schema.
     '''
 
-    if not self._valid:
+    if not self.isInitialized():
       raise RuntimeError('schema has not been initialized')
 
     return dict(self._schema)
@@ -426,7 +426,7 @@ class SgSchema(object):
     Returns the user visible name of the Entity type.
     '''
 
-    if not self._valid:
+    if not self.isInitialized():
       raise RuntimeError('schema has not been initialized')
 
     info = self.entityInfo(sgEntityType)
@@ -438,7 +438,7 @@ class SgSchema(object):
     Returns a list of Entity names contained in the schema.
     '''
 
-    if not self._valid:
+    if not self.isInitialized():
       raise RuntimeError('schema has not been initialized')
 
     return sorted(self._schema.keys())
@@ -449,7 +449,7 @@ class SgSchema(object):
     '''
 
     with self:
-      if not self._valid:
+      if not self.isInitialized():
         raise RuntimeError('schema has not been initialized')
 
       xmlData = self.toXML()
@@ -476,14 +476,14 @@ class SgSchema(object):
     Returns True if the schema is initialized.
     '''
 
-    return self._valid
+    return self.__valid
 
   def toXML(self):
     '''
     Returns an ElementTree representation of the schema.
     '''
 
-    if not self._valid:
+    if not self.isInitialized():
       raise RuntimeError('schema has not been initialized')
 
     xmlRoot = ET.Element(
