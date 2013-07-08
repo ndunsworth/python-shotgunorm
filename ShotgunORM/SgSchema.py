@@ -29,8 +29,10 @@ __all__ = [
 ]
 
 # Python imports
+import hashlib
 import os
 import threading
+import time
 import weakref
 
 from xml.etree import ElementTree as ET
@@ -155,7 +157,8 @@ class SgSchema(object):
     self._schema = {}
     self._url = url
 
-    self._valid = False
+    self.__valid = False
+    self.__buildId = 0
 
   @classmethod
   def createSchema(cls, url):
@@ -260,6 +263,8 @@ class SgSchema(object):
     if xmlEntities == None:
       raise RuntimeError('could not find entities element')
 
+    buildId = self.buildId()
+
     for entity in xmlEntities:
       if entity.tag != 'SgEntity':
         raise RuntimeError('invalid tag "%s"' % entity.tag)
@@ -359,9 +364,28 @@ class SgSchema(object):
 
       self._schema = newSchema
 
-      self._valid = True
+      self.__valid = True
+
+      t = time.time()
+
+      buildHash = hashlib.sha1()
+
+      buildHash.update(str(t))
+
+      self.__buildId = buildHash.hexdigest()
 
       self.changed()
+
+  def buildId(self):
+    '''
+    Returns the build ID of the schema.
+
+    Whenever a schema re-builds itself this ID number will be changed.
+
+    The ID value is the sha1 hash of the time.time() the schema was built.
+    '''
+
+    return self.__buildId
 
   def _changed(self):
     '''
@@ -391,7 +415,7 @@ class SgSchema(object):
     into their Shotgun api name.
     '''
 
-    if not self._valid:
+    if not self.isInitialized():
       raise RuntimeError('schema has not been initialized')
 
     info = self.entityInfo(sgEntityType)
@@ -406,7 +430,7 @@ class SgSchema(object):
     Returns the SgEntityInfo for the specified Entity type.
     '''
 
-    if not self._valid:
+    if not self.isInitialized():
       raise RuntimeError('schema has not been initialized')
 
     return self._schema.get(sgEntityType, None)
@@ -416,7 +440,7 @@ class SgSchema(object):
     Returns a dict containing all the Entity infos contained in the schema.
     '''
 
-    if not self._valid:
+    if not self.isInitialized():
       raise RuntimeError('schema has not been initialized')
 
     return dict(self._schema)
@@ -426,7 +450,7 @@ class SgSchema(object):
     Returns the user visible name of the Entity type.
     '''
 
-    if not self._valid:
+    if not self.isInitialized():
       raise RuntimeError('schema has not been initialized')
 
     info = self.entityInfo(sgEntityType)
@@ -438,7 +462,7 @@ class SgSchema(object):
     Returns a list of Entity names contained in the schema.
     '''
 
-    if not self._valid:
+    if not self.isInitialized():
       raise RuntimeError('schema has not been initialized')
 
     return sorted(self._schema.keys())
@@ -449,7 +473,7 @@ class SgSchema(object):
     '''
 
     with self:
-      if not self._valid:
+      if not self.isInitialized():
         raise RuntimeError('schema has not been initialized')
 
       xmlData = self.toXML()
@@ -476,14 +500,14 @@ class SgSchema(object):
     Returns True if the schema is initialized.
     '''
 
-    return self._valid
+    return self.__valid
 
   def toXML(self):
     '''
     Returns an ElementTree representation of the schema.
     '''
 
-    if not self._valid:
+    if not self.isInitialized():
       raise RuntimeError('schema has not been initialized')
 
     xmlRoot = ET.Element(

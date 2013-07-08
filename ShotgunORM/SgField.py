@@ -1032,8 +1032,6 @@ class SgField(object):
 
       self.setValid(True)
 
-      self.__profiler__.profile(self)
-
       self.changed()
 
       return True
@@ -1191,6 +1189,8 @@ class SgField(object):
     '''
 
     with self:
+      self.__profiler__.profile(self)
+
       if self.isValid():
         return self._Value()
 
