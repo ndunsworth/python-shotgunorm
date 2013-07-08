@@ -886,6 +886,39 @@ class SgEntity(object):
 
     return self._fields.get(sgField, None)
 
+  def _fieldChanged(self, sgField):
+    '''
+    Subclass portion of SgEntity.fieldChanged().
+
+    Called when a field changes values.
+    '''
+
+    pass
+
+  def fieldChanged(self, sgField):
+    '''
+    Called when a field changes values.
+
+    If SgEntity.widget() is not None then SgEntity.widget().fieldChanged()
+    will be called as well.
+
+    Args:
+      * (SgField) sgField:
+        Field that changed.
+    '''
+
+    ShotgunORM.LoggerEntity.debug('%(entity)s.fieldChanged("%(sgField)s")', {'entity': self, 'sgField': sgField.name()})
+
+    self._fieldChanged(sgField)
+
+    w = self.widget()
+
+    if w != None:
+      w.fieldChanged(sgField)
+
+    if not self.isBuildingFields() and self._createCompleted:
+      ShotgunORM.onFieldChanged(sgField)
+
   def fieldLabels(self, sgFields=None, sgReturnTypes=None):
     '''
     Returns a list of the field labels associated with the Entity in Shotgun.
@@ -1177,40 +1210,6 @@ class SgEntity(object):
         return True
 
       return self._makeWidget()
-
-  def _onFieldChanged(self, sgField):
-    '''
-    Subclass portion of SgEntity.onFieldChanged().
-
-    Called when a field changes values.
-    '''
-
-    pass
-
-  def onFieldChanged(self, sgField):
-    '''
-    Called when a field changes values.
-
-    If SgEntity.widget() is not None then SgEntity.widget().onFieldChanged()
-    will be called as well.
-
-    Args:
-      * (SgField) sgField:
-        Field that changed.
-    '''
-
-    ShotgunORM.LoggerEntity.debug('%(entity)s.onFieldChanged()', {'entity': self})
-    ShotgunORM.LoggerEntity.debug('    * sgField: %(sgField)s', {'sgField': sgField})
-
-    self._onFieldChanged(sgField)
-
-    w = self.widget()
-
-    if w != None:
-      w.onFieldChanged(sgField)
-
-    if not self.isBuildingFields() and self._createCompleted:
-      ShotgunORM.onFieldChanged(sgField)
 
   def revert(self, sgFields=None, ignoreValid=False, ignoreWithUpdate=False):
     '''

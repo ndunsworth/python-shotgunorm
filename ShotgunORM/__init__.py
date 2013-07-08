@@ -31,7 +31,6 @@ __all__ = [
   'VERSION',
   'SHOTGUN_API',
   'SHOTGUN_API_LOCK',
-  'Entities',
   'SgConnection',
   'SgEntity',
   'SgEntityClassFactory',

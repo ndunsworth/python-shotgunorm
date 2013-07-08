@@ -459,7 +459,7 @@ class SgField(object):
     Called whenever the fields value changes.
 
     This calls updateWidget() and if the field has a parent Entity it calls
-    the Entities onFieldChanged() with self.
+    the Entities fieldChanged() with self.
     '''
 
     # Do not do anything if the field is validating, validate will call changed
@@ -474,7 +474,7 @@ class SgField(object):
     if parent == None:
       return
 
-    parent.onFieldChanged(self)
+    parent.fieldChanged(self)
 
   def defaultValue(self):
     '''
@@ -673,13 +673,16 @@ class SgField(object):
 
     pass
 
-  def invalidate(self):
+  def invalidate(self, force=False):
     '''
     Invalidates the stored value of the field so that the next call to value()
     will force a re-evaluate its value.
     '''
 
     with self:
+      if not self.isValid() and not force:
+        return False
+
       ShotgunORM.LoggerField.debug('%(sgField)s.invalidate()', {'sgField': self})
 
       self.__isUpdatingEvent.wait()
@@ -692,6 +695,8 @@ class SgField(object):
       self._updateValue = None
 
       self._invalidate()
+
+      return True
 
   def isCacheable(self):
     '''
@@ -1094,9 +1099,9 @@ class SgField(object):
       'sgField': self
     })
 
-    validSyncUpdate = False
-
     if self.hasSyncUpdate():
+      validSyncUpdate = False
+
       ShotgunORM.LoggerField.debug('    * hasSyncUpdate()')
 
       # isSyncUpdating() might be True but if the search raised an exception it
@@ -1109,7 +1114,9 @@ class SgField(object):
         validSyncUpdate = True
 
         ShotgunORM.LoggerField.debug('        + Successful!')
-      except:
+      except Exception, e:
+        ShotgunORM.LoggerField.warn(e)
+
         ShotgunORM.LoggerField.debug('        + Failed!')
       finally:
         self._updateValue = None
