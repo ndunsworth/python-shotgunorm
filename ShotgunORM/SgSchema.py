@@ -29,8 +29,10 @@ __all__ = [
 ]
 
 # Python imports
+import hashlib
 import os
 import threading
+import time
 import weakref
 
 from xml.etree import ElementTree as ET
@@ -156,6 +158,7 @@ class SgSchema(object):
     self._url = url
 
     self.__valid = False
+    self.__buildId = 0
 
   @classmethod
   def createSchema(cls, url):
@@ -260,6 +263,8 @@ class SgSchema(object):
     if xmlEntities == None:
       raise RuntimeError('could not find entities element')
 
+    buildId = self.buildId()
+
     for entity in xmlEntities:
       if entity.tag != 'SgEntity':
         raise RuntimeError('invalid tag "%s"' % entity.tag)
@@ -361,7 +366,26 @@ class SgSchema(object):
 
       self.__valid = True
 
+      t = time.time()
+
+      buildHash = hashlib.sha1()
+
+      buildHash.update(str(t))
+
+      self.__buildId = buildHash.hexdigest()
+
       self.changed()
+
+  def buildId(self):
+    '''
+    Returns the build ID of the schema.
+
+    Whenever a schema re-builds itself this ID number will be changed.
+
+    The ID value is the sha1 hash of the time.time() the schema was built.
+    '''
+
+    return self.__buildId
 
   def _changed(self):
     '''
