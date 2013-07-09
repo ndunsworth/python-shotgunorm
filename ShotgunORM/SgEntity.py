@@ -467,14 +467,14 @@ class SgEntity(object):
     ** The Entity is still locked down when this is called **
 
     Args:
-      * (dict) sgBatchData:
-        Shotgun formatted batch dictionary of the Entities commit data.
+      * (list) sgBatchData:
+        List of Shotgun formatted batch commit data.
 
       * (list) sgBatchResult:
         The result returned from Shotgun.
 
       * (dict) sgCommitData:
-        Dictionary used to pass data user between beforeCommit() and
+        Dictionary used to pass user data between beforeCommit() and
         afterCommit().
 
       * (Exception) sgCommitError:
@@ -494,13 +494,13 @@ class SgEntity(object):
 
     Args:
       * (dict) sgBatchData:
-        Shotgun formatted batch dictionary of the Entities commit data.
+        List of Shotgun formatted batch commit data.
 
       * (list) sgBatchResult:
         The result returned from Shotgun.
 
       * (dict) sgCommitData:
-        Dictionary used to pass data user between beforeCommit() and
+        Dictionary used to pass user data between beforeCommit() and
         afterCommit().
 
       * (Exception) sgCommitError:
