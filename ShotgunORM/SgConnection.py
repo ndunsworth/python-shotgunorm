@@ -363,6 +363,20 @@ class SgConnection(SgConnectionPriv):
       if not self.isCaching():
         return
 
+      # Bail if the cache has been cleared.  The Entity is dirty!
+      if not self.__entityCache.has_key(sgEntity.type) or not self.__entityCache[sgEntity.type].has_key(sgEntity['id']):
+        return
+
+      cache = self.__entityCache[sgEntity.type][sgEntity['id']]
+
+      e = cache['entity']()
+
+      # If the cache was cleared and a new Entity object created this one is
+      # dirty and don't allow it to store cache data.
+      if e != None:
+        if id(e) != id(sgEntity):
+          return
+
       data = {}
 
       with sgEntity:
@@ -380,8 +394,6 @@ class SgConnection(SgConnectionPriv):
 
         #data['id'] = sgEntity['id']
         #data['type'] = sgEntity['type']
-
-      cache = self.__entityCache[sgEntity.type][sgEntity['id']]
 
       cache['cache'] = data
       cache['entity'] = None
