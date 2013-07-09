@@ -438,13 +438,13 @@ def afterEntityCommit(sgEntity, sgBatchData, sgBatchResult, sgCommitData, sgComm
       Entity that is committing.
 
     * (dict) sgBatchData:
-      Shotgun formatted batch dictionary of the Entities commit data.
+      List of Shotgun formatted batch commit data.
 
     * (list) sgBatchResult:
       Result returned from Shotgun for the commit.
 
     * (dict) sgCommitData:
-      Dictionary used to pass data user between beforeCommit() and
+      Dictionary used to pass user data between beforeCommit() and
       afterCommit().
 
     * (Exception) sgCommitError:
@@ -473,11 +473,11 @@ def beforeEntityCommit(sgEntity, sgBatchData, sgCommitData):
     * (SgEntity) sgEntity:
       Entity that is committing.
 
-    * (dict) sgBatchData:
-      Shotgun formatted batch dictionary of the Entities commit data.
+    * (list) sgBatchData:
+      List of Shotgun formatted batch commit data.
 
     * (dict) sgCommitData:
-      Dictionary used to pass data user between beforeCommit() and
+      Dictionary used to pass user data between beforeCommit() and
       afterCommit().
   '''
 
