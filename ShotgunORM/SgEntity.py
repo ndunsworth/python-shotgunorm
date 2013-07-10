@@ -59,9 +59,9 @@ class SgEntityInfo(object):
     self._fieldInfos = fieldInfos
 
   @classmethod
-  def fromSg(self, sgEntityName, sgEntityLabel, sgFieldSchemas):
+  def fromSg(cls, sgEntityName, sgEntityLabel, sgFieldSchemas):
     '''
-    Returns a new ShotgunORM.SgFieldInfo that is constructed from the arg "sgSchema".
+    From the passed Shotgun schema info a new SgEntityInfo is returned.
     '''
 
     fieldInfos = {}
@@ -85,10 +85,10 @@ class SgEntityInfo(object):
 
       fieldInfos[fieldName] = fieldInfo
 
-    return self(sgEntityName, sgEntityLabel, fieldInfos)
+    return cls(sgEntityName, sgEntityLabel, fieldInfos)
 
   @classmethod
-  def fromXML(self, sgXmlElement):
+  def fromXML(cls, sgXmlElement):
     '''
     From the passed XML data a new SgEntityInfo is returned.
     '''
@@ -117,7 +117,7 @@ class SgEntityInfo(object):
 
       entityFieldInfos[field.attrib.get('name')] = fieldInfo
 
-    return self(entityName, entityLabel, entityFieldInfos)
+    return cls(entityName, entityLabel, entityFieldInfos)
 
   def fieldInfo(self, sgField):
     '''
