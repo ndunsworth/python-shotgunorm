@@ -282,7 +282,7 @@ class SgEntity(object):
     field = self.field(item)
 
     if field == None:
-      raise KeyError('invalid key field "%s"' % item)
+      raise KeyError('invalid field key "%s"' % item)
 
     return field.value()
 
@@ -354,7 +354,6 @@ class SgEntity(object):
     return False
 
   def __del__(self):
-    #print '<SgEntity %s %d> __del__' % (self.type, self.id)
     self.connection()._cacheEntity(self)
 
   def __int__(self):
