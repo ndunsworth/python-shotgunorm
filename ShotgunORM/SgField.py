@@ -1212,10 +1212,10 @@ class SgField(object):
 
     result = self.parentEntity().valuesSg([self.name()])
 
-    if result.has_key(self.name()):
-      return result[self.name()]
-    else:
-      return None
+    if not result.has_key(self.name()):
+      raise RuntimeError('field %s.%s not found in Shotgun' % (parent.label(), self.name()))
+
+    return result[self.name()]
 
   def valueSg(self):
     '''
