@@ -1149,9 +1149,10 @@ class SgField(object):
       if self.isValid() and not force:
         return False
 
-      ShotgunORM.LoggerField.debug('%(sgField)s.validate(curState=%(state)s)', {
+      ShotgunORM.LoggerField.debug('%(sgField)s.validate(curState=%(state)s, force=%(force)s)', {
         'sgField': self,
-        'state': self.isValid()
+        'state': self.isValid(),
+        'force': force
       })
 
       self.__isUpdatingEvent.wait()
