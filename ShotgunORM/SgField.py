@@ -1372,5 +1372,6 @@ FIELD_RETURN_TYPES = {
   'tag_list': SgField.RETURN_TYPE_TAG_LIST,
   'text': SgField.RETURN_TYPE_TEXT,
   'url': SgField.RETURN_TYPE_URL,
+  'url_template': SgField.RETURN_TYPE_TEXT,
   'uuid': SgField.RETURN_TYPE_TEXT
 }
