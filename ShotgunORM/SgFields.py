@@ -1543,11 +1543,18 @@ class SgFieldUrl(ShotgunORM.SgField):
   '''
   Entity field that stores a url.
 
-  Example: {
+  Example URL: {
     'content_type': 'image/jpeg',
     'link_type': 'upload',
     'name': 'bob.jpg',
     'url': 'http://www.owned.com/bob.jpg'
+  }
+
+  Example Local: {
+    'content_type': 'image/jpeg',
+    'link_type': 'local',
+    'name': 'bob.jpg',
+    'local_storage': 'c:/temp/bob.jpg'
   }
   '''
 
@@ -1562,41 +1569,26 @@ class SgFieldUrl(ShotgunORM.SgField):
 
       return result
 
-    if isinstance(sgData, str):
-      sgData = {
-        'content_type': None,
-        'link_type': 'web',
-        'name': os.path.basename(sgData),
-        'url': sgData
-      }
-    elif not isinstance(sgData, dict):
+    if not isinstance(sgData, dict):
       raise TypeError('%s invalid sgData "%s", expected a dict or string' % (self, sgData))
 
     try:
-      result['url'] = sgData['url']
-      result['name'] = sgData.get('name', os.path.basename(result['url']))
+      result['link_type'] = sgData['link_type'].lower()
+
+      if result['link_type'] in ['upload', 'web']:
+        result['url'] = sgData['url']
+      else:
+        result['local_storage'] = sgData['local_storage']
+
+      result['name'] = sgData['name']
       result['content_type'] = sgData.get('content_type', None)
+    except Exception, e:
+      ShotgunORM.LoggerField.warn(e)
 
-      defaultLinkType = 'web'
-
-      if result['url'].lower().startswith('file:'):
-        defaultLinkType = 'local'
-
-      result['link_type'] = sgData.get('link_type', defaultLinkType).lower()
-    except:
       raise TypeError('%s invalid sgData dict "%s"' % (self, sgData))
 
     if not result['link_type'] in ['local', 'upload', 'web']:
       raise ValueError('%s invalid link_type "%s"' % (self, result['link_type']))
-
-    #if result['link_type'] == 'upload':
-    #  ctype = result['content_type']
-    #
-    #  if ctype == None:
-    #    raise ValueError('%s content_type can not be None when link_type is upload' % self)
-    #
-    #  if not ctype.startswith('image/'):
-    #    raise ValueError('%s invalid content_type "%s"' % (self, ctype))
 
     if self._value == result:
       return False
