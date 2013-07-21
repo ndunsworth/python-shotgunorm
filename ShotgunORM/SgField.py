@@ -374,12 +374,7 @@ class SgField(object):
   # Custom return types should start at 201.
   RETURN_TYPE_RESERVED = 200
 
-  __fieldclasses__ = {
-    'default': {
-      RETURN_TYPE_UNSUPPORTED: None
-    },
-    'entities': {}
-  }
+  __fieldclasses__ = {}
 
   __profiler__ = SgFieldQueryProfiler()
 
