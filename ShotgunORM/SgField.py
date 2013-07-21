@@ -612,7 +612,8 @@ class SgField(object):
       if not self.isEditable():
         raise RuntimeError('%s is not editable!' % ShotgunORM.mkEntityFieldString(self))
 
-      self.validate()
+      if not ShotgunORM.config.DISABLE_FIELD_VALIDATE_ON_SET_VALUE:
+        self.validate()
 
       result = self._fromFieldData(sgData)
 
@@ -997,7 +998,8 @@ class SgField(object):
       if not self.isEditable():
         raise RuntimeError('%s is not editable!' % ShotgunORM.mkEntityFieldString(self))
 
-      self.validate()
+      if not ShotgunORM.config.DISABLE_FIELD_VALIDATE_ON_SET_VALUE:
+        self.validate()
 
       if sgData == None:
         sgData = self.defaultValue()

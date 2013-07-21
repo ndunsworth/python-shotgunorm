@@ -39,6 +39,7 @@
 ################################################################################
 
 __all__ = [
+  'DISABLE_FIELD_VALIDATE_ON_SET_VALUE',
   'ENABLE_FIELD_QUERY_PROFILING',
   'SHOTGUNAPI_NAME'
 ]
@@ -56,6 +57,22 @@ import ShotgunORM
 ################################################################################
 
 SHOTGUNAPI_NAME = 'shotgun_api3'
+
+################################################################################
+#
+# Disables the action of fields validating when being set to a new value.
+#
+# Fields validate before being set to a new value, this means if the field has
+# not pulled its value from Shotgun then a db query will be run.  The main point
+# of this is for fields to not be flagged as having an update when the new value
+# is already the current Shotgun database value.
+#
+# If you wish to never check the new value against the database then set this
+# config variable to True.
+#
+################################################################################
+
+DISABLE_FIELD_VALIDATE_ON_SET_VALUE = False
 
 ################################################################################
 #
