@@ -672,13 +672,20 @@ class SgField(object):
     '''
     Invalidates the stored value of the field so that the next call to value()
     will force a re-evaluate its value.
+
+    Args:
+      * (bool) force:
+        Forces invalidate to execute even if isValid() is False.
     '''
 
     with self:
       if not self.isValid() and not force:
         return False
 
-      ShotgunORM.LoggerField.debug('%(sgField)s.invalidate()', {'sgField': self})
+      ShotgunORM.LoggerField.debug('%(sgField)s.invalidate(force=%(force)s)', {
+        'sgField': self,
+        'force': force
+      })
 
       self.__isUpdatingEvent.wait()
 
