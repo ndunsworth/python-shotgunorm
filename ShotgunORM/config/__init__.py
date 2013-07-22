@@ -39,6 +39,7 @@
 ################################################################################
 
 __all__ = [
+  'DEFAULT_CONNECTION_CACHING',
   'DISABLE_FIELD_VALIDATE_ON_SET_VALUE',
   'ENABLE_FIELD_QUERY_PROFILING',
   'SHOTGUNAPI_NAME'
@@ -57,6 +58,19 @@ import ShotgunORM
 ################################################################################
 
 SHOTGUNAPI_NAME = 'shotgun_api3'
+
+################################################################################
+#
+# Controls the default value that connections use for enabling/disabling Entity
+# caching.
+#
+# Setting this value to False will make all SgConnection objects disable Entity
+# caching.  Changing this config value will only affect new SgConnection objects
+# and not pre-existing ones.
+#
+################################################################################
+
+DEFAULT_CONNECTION_CACHING = True
 
 ################################################################################
 #

@@ -332,7 +332,7 @@ class SgConnection(SgConnectionPriv):
     self._factory = ShotgunORM.SgEntityClassFactory(self)
 
     self.__entityCache = {}
-    self.__entityCaching = True
+    self.__entityCaching = ShotgunORM.config.DEFAULT_CONNECTION_CACHING
 
   def _addEntity(self, sgEntity):
     '''
