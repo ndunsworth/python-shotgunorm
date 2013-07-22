@@ -1013,6 +1013,38 @@ class SgEntity(object):
 
     return result
 
+  def fieldSetValues(self, sgData):
+    '''
+    Sets the value of mulitple fields.
+
+    Args:
+      * (dict) sgData:
+        Dict of new field values.
+    '''
+
+    fields = self.fields(sgData.keys())
+
+    if len(fields) <= 0:
+      return False
+
+    # Sync the fields so that when setValue is called the fields dont validate
+    # one at a time.
+    if not ShotgunORM.config.DISABLE_FIELD_VALIDATE_ON_SET_VALUE:
+      self.sync(
+        fields.keys(),
+        ignoreValid=True,
+        ignoreWithUpdate=True,
+        backgroundPull=False
+      )
+
+    result = False
+
+    for field in fields.values():
+      if field.setValue(sgData[field.name()]):
+        result = True
+
+    return result
+
   def fieldValues(self, sgFields=None, sgReturnTypes=None):
     '''
     Returns a dict containing the value of all specified fields.

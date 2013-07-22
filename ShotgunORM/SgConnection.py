@@ -332,7 +332,7 @@ class SgConnection(SgConnectionPriv):
     self._factory = ShotgunORM.SgEntityClassFactory(self)
 
     self.__entityCache = {}
-    self.__entityCaching = True
+    self.__entityCaching = ShotgunORM.config.DEFAULT_CONNECTION_CACHING
 
   def _addEntity(self, sgEntity):
     '''
@@ -689,25 +689,46 @@ class SgConnection(SgConnectionPriv):
 
     return self._factory
 
-  def clearCache(self, sgEntityTypes=None):
+  def clearCache(self, sgEntityTypes=None, fieldValuesOnly=True):
     '''
     Clears all cached Entities.
 
     Args:
       * (list) sgEntityTypes:
         List of Entity types to clear.
+
+      * (bool) fieldValuesOnly:
+        Only clear field values for Entities that are not currently in scope.
+        This will leave any weakref links to alive Entity objects alone.  Any
+        such Entity will have the ability to cache field values when gc'd.
     '''
 
     with self:
-      if sgEntityTypes == None:
-        self.__entityCache = {}
-      else:
-        if isinstance(sgEntityTypes, str):
-          sgEntityTypes = [sgEntityTypes]
+      if fieldValuesOnly:
+        if sgEntityTypes == None:
+          for entityType, entityCaches in self.__entityCache.items():
+            for entityId, entityCache in entityCaches.items():
+              entityCache['cache'].clear()
+        else:
+          if isinstance(sgEntityTypes, str):
+            sgEntityTypes = [sgEntityTypes]
 
-        for i in sgEntityTypes:
-          if self.__entityCache.has_key(i):
-            del self.__entityCache[i]
+          for i in sgEntityTypes:
+            if not self.__entityCache.has_key(i):
+              continue
+
+            for entityId, entityCache in self.__entityCache[i].items():
+              entityCache['cache'].clear()
+      else:
+        if sgEntityTypes == None:
+          self.__entityCache = {}
+        else:
+          if isinstance(sgEntityTypes, str):
+            sgEntityTypes = [sgEntityTypes]
+
+          for i in sgEntityTypes:
+            if self.__entityCache.has_key(i):
+              del self.__entityCache[i]
 
   def create(self, sgEntityType, sgData={}, sgCommit=False, numberOfEntities=1):
     '''
@@ -823,7 +844,9 @@ class SgConnection(SgConnectionPriv):
 
       self.__entityCaching = False
 
-      self.clearCache()
+      # No need to break links for currently alive Entity objects so just clear
+      # the field value cache.
+      self.clearCache(fieldValuesOnly=True)
 
       return True
 
