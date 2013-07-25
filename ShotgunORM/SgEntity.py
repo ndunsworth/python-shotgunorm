@@ -393,10 +393,12 @@ class SgEntity(object):
       isNewEntity = not sgData.has_key('id')
 
       if isNewEntity:
-        sgData['id'] = -1
+        sgData['id'] = -id(self)
       else:
         if sgData['id'] < 0:
           isNewEntity = True
+
+          sgData['id'] = -id(self)
 
       idField = self.field('id')
 

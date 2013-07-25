@@ -429,8 +429,6 @@ class SgConnection(SgConnectionPriv):
 
       # Return immediately if the Entity does not exist.
       if eId <= -1:
-        sgData['id'] = -id(result)
-
         result = factory.createEntity(self, sgEntityType, sgData)
 
         ShotgunORM.onEntityCreate(result)
