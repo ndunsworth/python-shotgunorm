@@ -429,8 +429,6 @@ class SgConnection(SgConnectionPriv):
 
       # Return immediately if the Entity does not exist.
       if eId <= -1:
-        sgData['id'] = -id(result)
-
         result = factory.createEntity(self, sgEntityType, sgData)
 
         ShotgunORM.onEntityCreate(result)
@@ -571,7 +569,7 @@ class SgConnection(SgConnectionPriv):
           pass
 
     if len(requests) <= 0:
-      return
+      return []
 
     batchConfigs = []
     batchData = []
@@ -609,6 +607,8 @@ class SgConnection(SgConnectionPriv):
 
     try:
       sgResult = self._sg_batch(batchData)
+
+      result = copy.deepcopy(sgResult)
     except Exception, e:
       undoEntities(batchConfigs, e)
 
@@ -637,7 +637,7 @@ class SgConnection(SgConnectionPriv):
     if exception != None:
       raise exception
 
-    return sgResult
+    return result
 
   def batch(self, requests):
     '''
@@ -649,10 +649,12 @@ class SgConnection(SgConnectionPriv):
     '''
 
     if isinstance(requests, ShotgunORM.SgEntity):
-      requests = [requests]
+      requests = set([requests])
 
     if len(requests) <= 0:
       return []
+
+    requests = set(requests)
 
     # Lock the Entities down.
     for entity in requests:
@@ -660,26 +662,26 @@ class SgConnection(SgConnectionPriv):
 
     batchRequests = []
 
-    for entity in requests:
-      try:
+    try:
+      for entity in requests:
         commitData = entity.toBatchData()
-      except Exception, e:
-        for entity in requests:
-          entity._unlock()
 
-        raise e
+        if len(commitData) <= 0:
+          continue
 
-      if len(commitData) <= 0:
-        continue
+        batchRequests.append(
+          {
+            'entity': entity,
+            'batch_data': commitData
+          }
+        )
 
-      batchRequests.append(
-        {
-          'entity': entity,
-          'batch_data': commitData
-        }
-      )
+      result = self._batch(batchRequests)
 
-    self._batch(batchRequests)
+      return result
+    finally:
+      for entity in requests:
+        entity._unlock()
 
   def classFactory(self):
     '''
