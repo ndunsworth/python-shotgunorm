@@ -638,7 +638,7 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
             if iFields == None:
               iSyncFields = connection.defaultEntityQueryFields(t)
 
-              if len(iFields) <= 0:
+              if len(iSyncFields) <= 0:
                 iSyncFields = None
             else:
               pullFields = []
@@ -671,7 +671,7 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
           else:
             iSyncFields = connection.defaultEntityQueryFields(t)
 
-            if len(iFields) <= 0:
+            if len(iSyncFields) <= 0:
               iSyncFields = None
         else:
           iSyncFields = connection.defaultEntityQueryFields(t)
