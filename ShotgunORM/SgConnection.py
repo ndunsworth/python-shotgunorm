@@ -664,6 +664,9 @@ class SgConnection(SgConnectionPriv):
 
     try:
       for entity in requests:
+        if entity.connection() != self:
+          raise ValueError('entity %s does not belong to this connection %s' % (entity, self))
+
         commitData = entity.toBatchData()
 
         if len(commitData) <= 0:
@@ -792,6 +795,9 @@ class SgConnection(SgConnectionPriv):
     '''
 
     with sgEntity:
+      if sgEntity.connection() != self:
+        raise ValueError('entity %s does not belong to this connection %s' % (sgEntity, self))
+
       batchData = [
         {
           'request_type': 'delete',
@@ -1058,6 +1064,9 @@ class SgConnection(SgConnectionPriv):
     '''
 
     with sgEntity:
+      if sgEntity.connection() != self:
+        raise ValueError('entity %s does not belong to this connection %s' % (sgEntity, self))
+
       batchData = [
         {
           'request_type': 'revive',
