@@ -618,6 +618,7 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
       return copy.deepcopy(result)
 
     connection = parent.connection()
+    schema = connection.schema()
 
     tmp = []
 
@@ -653,14 +654,14 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
               if 'all' in pullFields:
                 pullFields.remove('all')
 
-                extraFields = parent.fieldNames()
+                extraFields = schema.entityInfo(t).fieldNames()
 
                 if 'default' in pullFields:
                   pullFields.remove('default')
               elif 'default' in pullFields:
                 pullFields.remove('default')
 
-                extraFields = connection.defaultEntityQueryFields(result.type)
+                extraFields = connection.defaultEntityQueryFields(t)
 
               pullFields.update(extraFields)
 
