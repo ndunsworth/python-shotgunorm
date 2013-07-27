@@ -528,7 +528,8 @@ class SgSchema(object):
 
   def _initialize(self, sgConnection, event):
     '''
-
+    Function that initialize threads call which calls build() if the schema is
+    not initialized.
     '''
 
     with self:
