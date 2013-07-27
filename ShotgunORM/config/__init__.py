@@ -155,6 +155,11 @@ ShotgunORM.SgEntity.registerDefaultEntityClass(
 )
 
 ShotgunORM.SgEntity.registerDefaultEntityClass(
+  sgEntityCls=ShotgunORM.SgProject,
+  sgEntityTypes=['Project']
+)
+
+ShotgunORM.SgEntity.registerDefaultEntityClass(
   sgEntityCls=ShotgunORM.SgTask,
   sgEntityTypes=['Task']
 )

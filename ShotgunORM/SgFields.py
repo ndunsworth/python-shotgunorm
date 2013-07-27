@@ -618,6 +618,7 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
       return copy.deepcopy(result)
 
     connection = parent.connection()
+    schema = connection.schema()
 
     tmp = []
 
@@ -638,7 +639,7 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
             if iFields == None:
               iSyncFields = connection.defaultEntityQueryFields(t)
 
-              if len(iFields) <= 0:
+              if len(iSyncFields) <= 0:
                 iSyncFields = None
             else:
               pullFields = []
@@ -653,14 +654,14 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
               if 'all' in pullFields:
                 pullFields.remove('all')
 
-                extraFields = parent.fieldNames()
+                extraFields = schema.entityInfo(t).fieldNames()
 
                 if 'default' in pullFields:
                   pullFields.remove('default')
               elif 'default' in pullFields:
                 pullFields.remove('default')
 
-                extraFields = connection.defaultEntityQueryFields(result.type)
+                extraFields = connection.defaultEntityQueryFields(t)
 
               pullFields.update(extraFields)
 
@@ -671,7 +672,7 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
           else:
             iSyncFields = connection.defaultEntityQueryFields(t)
 
-            if len(iFields) <= 0:
+            if len(iSyncFields) <= 0:
               iSyncFields = None
         else:
           iSyncFields = connection.defaultEntityQueryFields(t)
@@ -1691,7 +1692,7 @@ class SgFieldID(ShotgunORM.SgUserField):
 
     super(SgFieldID, self).__init__(parentEntity, info)
 
-    self._valid = True
+    self._SgField__valid = True
 
   def invalidate(self):
     '''
@@ -1791,7 +1792,8 @@ class SgFieldType(ShotgunORM.SgUserField):
     super(SgFieldType, self).__init__(parentEntity, info)
 
     self._value = info.parentEntity()
-    self._valid = True
+
+    self._SgField__valid = True
 
   def invalidate(self):
     '''

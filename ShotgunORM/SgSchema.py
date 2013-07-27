@@ -142,6 +142,10 @@ class SgSchema(object):
     'default': {}
   }
 
+  # This is the time that all functions which call wait on the buildEvent use
+  # as a timeout value.
+  BUILD_EVENT_TIMEOUT = 20
+
   def __enter__(self):
     self.__lock.acquire()
 
@@ -153,12 +157,16 @@ class SgSchema(object):
 
   def __init__(self, url):
     self.__lock = threading.RLock()
+    self.__buildEvent = threading.Event()
+
+    self.__buildEvent.clear()
 
     self._schema = {}
     self._url = url
 
     self.__valid = False
     self.__buildId = 0
+    self.__isBuilding = False
 
   @classmethod
   def createSchema(cls, url):
@@ -316,19 +324,18 @@ class SgSchema(object):
 
     return entityInfos
 
-  def build(self, sgConnection):
+  def _build(self, sgConnection):
     '''
-    Builds the schema.
-
-    If the schema has previously been built this will cause the schema to
-    rebuild itself.
-
-    See SgSchema.initialize() if you only want to make sure the schema is built.
+    Builds the schema, not thread safe!
     '''
 
-    with self:
-      ShotgunORM.LoggerSchema.debug('# BUILDING SCHEMA "%(url)s"', {'url': self._url})
+    self.__buildEvent.clear()
 
+    self.__isBuilding = True
+
+    ShotgunORM.LoggerSchema.debug('# BUILDING SCHEMA "%(url)s"', {'url': self._url})
+
+    try:
       loadedCache = False
 
       schemaCachePath = SCHEMA_CACHE_DIR
@@ -373,8 +380,25 @@ class SgSchema(object):
       buildHash.update(str(t))
 
       self.__buildId = buildHash.hexdigest()
+    finally:
+      self.__isBuilding = False
 
-      self.changed()
+      self.__buildEvent.set()
+
+    self.changed()
+
+  def build(self, sgConnection):
+    '''
+    Builds the schema.
+
+    If the schema has previously been built this will cause the schema to
+    rebuild itself.
+
+    See SgSchema.initialize() if you only want to make sure the schema is built.
+    '''
+
+    with self:
+      self._build(sgConnection)
 
   def buildId(self):
     '''
@@ -416,7 +440,10 @@ class SgSchema(object):
     '''
 
     if not self.isInitialized():
-      raise RuntimeError('schema has not been initialized')
+      self.__buildEvent.wait(self.BUILD_EVENT_TIMEOUT)
+
+      if not self.isInitialized():
+        raise RuntimeError('schema has not been initialized')
 
     info = self.entityInfo(sgEntityType)
 
@@ -431,7 +458,10 @@ class SgSchema(object):
     '''
 
     if not self.isInitialized():
-      raise RuntimeError('schema has not been initialized')
+      self.__buildEvent.wait(self.BUILD_EVENT_TIMEOUT)
+
+      if not self.isInitialized():
+        raise RuntimeError('schema has not been initialized')
 
     return self._schema.get(sgEntityType, None)
 
@@ -441,7 +471,10 @@ class SgSchema(object):
     '''
 
     if not self.isInitialized():
-      raise RuntimeError('schema has not been initialized')
+      self.__buildEvent.wait(self.BUILD_EVENT_TIMEOUT)
+
+      if not self.isInitialized():
+        raise RuntimeError('schema has not been initialized')
 
     return dict(self._schema)
 
@@ -451,7 +484,10 @@ class SgSchema(object):
     '''
 
     if not self.isInitialized():
-      raise RuntimeError('schema has not been initialized')
+      self.__buildEvent.wait(self.BUILD_EVENT_TIMEOUT)
+
+      if not self.isInitialized():
+        raise RuntimeError('schema has not been initialized')
 
     info = self.entityInfo(sgEntityType)
 
@@ -463,7 +499,10 @@ class SgSchema(object):
     '''
 
     if not self.isInitialized():
-      raise RuntimeError('schema has not been initialized')
+      self.__buildEvent.wait(self.BUILD_EVENT_TIMEOUT)
+
+      if not self.isInitialized():
+        raise RuntimeError('schema has not been initialized')
 
     return sorted(self._schema.keys())
 
@@ -474,7 +513,10 @@ class SgSchema(object):
 
     with self:
       if not self.isInitialized():
-        raise RuntimeError('schema has not been initialized')
+        self.__buildEvent.wait(self.BUILD_EVENT_TIMEOUT)
+
+        if not self.isInitialized():
+          raise RuntimeError('schema has not been initialized')
 
       xmlData = self.toXML()
 
@@ -484,16 +526,51 @@ class SgSchema(object):
 
       return True
 
-  def initialize(self, sgConnection):
+  def _initialize(self, sgConnection, event):
     '''
-    Builds the schema if it has not previously been built.
+    Function that initialize threads call which calls build() if the schema is
+    not initialized.
     '''
 
     with self:
       if self.isInitialized():
-        return True
+        return
 
-      self.build(sgConnection)
+      event.set()
+
+      self._build(sgConnection)
+
+  def initialize(self, sgConnection, thread=True):
+    '''
+    Builds the schema if it has not previously been built.
+    '''
+
+    e = threading.Event()
+
+    t = threading.Thread(
+      target=self._initialize,
+      name='%s.initialize()' % self,
+      args=[
+        sgConnection,
+        e
+      ]
+    )
+
+    t.setDaemon(True)
+
+    t.start()
+
+    if thread:
+      e.wait()
+    else:
+      t.join()
+
+  def isBuilding(self):
+    '''
+    Returns True if the schema is building.
+    '''
+
+    return self.__isBuilding
 
   def isInitialized(self):
     '''
@@ -508,7 +585,10 @@ class SgSchema(object):
     '''
 
     if not self.isInitialized():
-      raise RuntimeError('schema has not been initialized')
+      self.__buildEvent.wait(self.BUILD_EVENT_TIMEOUT)
+
+      if not self.isInitialized():
+        raise RuntimeError('schema has not been initialized')
 
     xmlRoot = ET.Element(
       'SgSchema',

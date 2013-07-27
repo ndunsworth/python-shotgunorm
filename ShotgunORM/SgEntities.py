@@ -32,6 +32,7 @@ __all__ = [
   'SgHumanUser',
   'SgNote',
   'SgPhase',
+  'SgProject',
   'SgTask',
   'SgTicket',
   'SgVersion'
@@ -215,6 +216,145 @@ class SgPhase(SgEntity):
     self._fields['color'] = fieldClasses.get(SgField.RETURN_TYPE_COLOR2, None)(self, colorFieldInfo)
 
     super(SgPhase, self)._buildFields(sgFieldInfos)
+
+class SgProject(SgEntity):
+  '''
+  Class that represents a Project Entity.
+  '''
+
+  def sequenceNames(self):
+    '''
+    Returns a list of all Sequence names for this project.
+    '''
+
+    result = []
+
+    if not self.exists():
+      return result
+
+    seqs = self.sequences(sgFields=['code'])
+
+    for seq in seqs:
+      result.append(seq['code'])
+
+    result.sort()
+
+    return result
+
+  def sequences(self, sgFields=None):
+    '''
+    Returns a list of all Sequence Entities for this project.
+
+      * (list) sgFields:
+        List of fields to populate the results with.
+    '''
+
+    if not self.exists():
+      return []
+
+    return self.connection().find(
+      'Sequence',
+      [
+        [
+          'project',
+          'is',
+          self
+        ]
+      ],
+      sgFields
+    )
+
+  def shotNames(self, sgSequences=None):
+    '''
+    Returns a dict containing of all Shot names for this project.
+
+    Args:
+      * (list) sgSequences:
+        Return only the Shot names associated with the list of Sequences.
+    '''
+
+    result = {}
+
+    if not self.exists():
+      return result
+
+    seqShots = self.shots(sgFields=['code'])
+
+    for seq, shots in seqShots.items():
+      shotNames = []
+
+      for shot in shots:
+        shotNames.append(shot['code'])
+
+      result[seq] = shotNames
+
+    return result
+
+  def shots(self, sgSequences=None, sgFields=None):
+    '''
+    Returns a dict of all Shot Entities for this project.
+
+    Args:
+      * (list) sgSequences:
+        Return only the Shots associated with the list of Sequences.
+
+      * (list) sgFields:
+        List of fields to populate the results with.
+    '''
+
+    if not self.exists():
+      return {}
+
+    if isinstance(sgSequences, (str, SgEntity)):
+      sgSequences = [sgSequences]
+
+    if sgSequences == None:
+      sgSequences = self.sequenceNames()
+
+    result = {}
+
+    if len(sgSequences) <= 0:
+      return result
+
+    seqNames = []
+
+    for seq in sgSequences:
+      if isinstance(seq, str):
+        seqNames.append(seq)
+      else:
+        seqNames.append(seq['code'])
+
+    qEngine = self.connection().queryEngine()
+
+    # Block the query engine so all Shot fields get pulled at once.
+    qEngine.block()
+
+    try:
+      sequences = self.connection().find(
+        'Sequence',
+        [
+          [
+            'project',
+            'is',
+            self
+          ],
+          [
+            'code',
+            'in',
+            seqNames
+          ]
+        ],
+        ['shots']
+      )
+
+      for seq in sequences:
+        seqField = seq.field('shots')
+
+        result[seq['code']] = seqField.value(sgSyncFields={'Shot': sgFields})
+    finally:
+      qEngine.unblock()
+
+    return result
 
 # Fix for the lame ass return type "color2".  See ShotgunORM.SgFieldColor2 for more
 # information on this lovely mess.
