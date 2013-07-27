@@ -1692,7 +1692,7 @@ class SgFieldID(ShotgunORM.SgUserField):
 
     super(SgFieldID, self).__init__(parentEntity, info)
 
-    self._valid = True
+    self._SgField__valid = True
 
   def invalidate(self):
     '''
@@ -1792,7 +1792,8 @@ class SgFieldType(ShotgunORM.SgUserField):
     super(SgFieldType, self).__init__(parentEntity, info)
 
     self._value = info.parentEntity()
-    self._valid = True
+
+    self._SgField__valid = True
 
   def invalidate(self):
     '''
