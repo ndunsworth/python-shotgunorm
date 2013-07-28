@@ -1298,8 +1298,6 @@ class SgEntity(object):
         if not field.invalidate():
           continue
 
-        print field
-
         result = True
 
       return result
