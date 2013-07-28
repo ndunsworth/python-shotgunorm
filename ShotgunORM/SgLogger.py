@@ -31,6 +31,7 @@ __all__ = [
   'LoggerEntity',
   'LoggerField',
   'LoggerFactory',
+  'LoggerORM',
   'LoggerQueryEngine',
   'LoggerSchema',
   'LoggerScriptEngine'
@@ -45,6 +46,7 @@ LoggerConnection = None
 LoggerEntity = None
 LoggerField = None
 LoggerFactory = None
+LoggerORM = None
 LoggerQueryEngine = None
 LoggerSchema = None
 LoggerScriptEngine = None
@@ -57,6 +59,7 @@ class SgLogger(logging.Logger):
   To enable a particular loggers debug level you can set a env var according to
   the following format.
 
+  Generic logger         debug: PY_SHOTGUNORM_SGGENERIC_DEBUG=1
   SgCallbacks            debug: PY_SHOTGUNORM_SGCALLBACK_DEBUG=1
   SgConnection           debug: PY_SHOTGUNORM_SGCONNECTION_DEBUG=1
   SgEntity               debug: PY_SHOTGUNORM_SGENTITY_DEBUG=1
@@ -94,6 +97,7 @@ LoggerConnection = SgLogger('SgConnection')
 LoggerEntity = SgLogger('SgEntity')
 LoggerField = SgLogger('SgField')
 LoggerFactory = SgLogger('SgEntityClassFactory')
+LoggerORM = SgLogger('SgGeneric')
 LoggerQueryEngine = SgLogger('SgQueryEngine')
 LoggerSchema = SgLogger('SgSchema')
 LoggerScriptEngine = SgLogger('SgScriptEngine')

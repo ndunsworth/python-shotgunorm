@@ -25,29 +25,28 @@
 #
 
 __all__ = [
-  'COMMIT_TYPE_NONE',
-  'COMMIT_TYPE_CREATE',
-  'COMMIT_TYPE_DELETE',
-  'COMMIT_TYPE_REVIVE',
-  'COMMIT_TYPE_UPDATE',
   'AFTER_ENTITY_COMMIT_CBS',
   'BEFORE_ENTITY_COMMIT_CBS',
   'ON_ENTITY_CREATE_CBS',
+  'ON_ENTITY_INFO_CREATE_CBS',
   'ON_FIELD_CHANGED_CBS',
   'ON_SCHEMA_CHANGED_CBS',
   'addAfterEntityCommit',
   'addBeforeEntityCommit',
   'addOnEntityCreate',
+  'addOnEntityInfoCreate',
   'addOnFieldChanged',
   'addOnSchemaChanged',
   'appendAfterEntityCommit',
   'appendBeforeEntityCommit',
   'appendOnEntityCreate',
+  'appendOnEntityInfoCreate',
   'appendOnFieldChanged',
   'appendOnSchemaChanged',
   'afterEntityCommit',
   'beforeEntityCommit',
   'onEntityCreate',
+  'onEntityInfoCreate',
   'onFieldChanged',
   'onSchemaChanged'
 ]
@@ -58,12 +57,6 @@ import socket
 
 # This module imports
 import ShotgunORM
-
-COMMIT_TYPE_NONE = 0
-COMMIT_TYPE_CREATE = 1
-COMMIT_TYPE_DELETE = 2
-COMMIT_TYPE_REVIVE = 3
-COMMIT_TYPE_UPDATE = 4
 
 def _defaultAfterEntityCommit(sgEntity, sgBatchData, sgBatchResult, sgCommitData, sgCommitError):
   ShotgunORM.LoggerCallback.debug('afterEntityCommit: %s' % sgEntity)
@@ -134,6 +127,10 @@ ON_ENTITY_CREATE_CBS = {
       'description': 'default_cb'
     }
   ]
+}
+
+ON_ENTITY_INFO_CREATE_CBS = {
+  '*': []
 }
 
 ON_FIELD_CHANGED_CBS = {
@@ -316,6 +313,62 @@ def appendOnEntityCreate(cb, filterName='*', description=''):
     ON_ENTITY_CREATE_CBS[filterName].append(data)
   except:
     ON_ENTITY_CREATE_CBS[filterName] = [data]
+
+def addOnEntityInfoCreate(cb, filterName='*', description=''):
+  '''
+  Adds the callback and places it at the front of the onEntityInfoCreate
+  callback list.
+
+  This callback will be executed anytime an Entity info object is created.
+
+  Note:
+    The callback must contain 1 args.  See the documentation for
+    ShotgunORM.onEntityInforeate() for detailed arg information.
+
+    def myCallback(sgEntityInfo):
+      ...
+  '''
+
+  if filterName in [None, '']:
+    filterName = '*'
+
+  data = {
+    'cb': cb,
+    'description': description
+  }
+
+  try:
+    ON_ENTITY_INFO_CREATE_CBS[filterName].insert(0, data)
+  except:
+    ON_ENTITY_INFO_CREATE_CBS[filterName] = [data]
+
+def appendOnEntityInfoCreate(cb, filterName='*', description=''):
+  '''
+  Adds the callback and places it at the end of the onEntityInfoCreate
+  callback list.
+
+  This callback will be executed anytime an Entity info object is created.
+
+  Note:
+    The callback must contain 1 args.  See the documentation for
+    ShotgunORM.onEntityInfoCreate() for detailed arg information.
+
+    def myCallback(sgEntityInfo):
+      ...
+  '''
+
+  if filterName in [None, '']:
+    filterName = '*'
+
+  data = {
+    'cb': cb,
+    'description': description
+  }
+
+  try:
+    ON_ENTITY_INFO_CREATE_CBS[filterName].append(data)
+  except:
+    ON_ENTITY_INFO_CREATE_CBS[filterName] = [data]
 
 def addOnFieldChanged(cb, filterName='*', description=''):
   '''
@@ -508,10 +561,42 @@ def onEntityCreate(sgEntity):
     for i in cbs:
       i['cb'](sgEntity)
 
+  if sgEntity.isCustom():
+    if ON_ENTITY_CREATE_CBS.has_key(sgEntity.label()):
+      cbs = ON_ENTITY_CREATE_CBS[sgEntity.label()]
+
+      for i in cbs:
+        i['cb'](sgEntity)
+
   cbs = ON_ENTITY_CREATE_CBS['*']
 
   for i in cbs:
     i['cb'](sgEntity)
+
+def onEntityInfoCreate(sgEntityInfo):
+  '''
+  This function is called anytime an Entity info object is created.
+  '''
+
+  entityType = sgEntityInfo.name()
+
+  if ON_ENTITY_INFO_CREATE_CBS.has_key(entityType):
+    cbs = ON_ENTITY_INFO_CREATE_CBS[entityType]
+
+    for i in cbs:
+      i['cb'](sgEntityInfo)
+
+  if sgEntityInfo.isCustom():
+    if ON_ENTITY_INFO_CREATE_CBS.has_key(sgEntityInfo.label()):
+      cbs = ON_ENTITY_INFO_CREATE_CBS[sgEntityInfo.label()]
+
+      for i in cbs:
+        i['cb'](sgEntityInfo)
+
+  cbs = ON_ENTITY_INFO_CREATE_CBS['*']
+
+  for i in cbs:
+    i['cb'](sgEntityInfo)
 
 def onFieldChanged(sgField):
   '''

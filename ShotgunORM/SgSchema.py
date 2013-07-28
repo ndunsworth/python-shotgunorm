@@ -40,7 +40,7 @@ from xml.etree import ElementTree as ET
 # This module imports
 import ShotgunORM
 
-def _entityFix(schemaData):
+def _entityFix(schema, schemaData):
   '''
   Returns Entities that dont exist in the API but fields return them as values.
 
@@ -86,7 +86,12 @@ def _entityFix(schemaData):
     'id': ShotgunORM.SgFieldInfo(idData)
   }
 
-  BannerEntity = ShotgunORM.SgEntityInfo('Banner', 'Banner', bannerFieldInfos)
+  BannerEntity = ShotgunORM.SgEntityInfo(
+    schema,
+    'Banner',
+    'Banner',
+    bannerFieldInfos
+  )
 
   nameData = {
     'default_value': None,
@@ -123,7 +128,12 @@ def _entityFix(schemaData):
     'id': ShotgunORM.SgFieldInfo(idData)
   }
 
-  AppWelcomeEntity = ShotgunORM.SgEntityInfo('AppWelcome', 'AppWelcome', bannerFieldInfos)
+  AppWelcomeEntity = ShotgunORM.SgEntityInfo(
+    schema,
+    'AppWelcome',
+    'AppWelcome',
+    bannerFieldInfos
+  )
 
   schemaData['AppWelcome'] = AppWelcomeEntity
   schemaData['Banner'] = BannerEntity
@@ -279,7 +289,7 @@ class SgSchema(object):
 
       ShotgunORM.LoggerSchema.debug('        + Building Entity "%(entityName)s"', {'entityName': entity.attrib.get('name')})
 
-      entityInfo = ShotgunORM.SgEntityInfo.fromXML(entity)
+      entityInfo = ShotgunORM.SgEntityInfo.fromXML(self, entity)
 
       result[entityInfo.name()] = entityInfo
 
@@ -313,7 +323,7 @@ class SgSchema(object):
       entityTypeLabel = entitySchema['name']['value']
       entityFieldSchemas = sgEntityFieldSchemas[entityType]
 
-      entityInfo = ShotgunORM.SgEntityInfo.fromSg(entityType, entityTypeLabel, entityFieldSchemas)
+      entityInfo = ShotgunORM.SgEntityInfo.fromSg(self, entityType, entityTypeLabel, entityFieldSchemas)
 
       entityInfos[entityType] = entityInfo
 
@@ -367,7 +377,7 @@ class SgSchema(object):
       if loadedCache == False:
         newSchema = self._fromSG(sgConnection)
 
-      _entityFix(newSchema)
+      _entityFix(self, newSchema)
 
       self._schema = newSchema
 

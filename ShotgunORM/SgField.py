@@ -92,7 +92,7 @@ class SgFieldInfo(object):
   '''
 
   def __repr__(self):
-    return '<%s.%s name:%s, label:%s, valueTypes:%s>' % (
+    return '<%s.%s name:"%s", label:"%s", valueTypes:%s>' % (
       self.__module__,
       self.__class__.__name__,
       self.name(),
