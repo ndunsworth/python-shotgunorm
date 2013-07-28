@@ -52,14 +52,15 @@ class SgEntityInfo(object):
     else:
       return '<SgEntityInfo("%s")>' % self.name()
 
-  def __init__(self, name, label, fieldInfos):
-    self._isCustom = name.startswith('CustomEntity') or name.startswith('CustomNonProjectEntity')
+  def __init__(self, schema, name, label, fieldInfos):
+    self._schema = schema
     self._name = str(name)
     self._label = str(label)
     self._fieldInfos = fieldInfos
+    self._isCustom = name.startswith('CustomEntity') or name.startswith('CustomNonProjectEntity')
 
   @classmethod
-  def fromSg(cls, sgEntityName, sgEntityLabel, sgFieldSchemas):
+  def fromSg(cls, sgSchema, sgEntityName, sgEntityLabel, sgFieldSchemas):
     '''
     From the passed Shotgun schema info a new SgEntityInfo is returned.
     '''
@@ -85,10 +86,17 @@ class SgEntityInfo(object):
 
       fieldInfos[fieldName] = fieldInfo
 
-    return cls(sgEntityName, sgEntityLabel, fieldInfos)
+    result = cls(sgSchema, sgEntityName, sgEntityLabel, fieldInfos)
+
+    try:
+      ShotgunORM.onEntityInfoCreate(result)
+    except Exception, e:
+      ShotgunORM.LoggerORM.warn(e)
+    finally:
+      return result
 
   @classmethod
-  def fromXML(cls, sgXmlElement):
+  def fromXML(cls, sgSchema, sgXmlElement):
     '''
     From the passed XML data a new SgEntityInfo is returned.
     '''
@@ -117,7 +125,14 @@ class SgEntityInfo(object):
 
       entityFieldInfos[field.attrib.get('name')] = fieldInfo
 
-    return cls(entityName, entityLabel, entityFieldInfos)
+    result = cls(sgSchema, entityName, entityLabel, entityFieldInfos)
+
+    try:
+      ShotgunORM.onEntityInfoCreate(result)
+    except Exception, e:
+      ShotgunORM.LoggerORM.warn(e)
+    finally:
+      return result
 
   def fieldInfo(self, sgField):
     '''
@@ -202,6 +217,13 @@ class SgEntityInfo(object):
     '''
 
     return self._name
+
+  def schema(self):
+    '''
+    Returns the SgSchema the info was built from.
+    '''
+
+    return self._schema
 
   def toXML(self):
     '''
