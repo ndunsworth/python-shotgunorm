@@ -1295,7 +1295,8 @@ class SgEntity(object):
         if (field.isValid() and ignoreValid) or (field.hasCommit() and ignoreWithUpdate):
           continue
 
-        field.invalidate()
+        if not field.invalidate():
+          continue
 
         result = True
 
