@@ -90,6 +90,49 @@ class SgHumanUser(SgEntity):
   Class that represents a Human User Entity.
   '''
 
+  def notes(self, sgFields=None, order=None, limit=0, retired_only=False, page=0):
+    '''
+    Returns all the Notes created by the user.
+
+    Args:
+      * (list) sgFields:
+        List of fields to populate the results with.
+
+      * (list) order:
+        List of Shotgun formatted order filters.
+
+      * (int) limit:
+        Limits the amount of Entities can be returned.
+
+      * (bool) retired_only:
+        Return only retired entities.
+
+      * (int) page:
+        Return a single specified page number of records instead of the entire
+        result set.
+    '''
+
+    if not self.exists():
+      return []
+
+    result = self.connection().find(
+      'Note',
+      [['user', 'is', self]],
+      sgFields,
+      order=order,
+      limit=limit,
+      retired_only=retired_only,
+      page=page
+    )
+
+    if limit == 1:
+      if len(result) <= 0:
+        return None
+      else:
+        return result[0]
+    else:
+      return result
+
   def sendEmail(self, subject, msg, cc=None, sender='mr.roboto@leetstudios.com', server='localhost'):
     '''
     Send the user an email.
@@ -165,25 +208,91 @@ class SgHumanUser(SgEntity):
 
     raise RuntimeError('not implemented')
 
-  def tasks(self, extraSgFilters=None, extraSgFilterArgs=None):
+  def tasks(self, sgFields=None, order=None, limit=0, retired_only=False, page=0):
     '''
     Returns all the Tasks the user belongs to.
 
     Args:
-      * (list) extraSgFilters:
-        Addtional search expression to append when finding Tasks.
+      * (list) sgFields:
+        List of fields to populate the results with.
 
-      * (list) extrSgFilterArgs:
-        List of args passed to the connection.search() function.
+      * (list) order:
+        List of Shotgun formatted order filters.
+
+      * (int) limit:
+        Limits the amount of Entities can be returned.
+
+      * (bool) retired_only:
+        Return only retired entities.
+
+      * (int) page:
+        Return a single specified page number of records instead of the entire
+        result set.
     '''
 
-    searchExp = 'task_assignees in [%s]' % self.toEntityFieldData()
+    if not self.exists():
+      return []
 
-    if extraSgFilters != None:
-      if len(extraSgFilters) >= 1 and not extraSgFilters.isspace():
-        searchExp += ' and ' + extraSgFilters
+    result = self.connection().find(
+      'Task',
+      [['task_assignees', 'is', self]],
+      sgFields,
+      order=order,
+      limit=limit,
+      retired_only=retired_only,
+      page=page
+    )
 
-    return self.connection().search('Task', searchExp, sgSearchArgs=extraSgFilterArgs)
+    if limit == 1:
+      if len(result) <= 0:
+        return None
+      else:
+        return result[0]
+    else:
+      return result
+
+  def tickets(self, sgFields=None, order=None, limit=0, retired_only=False, page=0):
+    '''
+    Returns all the Tickets assigned to the user.
+
+    Args:
+      * (list) sgFields:
+        List of fields to populate the results with.
+
+      * (list) order:
+        List of Shotgun formatted order filters.
+
+      * (int) limit:
+        Limits the amount of Entities can be returned.
+
+      * (bool) retired_only:
+        Return only retired entities.
+
+      * (int) page:
+        Return a single specified page number of records instead of the entire
+        result set.
+    '''
+
+    if not self.exists():
+      return []
+
+    result = self.connection().find(
+      'Ticket',
+      [['addressings_to', 'is', self]],
+      sgFields,
+      order=order,
+      limit=limit,
+      retired_only=retired_only,
+      page=page
+    )
+
+    if limit == 1:
+      if len(result) <= 0:
+        return None
+      else:
+        return result[0]
+    else:
+      return result
 
 class SgNote(SgEntity):
   '''
@@ -380,7 +489,6 @@ class SgTask(SgEntity):
     self._fields['color'] = fieldClasses.get(SgField.RETURN_TYPE_COLOR2, None)(self, colorFieldInfo)
 
     super(SgTask, self)._buildFields(sgFieldInfos)
-
 
 class SgTicket(SgEntity):
   '''
