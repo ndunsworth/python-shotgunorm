@@ -629,7 +629,7 @@ class SgVersion(SgEntity):
 
   REGEXP_VER = re.compile(r'([_.]v)(\d+)(s(\d+))?$')
 
-  def _changeVersion(self, value, doSub=False, valueIsVersion=False, ignoreProject=False):
+  def _changeVersion(self, value, sgFields=None, doSub=False, valueIsVersion=False, ignoreProject=False):
     self.sync(
       ['code', 'project'],
       ignoreValid=True,
@@ -749,7 +749,20 @@ class SgVersion(SgEntity):
         ]
       )
 
-    return self.connection().findOne('Version', searchFilters, ['default', 'code', 'project'])
+    if sgFields == None:
+      sgFields = self.connection().defaultEntityQueryFields('Version')
+
+      sgFields.update(['default', 'code', 'project'])
+
+      sgFields = list(sgFields)
+    else:
+      sgFields = set(sgFields)
+
+      sgFields.update(['code', 'project'])
+
+      sgFields = list(sgFields)
+
+    return self.connection().findOne('Version', searchFilters, sgFields)
 
   def isSubVersioned(self):
     '''
@@ -772,7 +785,7 @@ class SgVersion(SgEntity):
 
     return search != None
 
-  def latestSubVersion(self, ignoreProject=False):
+  def latestSubVersion(self, sgFields=None, ignoreProject=False):
     '''
     Returns the highest sub-version in Shotgun.
 
@@ -782,6 +795,9 @@ class SgVersion(SgEntity):
     This is performs a Shotgun search for its return value.
 
     Args:
+      * (list) sgFields:
+        List of fields to populate the result with.
+
       * (bool) ignoreProject:
         Ignore the project field when searchign for other versions.
     '''
@@ -822,7 +838,20 @@ class SgVersion(SgEntity):
     if self.exists():
       searchFilters.append(['id', 'is_not', self['id']])
 
-    otherVersions = self.connection().find('Version', searchFilters, ['code'])
+    if sgFields == None:
+      sgFields = self.connection().defaultEntityQueryFields('Version')
+
+      sgFields.add('code')
+
+      sgFields = list(sgFields)
+    else:
+      sgFields = set(sgFields)
+
+      sgFields.add('code')
+
+      sgFields = list(sgFields)
+
+    otherVersions = self.connection().find('Version', searchFilters, sgFields)
 
     if len(otherVersions) <= 0:
       return None
@@ -837,20 +866,9 @@ class SgVersion(SgEntity):
         highestVer = version
         highestVerInt = v
 
-    if highestVer != None:
-      fields = self.connection().defaultEntityQueryFields('Version')
-
-      if len(fields) >= 1:
-        highestVer.sync(
-          fields,
-          ignoreValid=True,
-          ignoreWithUpdate=True,
-          backgroundPull=True
-        )
-
     return highestVer
 
-  def latestVersion(self, ignoreProject=False):
+  def latestVersion(self, sgFields=None, ignoreProject=False):
     '''
     Returns the highest version in Shotgun.
 
@@ -860,6 +878,9 @@ class SgVersion(SgEntity):
     This is performs a Shotgun search for its return value.
 
     Args:
+      * (list) sgFields:
+        List of fields to populate the result with.
+
       * (bool) ignoreProject:
         Ignore the project field when searchign for other versions.
     '''
@@ -895,7 +916,20 @@ class SgVersion(SgEntity):
     if self.exists():
       searchFilters.append(['id', 'is_not', self['id']])
 
-    otherVersions = self.connection().find('Version', searchFilters, ['code'])
+    if sgFields == None:
+      sgFields = self.connection().defaultEntityQueryFields('Version')
+
+      sgFields.add('code')
+
+      sgFields = list(sgFields)
+    else:
+      sgFields = set(sgFields)
+
+      sgFields.add('code')
+
+      sgFields = list(sgFields)
+
+    otherVersions = self.connection().find('Version', searchFilters, sgFields)
 
     if len(otherVersions) <= 0:
       return None
@@ -910,20 +944,9 @@ class SgVersion(SgEntity):
         highestVer = version
         highestVerInt = v
 
-    if highestVer != None:
-      fields = self.connection().defaultEntityQueryFields('Version')
-
-      if len(fields) >= 1:
-        highestVer.sync(
-          fields,
-          ignoreValid=True,
-          ignoreWithUpdate=True,
-          backgroundPull=True
-        )
-
     return highestVer
 
-  def prevSubVersion(self, ignoreProject=False):
+  def prevSubVersion(self, sgFields=None, ignoreProject=False):
     '''
     Returns the Version Entity that is the previous sub-version of this one.
 
@@ -933,13 +956,16 @@ class SgVersion(SgEntity):
     This is performs a Shotgun search for its return value.
 
     Args:
+      * (list) sgFields:
+        List of fields to populate the result with.
+
       * (bool) ignoreProject:
         Ignore the project field when searchign for other versions.
     '''
 
-    return self._changeVersion(-1, True, ignoreProject=ignoreProject)
+    return self._changeVersion(-1, True, sgFields=sgFields, ignoreProject=ignoreProject)
 
-  def prevVersion(self, ignoreProject=False):
+  def prevVersion(self, sgFields=None, ignoreProject=False):
     '''
     Returns the Version Entity that is the previous version of this one.
 
@@ -949,13 +975,16 @@ class SgVersion(SgEntity):
     This is performs a Shotgun search for its return value.
 
     Args:
+      * (list) sgFields:
+        List of fields to populate the result with.
+
       * (bool) ignoreProject:
         Ignore the project field when searchign for other versions.
     '''
 
-    return self._changeVersion(-1, False, ignoreProject=ignoreProject)
+    return self._changeVersion(-1, False, sgFields=sgFields, ignoreProject=ignoreProject)
 
-  def nextSubVersion(self, ignoreProject=False):
+  def nextSubVersion(self, sgFields=None, ignoreProject=False):
     '''
     Returns the Version Entity that is the next sub-version of this one.
 
@@ -965,13 +994,16 @@ class SgVersion(SgEntity):
     This is performs a Shotgun search for its return value.
 
     Args:
+      * (list) sgFields:
+        List of fields to populate the result with.
+
       * (bool) ignoreProject:
         Ignore the project field when searchign for other versions.
     '''
 
-    return self._changeVersion(1, True, ignoreProject=ignoreProject)
+    return self._changeVersion(1, True, sgFields=sgFields, ignoreProject=ignoreProject)
 
-  def nextVersion(self, ignoreProject=False):
+  def nextVersion(self, sgFields=None, ignoreProject=False):
     '''
     Returns the Version Entity that is the next version of this one.
 
@@ -981,13 +1013,16 @@ class SgVersion(SgEntity):
     This is performs a Shotgun search for its return value.
 
     Args:
+      * (list) sgFields:
+        List of fields to populate the result with.
+
       * (bool) ignoreProject:
         Ignore the project field when searchign for other versions.
     '''
 
-    return self._changeVersion(1, False)
+    return self._changeVersion(1, False, sgFields=sgFields, ignoreProject=ignoreProject)
 
-  def otherSubVersions(self, ignoreProject=False):
+  def otherSubVersions(self, sgFields=None, ignoreProject=False):
     '''
     Returns all sub-versions but not including this one.
 
@@ -995,6 +1030,9 @@ class SgVersion(SgEntity):
     This is performs a Shotgun search for its return value.
 
     Args:
+      * (list) sgFields:
+        List of fields to populate the results with.
+
       * (bool) ignoreProject:
         Ignore the project field when searchign for other versions.
     '''
@@ -1035,9 +1073,22 @@ class SgVersion(SgEntity):
     if self.exists():
       searchFilters.append(['id', 'is_not', self['id']])
 
-    return self.connection().find('Version', searchFilters)
+    if sgFields == None:
+      sgFields = self.connection().defaultEntityQueryFields('Version')
 
-  def otherVersions(self, ignoreProject=False):
+      sgFields.add('code')
+
+      sgFields = list(sgFields)
+    else:
+      sgFields = set(sgFields)
+
+      sgFields.add('code')
+
+      sgFields = list(sgFields)
+
+    return self.connection().find('Version', searchFilters, sgFields)
+
+  def otherVersions(self, sgFields=None, ignoreProject=False):
     '''
     Returns all versions but not including this one.
 
@@ -1045,6 +1096,9 @@ class SgVersion(SgEntity):
     This is performs a Shotgun search for its return value.
 
     Args:
+      * (list) sgFields:
+        List of fields to populate the results with.
+
       * (bool) ignoreProject:
         Ignore the project field when searchign for other versions.
     '''
@@ -1080,9 +1134,22 @@ class SgVersion(SgEntity):
     if self.exists():
       searchFilters.append(['id', 'is_not', self['id']])
 
-    return self.connection().find('Version', searchFilters)
+    if sgFields == None:
+      sgFields = self.connection().defaultEntityQueryFields('Version')
 
-  def subVersion(self, subVersion, ignoreProject=False):
+      sgFields.add('code')
+
+      sgFields = list(sgFields)
+    else:
+      sgFields = set(sgFields)
+
+      sgFields.add('code')
+
+      sgFields = list(sgFields)
+
+    return self.connection().find('Version', searchFilters, sgFields)
+
+  def subVersion(self, subVersion, sgFields=None, ignoreProject=False):
     '''
     Returns the Version Entity that is the sub-version specified by arg
     "subVersion".  The returned result can be the same Entity.
@@ -1093,11 +1160,17 @@ class SgVersion(SgEntity):
     This is performs a Shotgun search for its return value.
 
     Args:
+      * (list) sgFields:
+        List of fields to populate the result with.
+
       * (bool) ignoreProject:
         Ignore the project field when searchign for other versions.
     '''
 
-    return self._changeVersion(int(subVersion), True, True, ignoreProject=ignoreProject)
+    if int(subVersion) == self.subVersionNumber():
+      return self
+
+    return self._changeVersion(int(subVersion), True, True, sgFields=sgFields, ignoreProject=ignoreProject)
 
   def subVersionNumber(self):
     '''
@@ -1125,7 +1198,7 @@ class SgVersion(SgEntity):
 
     return len(search.group(4))
 
-  def subVersions(self, ignoreProject=False):
+  def subVersions(self, sgFields=None, ignoreProject=False):
     '''
     Returns all sub-versions.
 
@@ -1133,6 +1206,9 @@ class SgVersion(SgEntity):
     This is performs a Shotgun search for its return value.
 
     Args:
+      * (list) sgFields:
+        List of fields to populate the results with.
+
       * (bool) ignoreProject:
         Ignore the project field when searchign for other versions.
     '''
@@ -1161,9 +1237,22 @@ class SgVersion(SgEntity):
         ]
       )
 
+    if sgFields == None:
+      sgFields = self.connection().defaultEntityQueryFields('Version')
+
+      sgFields.add('code')
+
+      sgFields = list(sgFields)
+    else:
+      sgFields = set(sgFields)
+
+      sgFields.add('code')
+
+      sgFields = list(sgFields)
+
     return self.connection().find('Version', searchFilters)
 
-  def version(self, version, ignoreProject=False):
+  def version(self, version, sgFields=None, ignoreProject=False):
     '''
     Returns the Version Entity that is the version specified by arg "version".
     The returned result can be the same Entity.
@@ -1174,11 +1263,17 @@ class SgVersion(SgEntity):
     This is performs a Shotgun search for its return value.
 
     Args:
+      * (list) sgFields:
+        List of fields to populate the result with.
+
       * (bool) ignoreProject:
         Ignore the project field when searchign for other versions.
     '''
 
-    return self._changeVersion(int(version), False, True, ignoreProject=ignoreProject)
+    if int(version) == self.versionNumber():
+      return self
+
+    return self._changeVersion(int(version), False, True, sgFields=sgFields, ignoreProject=ignoreProject)
 
   def versionNumber(self):
     '''
@@ -1206,7 +1301,7 @@ class SgVersion(SgEntity):
 
     return len(search.group(2))
 
-  def versions(self, ignoreProject=False):
+  def versions(self, sgFields=None, ignoreProject=False):
     '''
     Returns all versions.
 
@@ -1214,6 +1309,9 @@ class SgVersion(SgEntity):
     This is performs a Shotgun search for its return value.
 
     Args:
+      * (list) sgFields:
+        List of fields to populate the results with.
+
       * (bool) ignoreProject:
         Ignore the project field when searchign for other versions.
     '''
@@ -1246,4 +1344,17 @@ class SgVersion(SgEntity):
         ]
       )
 
-    return self.connection().find('Version', searchFilters)
+    if sgFields == None:
+      sgFields = self.connection().defaultEntityQueryFields('Version')
+
+      sgFields.add('code')
+
+      sgFields = list(sgFields)
+    else:
+      sgFields = set(sgFields)
+
+      sgFields.add('code')
+
+      sgFields = list(sgFields)
+
+    return self.connection().find('Version', searchFilters, sgFields)
