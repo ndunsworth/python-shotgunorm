@@ -411,16 +411,16 @@ class SgProject(SgEntity):
         List of fields to populate the results with.
     '''
 
+    result = {}
+
     if not self.exists():
-      return {}
+      return result
 
     if isinstance(sgSequences, (str, SgEntity)):
       sgSequences = [sgSequences]
 
     if sgSequences == None:
       sgSequences = self.sequenceNames()
-
-    result = {}
 
     if len(sgSequences) <= 0:
       return result
@@ -520,6 +520,9 @@ class SgTicket(SgEntity):
         Commit the reply immediately.
     '''
 
+    if not self.exists():
+      raise RuntimError('unable to reply to ticket, does not exist in Shotgun')
+
     connection = self.connection()
 
     replyData = None
@@ -569,6 +572,9 @@ class SgTicket(SgEntity):
     '''
 
     with self:
+      if not self.exists():
+        raise RuntimError('unable to close ticket, does not exist in Shotgun')
+
       if not isinstance(sgMsg, str):
         raise TypeError('expected a str for "sgMsg" got %s' % sgMsg)
 
