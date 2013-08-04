@@ -90,7 +90,8 @@ def _entityFix(schema, schemaData):
     schema,
     'Banner',
     'Banner',
-    bannerFieldInfos
+    bannerFieldInfos,
+    {}
   )
 
   nameData = {
@@ -123,7 +124,7 @@ def _entityFix(schema, schemaData):
     'valid_values': []
   }
 
-  bannerFieldInfos = {
+  appwelcomeFieldInfos = {
     'name': ShotgunORM.SgFieldSchemaInfo(nameData),
     'id': ShotgunORM.SgFieldSchemaInfo(idData)
   }
@@ -132,7 +133,8 @@ def _entityFix(schema, schemaData):
     schema,
     'AppWelcome',
     'AppWelcome',
-    bannerFieldInfos
+    appwelcomeFieldInfos,
+    {}
   )
 
   schemaData['AppWelcome'] = AppWelcomeEntity

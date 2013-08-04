@@ -52,11 +52,12 @@ class SgEntitySchemaInfo(object):
     else:
       return '<SgEntitySchemaInfo("%s")>' % self.name()
 
-  def __init__(self, schema, name, label, fieldInfos):
+  def __init__(self, schema, name, label, fieldInfos, fieldInfosUnsupported):
     self._schema = schema
     self._name = str(name)
     self._label = str(label)
     self._fieldInfos = fieldInfos
+    self._fieldInfosUnsupported = fieldInfosUnsupported
     self._isCustom = name.startswith('CustomEntity') or name.startswith('CustomNonProjectEntity')
 
   @classmethod
@@ -66,6 +67,7 @@ class SgEntitySchemaInfo(object):
     '''
 
     fieldInfos = {}
+    fieldInfosUnsupported = {}
 
     for fieldName, schemaData in sgFieldSchemas.items():
       if fieldName.startswith('step_'):
@@ -82,11 +84,11 @@ class SgEntitySchemaInfo(object):
           )
         )
 
-        continue
+        fieldInfosUnsupported[fieldName] = fieldInfo
+      else:
+        fieldInfos[fieldName] = fieldInfo
 
-      fieldInfos[fieldName] = fieldInfo
-
-    result = cls(sgSchema, sgEntityName, sgEntityLabel, fieldInfos)
+    result = cls(sgSchema, sgEntityName, sgEntityLabel, fieldInfos, fieldInfosUnsupported)
 
     try:
       ShotgunORM.onEntityInfoCreate(result)
@@ -143,7 +145,7 @@ class SgEntitySchemaInfo(object):
 
   def fieldInfos(self, sgReturnTypes=None):
     '''
-    Returns a list of ShotgunORM.SgFieldSchemaInfo objects used by the Entity.
+    Returns a dict of ShotgunORM.SgFieldSchemaInfo objects used by the Entity.
 
     Args:
       * (list) sgReturnTypes:
@@ -166,6 +168,13 @@ class SgEntitySchemaInfo(object):
       result[name] = info
 
     return result
+
+  def fieldInfosUnsupported(self):
+    '''
+    Returns a dict of all unsupported ShotgunORM.SgFieldSchemaInfo objects.
+    '''
+
+    return dict(self._fieldInfosUnsupported)
 
   def fieldNames(self, sgReturnTypes=None):
     '''
