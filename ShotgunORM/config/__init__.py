@@ -528,6 +528,7 @@ ShotgunORM.SgSchema.registerDefaultQueryFields(
 #ShotgunORM.LoggerEntity.setLevel(logging.DEBUG)
 #ShotgunORM.LoggerField.setLevel(logging.DEBUG)
 #ShotgunORM.LoggerFactory.setLevel(logging.DEBUG)
+#ShotgunORM.LoggerORM.setLevel(logging.DEBUG)
 #ShotgunORM.LoggerQueryEngine.setLevel(logging.DEBUG)
 #ShotgunORM.LoggerSchema.setLevel(logging.DEBUG)
 #ShotgunORM.LoggerScriptEngine.setLevel(logging.DEBUG)
