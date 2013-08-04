@@ -112,15 +112,6 @@ from SgSchema import SgSchema
 from SgEntity import SgEntity, SgEntitySchemaInfo
 from SgField import SgField, SgFieldSchemaInfo, SgUserField
 
-# Entities
-import SgEntities
-
-__all__.extend(SgEntities.__all__)
-
-del SgEntities
-
-from SgEntities import *
-
 # Fields
 import SgFields
 

@@ -169,20 +169,27 @@ class SgFieldColor2(ShotgunORM.SgField):
   differentiate the two I know right?
   '''
 
-  REGEXP_TASK = re.compile(r'(\d+,\d+,\d+)|(pipeline_step)')
-  REGEXP_PHASE = re.compile(r'(\d+,\d+,\d+)|(project)')
+  REGEXP_COLOR = re.compile(r'(\d+,\d+,\d+)')
+  REGEXP_TASK_COLOR = re.compile(r'(\d+,\d+,\d+)|(pipeline_step)')
+  REGEXP_PHASE_COLOR = re.compile(r'(\d+,\d+,\d+)|(project)')
 
   def __init__(self, parentEntity, fieldInfo):
     super(SgFieldColor2, self).__init__(parentEntity, fieldInfo)
 
+    self._regexp = None
+    self._linkString = None
+    self._linkField = None
+
     if parentEntity.type == 'Task':
-      self._regexp = self.REGEXP_TASK
+      self._regexp = self.REGEXP_TASK_COLOR
       self._linkString = 'pipeline_step'
       self._linkField = 'step'
-    else:
-      self._regexp = self.REGEXP_PHASE
+    elif parentEntity.type == 'Phase':
+      self._regexp = self.REGEXP_PHASE_COLOR
       self._linkString = 'project'
       self._linkField= 'project'
+    else:
+      self._regexp = self.REGEXP_COLOR
 
   def _fromFieldData(self, sgData):
     if sgData == None:
