@@ -91,7 +91,7 @@ class SgEntitySchemaInfo(object):
     result = cls(sgSchema, sgEntityName, sgEntityLabel, fieldInfos, fieldInfosUnsupported)
 
     try:
-      ShotgunORM.onEntityInfoCreate(result)
+      ShotgunORM.onEntitySchemaInfoCreate(result)
     except Exception, e:
       ShotgunORM.LoggerORM.warn(e)
     finally:
@@ -130,7 +130,7 @@ class SgEntitySchemaInfo(object):
     result = cls(sgSchema, entityName, entityLabel, entityFieldInfos)
 
     try:
-      ShotgunORM.onEntityInfoCreate(result)
+      ShotgunORM.onEntitySchemaInfoCreate(result)
     except Exception, e:
       ShotgunORM.LoggerORM.warn(e)
     finally:
