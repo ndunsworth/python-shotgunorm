@@ -1069,6 +1069,33 @@ class SgEntity(object):
 
     return result
 
+  def fieldsValid(self, sgFields=None, sgReturnTypes=None, includeWithSyncUpdate=True):
+    '''
+    Returns a list of field names that are valid.
+
+    Args:
+      * (list) sgFields:
+        List of specific fields to return.
+
+      * (list) sgReturnTypes:
+        List of specific field return types to filter by.
+
+      * (bool) includeWithSyncUpdate:
+        When True fields that are not yet valid but have a pending sync update
+        are considered valid.
+    '''
+
+    result = []
+
+    with self:
+      for name, field in self.fields(sgFields, sgReturnTypes).items():
+        if field.isValid() or (field.hasSyncUpdate() and includeWithSyncUpdate):
+          result.append(name)
+
+    result.sort()
+
+    return result
+
   def fieldValues(self, sgFields=None, sgReturnTypes=None):
     '''
     Returns a dict containing the value of all specified fields.
@@ -1519,7 +1546,7 @@ class SgEntity(object):
 
     return result
 
-  def valuesSg(self, sgFields=None):
+  def valuesSg(self, sgFields=None, sgReturnTypes=None):
     '''
     Returns field values from Shotgun for the specified fields.
 
@@ -1530,6 +1557,9 @@ class SgEntity(object):
     Args:
       * (list) sgFields:
         List of fields to fetch from Shotgun.
+
+      * (list) sgReturnTypes:
+        List of specific field return types to filter by.
     '''
 
     ShotgunORM.LoggerEntity.debug('%(entity)s.valuesSg()', {'entity': self})
@@ -1545,11 +1575,14 @@ class SgEntity(object):
 
     pullFields = []
 
-    for fieldName, field in self.fields(sgFields).items():
+    for fieldName, field in self.fields(sgFields, sgReturnTypes).items():
       if not field.isQueryable():
         continue
 
       pullFields.append(field.name())
+
+    if len(pullFields) <= 0:
+      return {}
 
     result = self.connection()._sg_find_one(
       self.type,
