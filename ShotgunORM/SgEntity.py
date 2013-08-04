@@ -26,7 +26,7 @@
 
 __all__ = [
   'SgEntity',
-  'SgEntityInfo'
+  'SgEntitySchemaInfo'
 ]
 
 # Python imports
@@ -41,16 +41,16 @@ from xml.etree import ElementTree as ET
 # This module imports
 import ShotgunORM
 
-class SgEntityInfo(object):
+class SgEntitySchemaInfo(object):
   '''
   Class for representing basic information about a Shotgun Entity.
   '''
 
   def __repr__(self):
     if self.isCustom():
-      return '<SgEntityInfo("%s"|"%s")>' % (self.name(), self.label())
+      return '<SgEntitySchemaInfo("%s"|"%s")>' % (self.name(), self.label())
     else:
-      return '<SgEntityInfo("%s")>' % self.name()
+      return '<SgEntitySchemaInfo("%s")>' % self.name()
 
   def __init__(self, schema, name, label, fieldInfos):
     self._schema = schema
@@ -62,7 +62,7 @@ class SgEntityInfo(object):
   @classmethod
   def fromSg(cls, sgSchema, sgEntityName, sgEntityLabel, sgFieldSchemas):
     '''
-    From the passed Shotgun schema info a new SgEntityInfo is returned.
+    From the passed Shotgun schema info a new SgEntitySchemaInfo is returned.
     '''
 
     fieldInfos = {}
@@ -71,7 +71,7 @@ class SgEntityInfo(object):
       if fieldName.startswith('step_'):
         continue
 
-      fieldInfo = ShotgunORM.SgFieldInfo.fromSg(sgEntityName, sgEntityLabel, fieldName, schemaData)
+      fieldInfo = ShotgunORM.SgFieldSchemaInfo.fromSg(sgEntityName, sgEntityLabel, fieldName, schemaData)
 
       # Skip fields that have an unsupported return type!
       if fieldInfo.returnType() == ShotgunORM.SgField.RETURN_TYPE_UNSUPPORTED:
@@ -98,7 +98,7 @@ class SgEntityInfo(object):
   @classmethod
   def fromXML(cls, sgSchema, sgXmlElement):
     '''
-    From the passed XML data a new SgEntityInfo is returned.
+    From the passed XML data a new SgEntitySchemaInfo is returned.
     '''
 
     if sgXmlElement.tag != 'SgEntity':
@@ -116,7 +116,7 @@ class SgEntityInfo(object):
 
     for field in fields:
       # Skip fields that have an unsupported return type!
-      fieldInfo = ShotgunORM.SgFieldInfo.fromXML(entityName, entityLabel, field)
+      fieldInfo = ShotgunORM.SgFieldSchemaInfo.fromXML(entityName, entityLabel, field)
 
       if fieldInfo.returnType() == ShotgunORM.SgField.RETURN_TYPE_UNSUPPORTED:
         ShotgunORM.LoggerEntity.warning('field %s.%s ignored because of return type unsupported' % (fieldInfo.name(), entityName))
@@ -136,14 +136,14 @@ class SgEntityInfo(object):
 
   def fieldInfo(self, sgField):
     '''
-    Returns the SgFieldInfo for the field.
+    Returns the SgFieldSchemaInfo for the field.
     '''
 
     return self._fieldInfos.get(sgField, None)
 
   def fieldInfos(self, sgReturnTypes=None):
     '''
-    Returns a list of ShotgunORM.SgFieldInfo objects used by the Entity.
+    Returns a list of ShotgunORM.SgFieldSchemaInfo objects used by the Entity.
 
     Args:
       * (list) sgReturnTypes:
@@ -428,7 +428,7 @@ class SgEntity(object):
 
       del sgData['id']
 
-      self.field('type')._value = self.info().name()
+      self.field('type')._value = self.schemaInfo().name()
 
       if sgData.has_key('type'):
         sgData['type']
@@ -665,7 +665,7 @@ class SgEntity(object):
     '''
     Sub-class portion of SgEntity.buildFields().
 
-    Default function iterates over the incoming SgFieldInfos and creates the
+    Default function iterates over the incoming SgFieldSchemaInfos and creates the
     fields.
     '''
 
@@ -697,7 +697,7 @@ class SgEntity(object):
     self._fields['type'] = ShotgunORM.SgFieldType(self)
     self._fields['id'] = ShotgunORM.SgFieldID(self)
 
-    entityFieldInfos = self.info().fieldInfos()
+    entityFieldInfos = self.schemaInfo().fieldInfos()
 
     # Dont pass the "id" field as its manually built as a user field.  Same
     # for the type field.
@@ -1184,13 +1184,6 @@ class SgEntity(object):
 
     return False
 
-  def info(self):
-    '''
-    Returns the SgEntityInfo object that defines this Entity.
-    '''
-
-    return self.__classinfo__
-
   def isBuildingFields(self):
     '''
     Returns True when the Entity is building its fields.
@@ -1210,7 +1203,7 @@ class SgEntity(object):
     Returns True if the Entity is a custom Shotgun entity, example CustomEntity01.
     '''
 
-    return self.info().isCustom()
+    return self.schemaInfo().isCustom()
 
   def isMarkedForDeletion(self):
     '''
@@ -1225,7 +1218,7 @@ class SgEntity(object):
     Returns the user visible Shotgun label of the Entity.
     '''
 
-    return self.info().label()
+    return self.schemaInfo().label()
 
   def lastEventLog(self, sgEventType=None):
     '''
@@ -1339,6 +1332,13 @@ class SgEntity(object):
         raise RuntimeError('entity does not exist, can not generate request data for type revive')
 
       self.connection().revive(self)
+
+  def schemaInfo(self):
+    '''
+    Returns the SgEntitySchemaInfo object that defines this Entity.
+    '''
+
+    return self.__classinfo__
 
   def sync(self, sgFields=None, ignoreValid=False, ignoreWithUpdate=True, backgroundPull=True):
     '''

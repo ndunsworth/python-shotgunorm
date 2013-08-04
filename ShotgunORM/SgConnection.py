@@ -1123,7 +1123,7 @@ class SgConnection(SgConnectionPriv):
       # Blast the field cache.
       self.clearCache()
 
-    # In the future this could support live updating of SgEntityInfo objects.
+    # In the future this could support live updating of SgEntitySchemaInfo objects.
 
   def search(self, sgEntityType, sgSearchExp, sgFields=None, sgSearchArgs=[], order=None, limit=0, retired_only=False, page=0):
     '''

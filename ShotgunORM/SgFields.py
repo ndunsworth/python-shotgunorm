@@ -1673,14 +1673,14 @@ class SgFieldID(ShotgunORM.SgUserField):
     return False
 
   def __init__(self, parentEntity):
-    info = ShotgunORM.SgFieldInfo(
+    info = ShotgunORM.SgFieldSchemaInfo(
       {
         'default_value': None,
         'doc': '',
         'editable': False,
         'label': 'Id',
         'name': 'id',
-        'parent': parentEntity.info().name(),
+        'parent': parentEntity.schemaInfo().name(),
         'required': False,
         'return_type': ShotgunORM.SgField.RETURN_TYPE_INT,
         'return_type_name': 'number',
@@ -1772,14 +1772,14 @@ class SgFieldType(ShotgunORM.SgUserField):
     return False
 
   def __init__(self, parentEntity):
-    info = ShotgunORM.SgFieldInfo(
+    info = ShotgunORM.SgFieldSchemaInfo(
       {
         'default_value': None,
         'doc': '',
         'editable': False,
         'label': 'Type',
         'name': 'type',
-        'parent': parentEntity.info().name(),
+        'parent': parentEntity.schemaInfo().name(),
         'required': False,
         'return_type': ShotgunORM.SgField.RETURN_TYPE_TEXT,
         'return_type_name': 'text',

@@ -34,9 +34,9 @@ __all__ = [
   'SgConnection',
   'SgEntity',
   'SgEntityClassFactory',
-  'SgEntityInfo',
+  'SgEntitySchemaInfo',
   'SgField',
-  'SgFieldInfo',
+  'SgFieldSchemaInfo',
   'SgQueryEngine',
   'SgSchema',
   'SgScriptField',
@@ -109,8 +109,8 @@ from SgSchema import SgSchema
 #
 ################################################################################
 
-from SgEntity import SgEntity, SgEntityInfo
-from SgField import SgField, SgFieldInfo, SgUserField
+from SgEntity import SgEntity, SgEntitySchemaInfo
+from SgField import SgField, SgFieldSchemaInfo, SgUserField
 
 # Entities
 import SgEntities

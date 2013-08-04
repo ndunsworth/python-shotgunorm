@@ -26,7 +26,7 @@
 
 __all__ = [
   'SgField',
-  'SgFieldInfo',
+  'SgFieldSchemaInfo',
   'SgUserField'
 ]
 
@@ -86,7 +86,7 @@ class SgFieldQueryProfiler(object):
   def reset(self):
     self._fieldProfiles = {}
 
-class SgFieldInfo(object):
+class SgFieldSchemaInfo(object):
   '''
   Class that represents a Shotgun Entities field information.
   '''
@@ -119,7 +119,7 @@ class SgFieldInfo(object):
   @classmethod
   def fromSg(self, sgEntityName, sgEntityLabel, sgFieldName, sgSchema):
     '''
-    Returns a new SgFieldInfo that is constructed from the arg "sgSchema".
+    Returns a new SgFieldSchemaInfo that is constructed from the arg "sgSchema".
     '''
 
     data = {
@@ -172,7 +172,7 @@ class SgFieldInfo(object):
   @classmethod
   def fromXML(self, sgEntityName, sgEntityLabel, sgXmlElement):
     '''
-    Returns a new SgFieldInfo that is constructed from the arg "sgXmlElement".
+    Returns a new SgFieldSchemaInfo that is constructed from the arg "sgXmlElement".
     '''
 
     if sgXmlElement.tag != 'SgField':
@@ -476,7 +476,7 @@ class SgField(object):
     Returns the default value for the field.
     '''
 
-    return self.info().defaultValue()
+    return self.schemaInfo().defaultValue()
 
   def _deleteWidget(self):
     '''
@@ -508,7 +508,7 @@ class SgField(object):
     Returns the fields doc string.
     '''
 
-    return self.info().doc()
+    return self.schemaInfo().doc()
 
   def eventLogs(self, sgEventType=None, sgRecordLimit=0):
     '''
@@ -655,13 +655,6 @@ class SgField(object):
 
     return self.__hasSyncUpdate
 
-  def info(self):
-    '''
-    Returns the SgFieldInfo object that describes the field.
-    '''
-
-    return self._info
-
   def _invalidate(self):
     '''
     Sub-class portion of SgField.invalidate().
@@ -751,9 +744,9 @@ class SgField(object):
     parent = self.parentEntity()
 
     if parent == None:
-      return self.info().isEditable()
+      return self.schemaInfo().isEditable()
     else:
-      return self.info().isEditable() or not parent.exists()
+      return self.schemaInfo().isEditable() or not parent.exists()
 
   def isQueryable(self):
     '''
@@ -788,7 +781,7 @@ class SgField(object):
     Returns the user visible string of the field.
     '''
 
-    return self.info().label()
+    return self.schemaInfo().label()
 
   def lastEventLog(self, sgEventType=None):
     '''
@@ -871,7 +864,7 @@ class SgField(object):
     Returns the Shotgun API string used to reference the field on an Entity.
     '''
 
-    return self.info().name()
+    return self.schemaInfo().name()
 
   def parentEntity(self):
     '''
@@ -895,7 +888,14 @@ class SgField(object):
     Returns the SgEntity.RETURN_TYPE.
     '''
 
-    return self.info().returnType()
+    return self.schemaInfo().returnType()
+
+  def schemaInfo(self):
+    '''
+    Returns the SgFieldSchemaInfo object that describes the field.
+    '''
+
+    return self._info
 
   def setHasCommit(self, valid):
     '''
@@ -1241,14 +1241,14 @@ class SgField(object):
     Returns a list of valid values supported by the field.
     '''
 
-    return self.info().validValues()
+    return self.schemaInfo().validValues()
 
   def valueTypes(self):
     '''
     Returns a list of valid value types supported by the field.
     '''
 
-    return self.info().valueTypes()
+    return self.schemaInfo().valueTypes()
 
   def widget(self):
     '''

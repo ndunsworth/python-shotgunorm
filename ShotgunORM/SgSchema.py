@@ -82,11 +82,11 @@ def _entityFix(schema, schemaData):
   }
 
   bannerFieldInfos = {
-    'name': ShotgunORM.SgFieldInfo(nameData),
-    'id': ShotgunORM.SgFieldInfo(idData)
+    'name': ShotgunORM.SgFieldSchemaInfo(nameData),
+    'id': ShotgunORM.SgFieldSchemaInfo(idData)
   }
 
-  BannerEntity = ShotgunORM.SgEntityInfo(
+  BannerEntity = ShotgunORM.SgEntitySchemaInfo(
     schema,
     'Banner',
     'Banner',
@@ -124,11 +124,11 @@ def _entityFix(schema, schemaData):
   }
 
   bannerFieldInfos = {
-    'name': ShotgunORM.SgFieldInfo(nameData),
-    'id': ShotgunORM.SgFieldInfo(idData)
+    'name': ShotgunORM.SgFieldSchemaInfo(nameData),
+    'id': ShotgunORM.SgFieldSchemaInfo(idData)
   }
 
-  AppWelcomeEntity = ShotgunORM.SgEntityInfo(
+  AppWelcomeEntity = ShotgunORM.SgEntitySchemaInfo(
     schema,
     'AppWelcome',
     'AppWelcome',
@@ -289,7 +289,7 @@ class SgSchema(object):
 
       ShotgunORM.LoggerSchema.debug('        + Building Entity "%(entityName)s"', {'entityName': entity.attrib.get('name')})
 
-      entityInfo = ShotgunORM.SgEntityInfo.fromXML(self, entity)
+      entityInfo = ShotgunORM.SgEntitySchemaInfo.fromXML(self, entity)
 
       result[entityInfo.name()] = entityInfo
 
@@ -323,7 +323,7 @@ class SgSchema(object):
       entityTypeLabel = entitySchema['name']['value']
       entityFieldSchemas = sgEntityFieldSchemas[entityType]
 
-      entityInfo = ShotgunORM.SgEntityInfo.fromSg(self, entityType, entityTypeLabel, entityFieldSchemas)
+      entityInfo = ShotgunORM.SgEntitySchemaInfo.fromSg(self, entityType, entityTypeLabel, entityFieldSchemas)
 
       entityInfos[entityType] = entityInfo
 
@@ -464,7 +464,7 @@ class SgSchema(object):
 
   def entityInfo(self, sgEntityType):
     '''
-    Returns the SgEntityInfo for the specified Entity type.
+    Returns the SgEntitySchemaInfo for the specified Entity type.
     '''
 
     if not self.isInitialized():
