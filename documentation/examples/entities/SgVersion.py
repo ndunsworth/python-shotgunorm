@@ -25,503 +25,23 @@
 #
 
 __all__ = [
-  'SgApiUser',
-  'SgAppWelcome',
-  'SgAsset',
-  'SgBanner',
-  'SgHumanUser',
-  'SgNote',
-  'SgPhase',
-  'SgProject',
-  'SgTask',
-  'SgTicket',
   'SgVersion'
 ]
 
 # Python imports
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-
 import re
-import smtplib
 
 # This module imports
-from SgEntity import SgEntity
-from SgField import SgField
+import ShotgunORM
 
-class SgApiUser(SgEntity):
-  '''
-  Class that represents a Api User Entity.
-  '''
-
-  pass
-
-class SgAppWelcome(SgEntity):
-  '''
-  Class that represents a AppWelcome Entity.
-
-  This Entity does nothing and is used by HumanUser Entities.
-
-  This class is just a place holder.
-  '''
-
-  pass
-
-class SgBanner(SgEntity):
-  '''
-  Class that represents a Banner Entity.
-
-  This Entity does nothing and is used by HumanUser Entities.
-
-  This class is just a place holder.
-  '''
-
-  pass
-
-class SgAsset(SgEntity):
-  '''
-  Class that represents a Asset Entity.
-  '''
-
-  pass
-
-class SgHumanUser(SgEntity):
-  '''
-  Class that represents a Human User Entity.
-  '''
-
-  def sendEmail(self, subject, msg, cc=None, sender='mr.roboto@leetstudios.com', server='localhost'):
-    '''
-    Send the user an email.
-
-    The arg "cc" should be a list of other SgHumanUser objects or strings.
-
-    Args:
-      * (str) subject:
-        Email subject string.
-
-      * (str) msg:
-        Email message.
-
-      * (list) cc:
-        List of HumanUser or strings that will be cc'd.
-
-      * (str) sender:
-        Return email address.
-
-      * (str) server:
-        Email server ip.
-    '''
-
-    email = self['email']
-
-    if email == '' or email.isspace():
-      raise RuntimeError('email field is emtpy')
-
-    ccEmails = []
-
-    if cc != None:
-      for i in cc:
-        if not isinstance(i, SgHumanUser):
-          raise TypeError('expected a SgHumanUser, got "%s"' % i.__class__.__name__)
-
-        ccEmail = i['email']
-
-        if ccEmail == None or ccEmail == '' or ccEmail.isspace():
-          raise RuntimeError('HumanUser %s\'s email field is emtpy' % i['name'])
-
-        ccEmails.append(ccEmail)
-
-    emailInfo = MIMEMultipart()
-
-    emailInfo['From'] = sender
-    emailInfo['To'] = email
-
-    if len(ccEmails) >= 1:
-      emailInfo['CC'] = ','.join(ccEmails)
-
-    emailInfo['Subject'] = subject
-
-    emailMsg = MIMEText(msg)
-    emailMsg.add_header('Content-Disposition', 'inline')
-
-    emailInfo.attach(emailMsg)
-
-    serverSmtp = smtplib.SMTP(server, 25)
-    #serverSmtp.debuglevel = 5
-
-    serverSmtp.sendmail(emailInfo['From'], [emailInfo['TO']] + ccEmails, emailInfo.as_string())
-
-  def sendInstantMessage(self, msg):
-    '''
-    Sends the user an instant message.
-
-    Default function raises a RuntimeError of "not implemented".
-
-    Args:
-      * (str) msg:
-        Message string.
-    '''
-
-    raise RuntimeError('not implemented')
-
-  def tasks(self, extraSgFilters=None, extraSgFilterArgs=None):
-    '''
-    Returns all the Tasks the user belongs to.
-
-    Args:
-      * (list) extraSgFilters:
-        Addtional search expression to append when finding Tasks.
-
-      * (list) extrSgFilterArgs:
-        List of args passed to the connection.search() function.
-    '''
-
-    searchExp = 'task_assignees in [%s]' % self.toEntityFieldData()
-
-    if extraSgFilters != None:
-      if len(extraSgFilters) >= 1 and not extraSgFilters.isspace():
-        searchExp += ' and ' + extraSgFilters
-
-    return self.connection().search('Task', searchExp, sgSearchArgs=extraSgFilterArgs)
-
-class SgNote(SgEntity):
-  '''
-  Class that represents a Note Entity.
-  '''
-
-  pass
-
-# Fix for the lame ass return type "color2".  See ShotgunORM.SgFieldColor2 for more
-# information on this lovely mess.
-class SgPhase(SgEntity):
-  '''
-  Class that represents a Phase Entity.
-  '''
-
-  def _buildFields(self, sgFieldInfos):
-    '''
-    Subclass portion of SgEntity.buildFields().
-
-    Note:
-    Do not call this directly!
-    '''
-
-    colorFieldInfo = sgFieldInfos['color']
-
-    del sgFieldInfos['color']
-
-    fieldClasses = SgField.__fieldclasses__
-
-    self._fields['color'] = fieldClasses.get(SgField.RETURN_TYPE_COLOR2, None)(self, colorFieldInfo)
-
-    super(SgPhase, self)._buildFields(sgFieldInfos)
-
-class SgProject(SgEntity):
-  '''
-  Class that represents a Project Entity.
-  '''
-
-  def sequenceNames(self):
-    '''
-    Returns a list of all Sequence names for this project.
-    '''
-
-    result = []
-
-    if not self.exists():
-      return result
-
-    seqs = self.sequences(sgFields=['code'])
-
-    for seq in seqs:
-      result.append(seq['code'])
-
-    result.sort()
-
-    return result
-
-  def sequences(self, sgFields=None):
-    '''
-    Returns a list of all Sequence Entities for this project.
-
-      * (list) sgFields:
-        List of fields to populate the results with.
-    '''
-
-    if not self.exists():
-      return []
-
-    return self.connection().find(
-      'Sequence',
-      [
-        [
-          'project',
-          'is',
-          self
-        ]
-      ],
-      sgFields
-    )
-
-  def shotNames(self, sgSequences=None):
-    '''
-    Returns a dict containing of all Shot names for this project.
-
-    Args:
-      * (list) sgSequences:
-        Return only the Shot names associated with the list of Sequences.
-    '''
-
-    result = {}
-
-    if not self.exists():
-      return result
-
-    seqShots = self.shots(sgFields=['code'])
-
-    for seq, shots in seqShots.items():
-      shotNames = []
-
-      for shot in shots:
-        shotNames.append(shot['code'])
-
-      result[seq] = shotNames
-
-    return result
-
-  def shots(self, sgSequences=None, sgFields=None):
-    '''
-    Returns a dict of all Shot Entities for this project.
-
-    Args:
-      * (list) sgSequences:
-        Return only the Shots associated with the list of Sequences.
-
-      * (list) sgFields:
-        List of fields to populate the results with.
-    '''
-
-    if not self.exists():
-      return {}
-
-    if isinstance(sgSequences, (str, SgEntity)):
-      sgSequences = [sgSequences]
-
-    if sgSequences == None:
-      sgSequences = self.sequenceNames()
-
-    result = {}
-
-    if len(sgSequences) <= 0:
-      return result
-
-    seqNames = []
-
-    for seq in sgSequences:
-      if isinstance(seq, str):
-        seqNames.append(seq)
-      else:
-        seqNames.append(seq['code'])
-
-    qEngine = self.connection().queryEngine()
-
-    # Block the query engine so all Shot fields get pulled at once.
-    qEngine.block()
-
-    try:
-      sequences = self.connection().find(
-        'Sequence',
-        [
-          [
-            'project',
-            'is',
-            self
-          ],
-          [
-            'code',
-            'in',
-            seqNames
-          ]
-        ],
-        ['shots']
-      )
-
-      for seq in sequences:
-        seqField = seq.field('shots')
-
-        result[seq['code']] = seqField.value(sgSyncFields={'Shot': sgFields})
-    finally:
-      qEngine.unblock()
-
-    return result
-
-# Fix for the lame ass return type "color2".  See ShotgunORM.SgFieldColor2 for more
-# information on this lovely mess.
-class SgTask(SgEntity):
-  '''
-  Class that represents a Task Entity.
-  '''
-
-  def _buildFields(self, sgFieldInfos):
-    '''
-    Subclass portion of SgEntity.buildFields().
-
-    Note:
-    Do not call this directly!
-    '''
-
-    colorFieldInfo = sgFieldInfos['color']
-
-    del sgFieldInfos['color']
-
-    fieldClasses = SgField.__fieldclasses__
-
-    self._fields['color'] = fieldClasses.get(SgField.RETURN_TYPE_COLOR2, None)(self, colorFieldInfo)
-
-    super(SgTask, self)._buildFields(sgFieldInfos)
-
-
-class SgTicket(SgEntity):
-  '''
-  Class that represents a Ticket Entity.
-  '''
-
-  def reply(self, sgMsg, sgUser=None, sgCommit=False):
-    '''
-    Creates a reply to the ticket.
-
-    When the arg "sgUser", valid value types (SgApiUser, SgHumanUser or str), is
-    specified the ticket will be a reply from that user.
-
-    Returns the Reply Entity.
-
-    Note:
-    If the arg "sgCommit" is False then the returned Reply Entity has not yet
-    been published to Shotgun.  You must call commit() on the returned Entity.
-
-    Args:
-      * (str) sgMsg:
-        Reply message.
-
-      * (HumanUser, str) sgUser:
-        User which the replay will originate from.  If left as None then the
-        connections SgApiUser will be used.
-
-      * (bool) sgCommit:
-        Commit the reply immediately.
-    '''
-
-    connection = self.connection()
-
-    replyData = None
-
-    if sgUser != None:
-      if isinstance(sgUser, str):
-        user = connection.findOne('HumanUser', [['name', 'is', sgUser]])
-
-        if user == None:
-          raise RuntimeError('unable to find HumanUser "%s"' % sgUser)
-
-        sgUser = user
-      elif not isinstance(sgUser, (SgApiUser, SgHumanUser)):
-        raise TypeError('expected a ApiUser/HumanUser Entity or a user name, got %s' % sgUser.__class__.__name__)
-
-      replyData = {
-        'content': sgMsg,
-        'entity': self.toEntityFieldData(),
-        'user': sgUser.toEntityFieldData()
-      }
-    else:
-      replyData = {
-        'content': sgMsg,
-        'entity': self.toEntityFieldData(),
-      }
-
-    result = connection.create('Reply', replyData, sgCommit=sgCommit)
-
-    return result
-
-  def close(self, sgMsg, sgUser=None, sgCommit=False):
-    '''
-    Sets the tickets status to closed and creates a reply.
-
-    Returns the reply Entity.
-
-    Args:
-      * (str) sgMsg:
-        Reply message.
-
-      * (HumanUser, str) sgUser:
-        User which the replay will originate from.  If left as None then the
-        connections SgApiUser will be used.
-
-      * (bool) sgCommit:
-        Commit the reply immediately.
-    '''
-
-    with self:
-      if not isinstance(sgMsg, str):
-        raise TypeError('expected a str for "sgMsg" got %s' % sgMsg)
-
-      if sgUser != None:
-        if isinstance(sgUser, str):
-          user = sg.searchOne('HumanUser', 'name == "%s"' % sgUser)
-
-          if user == None:
-            raise RuntimeError('not able to find Shotgun user "%s"' % sgUser)
-
-          sgUser = user
-        elif isinstance(sgUser, SgEntity):
-          if not sgUser.type == 'HumanUser':
-            raise TypeError('invalid entity type "%s" expected a HumanUser' % sgUser.type)
-
-      fieldStatus = self.field('sg_status_list')
-
-      fieldStatus.setValue('res')
-
-      connection = self.connection()
-
-      replyEntity = connection.create('Reply', {
-        'content': sgMsg,
-        'entity': self.toEntityFieldData()
-      })
-
-      if sgUser != None:
-        replyEntity['user'] = sgUser
-
-      if not sgCommit:
-        return replyEntity
-
-      batchData = []
-
-      if fieldStatus.hasCommit():
-        batchData.append(
-          {
-            'entity': self,
-            'batch_data': self.toBatchData(['sg_status_list'])
-          }
-        )
-
-      batchData.append(
-        {
-          'entity': replyEntity,
-          'batch_data': replyEntity.toBatchData()
-        }
-      )
-
-      connection._batch(batchData)
-
-      return replyEntity
-
-class SgVersion(SgEntity):
+class SgVersion(ShotgunORM.SgEntity):
   '''
   Class that represents a Version Entity.
   '''
 
   REGEXP_VER = re.compile(r'([_.]v)(\d+)(s(\d+))?$')
 
-  def _changeVersion(self, value, doSub=False, valueIsVersion=False, ignoreProject=False):
+  def _changeVersion(self, value, sgFields=None, doSub=False, valueIsVersion=False, ignoreProject=False):
     self.sync(
       ['code', 'project'],
       ignoreValid=True,
@@ -641,7 +161,20 @@ class SgVersion(SgEntity):
         ]
       )
 
-    return self.connection().findOne('Version', searchFilters, ['default', 'code', 'project'])
+    if sgFields == None:
+      sgFields = self.connection().defaultEntityQueryFields('Version')
+
+      sgFields.update(['default', 'code', 'project'])
+
+      sgFields = list(sgFields)
+    else:
+      sgFields = set(sgFields)
+
+      sgFields.update(['code', 'project'])
+
+      sgFields = list(sgFields)
+
+    return self.connection().findOne('Version', searchFilters, sgFields)
 
   def isSubVersioned(self):
     '''
@@ -664,7 +197,7 @@ class SgVersion(SgEntity):
 
     return search != None
 
-  def latestSubVersion(self, ignoreProject=False):
+  def latestSubVersion(self, sgFields=None, ignoreProject=False):
     '''
     Returns the highest sub-version in Shotgun.
 
@@ -674,6 +207,9 @@ class SgVersion(SgEntity):
     This is performs a Shotgun search for its return value.
 
     Args:
+      * (list) sgFields:
+        List of fields to populate the result with.
+
       * (bool) ignoreProject:
         Ignore the project field when searchign for other versions.
     '''
@@ -714,7 +250,20 @@ class SgVersion(SgEntity):
     if self.exists():
       searchFilters.append(['id', 'is_not', self['id']])
 
-    otherVersions = self.connection().find('Version', searchFilters, ['code'])
+    if sgFields == None:
+      sgFields = self.connection().defaultEntityQueryFields('Version')
+
+      sgFields.add('code')
+
+      sgFields = list(sgFields)
+    else:
+      sgFields = set(sgFields)
+
+      sgFields.add('code')
+
+      sgFields = list(sgFields)
+
+    otherVersions = self.connection().find('Version', searchFilters, sgFields)
 
     if len(otherVersions) <= 0:
       return None
@@ -729,20 +278,9 @@ class SgVersion(SgEntity):
         highestVer = version
         highestVerInt = v
 
-    if highestVer != None:
-      fields = self.connection().defaultEntityQueryFields('Version')
-
-      if len(fields) >= 1:
-        highestVer.sync(
-          fields,
-          ignoreValid=True,
-          ignoreWithUpdate=True,
-          backgroundPull=True
-        )
-
     return highestVer
 
-  def latestVersion(self, ignoreProject=False):
+  def latestVersion(self, sgFields=None, ignoreProject=False):
     '''
     Returns the highest version in Shotgun.
 
@@ -752,6 +290,9 @@ class SgVersion(SgEntity):
     This is performs a Shotgun search for its return value.
 
     Args:
+      * (list) sgFields:
+        List of fields to populate the result with.
+
       * (bool) ignoreProject:
         Ignore the project field when searchign for other versions.
     '''
@@ -787,7 +328,20 @@ class SgVersion(SgEntity):
     if self.exists():
       searchFilters.append(['id', 'is_not', self['id']])
 
-    otherVersions = self.connection().find('Version', searchFilters, ['code'])
+    if sgFields == None:
+      sgFields = self.connection().defaultEntityQueryFields('Version')
+
+      sgFields.add('code')
+
+      sgFields = list(sgFields)
+    else:
+      sgFields = set(sgFields)
+
+      sgFields.add('code')
+
+      sgFields = list(sgFields)
+
+    otherVersions = self.connection().find('Version', searchFilters, sgFields)
 
     if len(otherVersions) <= 0:
       return None
@@ -802,20 +356,9 @@ class SgVersion(SgEntity):
         highestVer = version
         highestVerInt = v
 
-    if highestVer != None:
-      fields = self.connection().defaultEntityQueryFields('Version')
-
-      if len(fields) >= 1:
-        highestVer.sync(
-          fields,
-          ignoreValid=True,
-          ignoreWithUpdate=True,
-          backgroundPull=True
-        )
-
     return highestVer
 
-  def prevSubVersion(self, ignoreProject=False):
+  def prevSubVersion(self, sgFields=None, ignoreProject=False):
     '''
     Returns the Version Entity that is the previous sub-version of this one.
 
@@ -825,13 +368,16 @@ class SgVersion(SgEntity):
     This is performs a Shotgun search for its return value.
 
     Args:
+      * (list) sgFields:
+        List of fields to populate the result with.
+
       * (bool) ignoreProject:
         Ignore the project field when searchign for other versions.
     '''
 
-    return self._changeVersion(-1, True, ignoreProject=ignoreProject)
+    return self._changeVersion(-1, True, sgFields=sgFields, ignoreProject=ignoreProject)
 
-  def prevVersion(self, ignoreProject=False):
+  def prevVersion(self, sgFields=None, ignoreProject=False):
     '''
     Returns the Version Entity that is the previous version of this one.
 
@@ -841,13 +387,16 @@ class SgVersion(SgEntity):
     This is performs a Shotgun search for its return value.
 
     Args:
+      * (list) sgFields:
+        List of fields to populate the result with.
+
       * (bool) ignoreProject:
         Ignore the project field when searchign for other versions.
     '''
 
-    return self._changeVersion(-1, False, ignoreProject=ignoreProject)
+    return self._changeVersion(-1, False, sgFields=sgFields, ignoreProject=ignoreProject)
 
-  def nextSubVersion(self, ignoreProject=False):
+  def nextSubVersion(self, sgFields=None, ignoreProject=False):
     '''
     Returns the Version Entity that is the next sub-version of this one.
 
@@ -857,13 +406,16 @@ class SgVersion(SgEntity):
     This is performs a Shotgun search for its return value.
 
     Args:
+      * (list) sgFields:
+        List of fields to populate the result with.
+
       * (bool) ignoreProject:
         Ignore the project field when searchign for other versions.
     '''
 
-    return self._changeVersion(1, True, ignoreProject=ignoreProject)
+    return self._changeVersion(1, True, sgFields=sgFields, ignoreProject=ignoreProject)
 
-  def nextVersion(self, ignoreProject=False):
+  def nextVersion(self, sgFields=None, ignoreProject=False):
     '''
     Returns the Version Entity that is the next version of this one.
 
@@ -873,13 +425,16 @@ class SgVersion(SgEntity):
     This is performs a Shotgun search for its return value.
 
     Args:
+      * (list) sgFields:
+        List of fields to populate the result with.
+
       * (bool) ignoreProject:
         Ignore the project field when searchign for other versions.
     '''
 
-    return self._changeVersion(1, False)
+    return self._changeVersion(1, False, sgFields=sgFields, ignoreProject=ignoreProject)
 
-  def otherSubVersions(self, ignoreProject=False):
+  def otherSubVersions(self, sgFields=None, ignoreProject=False):
     '''
     Returns all sub-versions but not including this one.
 
@@ -887,6 +442,9 @@ class SgVersion(SgEntity):
     This is performs a Shotgun search for its return value.
 
     Args:
+      * (list) sgFields:
+        List of fields to populate the results with.
+
       * (bool) ignoreProject:
         Ignore the project field when searchign for other versions.
     '''
@@ -927,9 +485,22 @@ class SgVersion(SgEntity):
     if self.exists():
       searchFilters.append(['id', 'is_not', self['id']])
 
-    return self.connection().find('Version', searchFilters)
+    if sgFields == None:
+      sgFields = self.connection().defaultEntityQueryFields('Version')
 
-  def otherVersions(self, ignoreProject=False):
+      sgFields.add('code')
+
+      sgFields = list(sgFields)
+    else:
+      sgFields = set(sgFields)
+
+      sgFields.add('code')
+
+      sgFields = list(sgFields)
+
+    return self.connection().find('Version', searchFilters, sgFields)
+
+  def otherVersions(self, sgFields=None, ignoreProject=False):
     '''
     Returns all versions but not including this one.
 
@@ -937,6 +508,9 @@ class SgVersion(SgEntity):
     This is performs a Shotgun search for its return value.
 
     Args:
+      * (list) sgFields:
+        List of fields to populate the results with.
+
       * (bool) ignoreProject:
         Ignore the project field when searchign for other versions.
     '''
@@ -972,9 +546,22 @@ class SgVersion(SgEntity):
     if self.exists():
       searchFilters.append(['id', 'is_not', self['id']])
 
-    return self.connection().find('Version', searchFilters)
+    if sgFields == None:
+      sgFields = self.connection().defaultEntityQueryFields('Version')
 
-  def subVersion(self, subVersion, ignoreProject=False):
+      sgFields.add('code')
+
+      sgFields = list(sgFields)
+    else:
+      sgFields = set(sgFields)
+
+      sgFields.add('code')
+
+      sgFields = list(sgFields)
+
+    return self.connection().find('Version', searchFilters, sgFields)
+
+  def subVersion(self, subVersion, sgFields=None, ignoreProject=False):
     '''
     Returns the Version Entity that is the sub-version specified by arg
     "subVersion".  The returned result can be the same Entity.
@@ -985,11 +572,17 @@ class SgVersion(SgEntity):
     This is performs a Shotgun search for its return value.
 
     Args:
+      * (list) sgFields:
+        List of fields to populate the result with.
+
       * (bool) ignoreProject:
         Ignore the project field when searchign for other versions.
     '''
 
-    return self._changeVersion(int(subVersion), True, True, ignoreProject=ignoreProject)
+    if int(subVersion) == self.subVersionNumber():
+      return self
+
+    return self._changeVersion(int(subVersion), True, True, sgFields=sgFields, ignoreProject=ignoreProject)
 
   def subVersionNumber(self):
     '''
@@ -1017,7 +610,7 @@ class SgVersion(SgEntity):
 
     return len(search.group(4))
 
-  def subVersions(self, ignoreProject=False):
+  def subVersions(self, sgFields=None, ignoreProject=False):
     '''
     Returns all sub-versions.
 
@@ -1025,6 +618,9 @@ class SgVersion(SgEntity):
     This is performs a Shotgun search for its return value.
 
     Args:
+      * (list) sgFields:
+        List of fields to populate the results with.
+
       * (bool) ignoreProject:
         Ignore the project field when searchign for other versions.
     '''
@@ -1053,9 +649,22 @@ class SgVersion(SgEntity):
         ]
       )
 
+    if sgFields == None:
+      sgFields = self.connection().defaultEntityQueryFields('Version')
+
+      sgFields.add('code')
+
+      sgFields = list(sgFields)
+    else:
+      sgFields = set(sgFields)
+
+      sgFields.add('code')
+
+      sgFields = list(sgFields)
+
     return self.connection().find('Version', searchFilters)
 
-  def version(self, version, ignoreProject=False):
+  def version(self, version, sgFields=None, ignoreProject=False):
     '''
     Returns the Version Entity that is the version specified by arg "version".
     The returned result can be the same Entity.
@@ -1066,11 +675,17 @@ class SgVersion(SgEntity):
     This is performs a Shotgun search for its return value.
 
     Args:
+      * (list) sgFields:
+        List of fields to populate the result with.
+
       * (bool) ignoreProject:
         Ignore the project field when searchign for other versions.
     '''
 
-    return self._changeVersion(int(version), False, True, ignoreProject=ignoreProject)
+    if int(version) == self.versionNumber():
+      return self
+
+    return self._changeVersion(int(version), False, True, sgFields=sgFields, ignoreProject=ignoreProject)
 
   def versionNumber(self):
     '''
@@ -1098,7 +713,7 @@ class SgVersion(SgEntity):
 
     return len(search.group(2))
 
-  def versions(self, ignoreProject=False):
+  def versions(self, sgFields=None, ignoreProject=False):
     '''
     Returns all versions.
 
@@ -1106,6 +721,9 @@ class SgVersion(SgEntity):
     This is performs a Shotgun search for its return value.
 
     Args:
+      * (list) sgFields:
+        List of fields to populate the results with.
+
       * (bool) ignoreProject:
         Ignore the project field when searchign for other versions.
     '''
@@ -1138,4 +756,23 @@ class SgVersion(SgEntity):
         ]
       )
 
-    return self.connection().find('Version', searchFilters)
+    if sgFields == None:
+      sgFields = self.connection().defaultEntityQueryFields('Version')
+
+      sgFields.add('code')
+
+      sgFields = list(sgFields)
+    else:
+      sgFields = set(sgFields)
+
+      sgFields.add('code')
+
+      sgFields = list(sgFields)
+
+    return self.connection().find('Version', searchFilters, sgFields)
+
+# Register the custom class.
+ShotgunORM.SgEntity.registerDefaultEntityClass(
+  sgEntityCls=SgVersion,
+  sgEntityTypes=['Version']
+)

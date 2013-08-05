@@ -114,66 +114,6 @@ ShotgunORM.SgEntity.registerDefaultEntityClass(
   sgEntityTypes=['Entity']
 )
 
-ShotgunORM.SgEntity.registerDefaultEntityClass(
-  sgEntityCls=ShotgunORM.SgApiUser,
-  sgEntityTypes=['ApiUser']
-)
-
-ShotgunORM.SgEntity.registerDefaultEntityClass(
-  sgEntityCls=ShotgunORM.SgAppWelcome,
-  sgEntityTypes=['AppWelcome'],
-)
-
-ShotgunORM.SgEntity.registerDefaultEntityClass(
-  sgEntityCls=ShotgunORM.SgAsset,
-  sgEntityTypes=['Asset']
-)
-
-ShotgunORM.SgEntity.registerDefaultEntityClass(
-  sgEntityCls=ShotgunORM.SgBanner,
-  sgEntityTypes=['Banner']
-)
-
-ShotgunORM.SgEntity.registerDefaultEntityClass(
-  ShotgunORM.SgApiUser,
-  sgEntityTypes=['ApiUser']
-)
-
-ShotgunORM.SgEntity.registerDefaultEntityClass(
-  sgEntityCls=ShotgunORM.SgHumanUser,
-  sgEntityTypes=['HumanUser']
-)
-
-ShotgunORM.SgEntity.registerDefaultEntityClass(
-  sgEntityCls=ShotgunORM.SgNote,
-  sgEntityTypes=['Note']
-)
-
-ShotgunORM.SgEntity.registerDefaultEntityClass(
-  sgEntityCls=ShotgunORM.SgPhase,
-  sgEntityTypes=['Phase']
-)
-
-ShotgunORM.SgEntity.registerDefaultEntityClass(
-  sgEntityCls=ShotgunORM.SgProject,
-  sgEntityTypes=['Project']
-)
-
-ShotgunORM.SgEntity.registerDefaultEntityClass(
-  sgEntityCls=ShotgunORM.SgTask,
-  sgEntityTypes=['Task']
-)
-
-ShotgunORM.SgEntity.registerDefaultEntityClass(
-  sgEntityCls=ShotgunORM.SgTicket,
-  sgEntityTypes=['Ticket']
-)
-
-ShotgunORM.SgEntity.registerDefaultEntityClass(
- sgEntityCls= ShotgunORM.SgVersion,
-  sgEntityTypes=['Version']
-)
-
 ################################################################################
 #
 # Config for the default fields to fill in for Entities.
@@ -528,6 +468,7 @@ ShotgunORM.SgSchema.registerDefaultQueryFields(
 #ShotgunORM.LoggerEntity.setLevel(logging.DEBUG)
 #ShotgunORM.LoggerField.setLevel(logging.DEBUG)
 #ShotgunORM.LoggerFactory.setLevel(logging.DEBUG)
+#ShotgunORM.LoggerORM.setLevel(logging.DEBUG)
 #ShotgunORM.LoggerQueryEngine.setLevel(logging.DEBUG)
 #ShotgunORM.LoggerSchema.setLevel(logging.DEBUG)
 #ShotgunORM.LoggerScriptEngine.setLevel(logging.DEBUG)

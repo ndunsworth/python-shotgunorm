@@ -28,25 +28,25 @@ __all__ = [
   'AFTER_ENTITY_COMMIT_CBS',
   'BEFORE_ENTITY_COMMIT_CBS',
   'ON_ENTITY_CREATE_CBS',
-  'ON_ENTITY_INFO_CREATE_CBS',
+  'ON_ENTITY_SCHEMA_INFO_CREATE_CBS',
   'ON_FIELD_CHANGED_CBS',
   'ON_SCHEMA_CHANGED_CBS',
   'addAfterEntityCommit',
   'addBeforeEntityCommit',
   'addOnEntityCreate',
-  'addOnEntityInfoCreate',
+  'addOnEntitySchemaInfoCreate',
   'addOnFieldChanged',
   'addOnSchemaChanged',
   'appendAfterEntityCommit',
   'appendBeforeEntityCommit',
   'appendOnEntityCreate',
-  'appendOnEntityInfoCreate',
+  'appendOnEntitySchemaInfoCreate',
   'appendOnFieldChanged',
   'appendOnSchemaChanged',
   'afterEntityCommit',
   'beforeEntityCommit',
   'onEntityCreate',
-  'onEntityInfoCreate',
+  'onEntitySchemaInfoCreate',
   'onFieldChanged',
   'onSchemaChanged'
 ]
@@ -66,6 +66,11 @@ def _defaultBeforeEntityCommit(sgEntity, sgBatchData, sgCommitData):
 
 def _defaultOnEntityCreate(sgEntity):
   ShotgunORM.LoggerCallback.debug('onEntityCreate: %s' % sgEntity)
+
+def _defaultOnEntitySchemaInfoCreate(sgEntitySchemaInfo):
+  colorField = sgEntitySchemaInfo.fieldInfo('color')
+
+  colorField._returnType = ShotgunORM.SgField.RETURN_TYPE_COLOR2
 
 def _defaultOnFieldChanged(sgField):
   ShotgunORM.LoggerCallback.debug('onFieldChanged: %s' % sgField)
@@ -129,8 +134,20 @@ ON_ENTITY_CREATE_CBS = {
   ]
 }
 
-ON_ENTITY_INFO_CREATE_CBS = {
-  '*': []
+ON_ENTITY_SCHEMA_INFO_CREATE_CBS = {
+  '*': [],
+  'Phase': [
+    {
+      'cb': _defaultOnEntitySchemaInfoCreate,
+      'description': 'changes color field return type to color2'
+    }
+  ],
+  'Task': [
+    {
+      'cb': _defaultOnEntitySchemaInfoCreate,
+      'description': 'changes color field return type to color2'
+    }
+  ]
 }
 
 ON_FIELD_CHANGED_CBS = {
@@ -314,7 +331,7 @@ def appendOnEntityCreate(cb, filterName='*', description=''):
   except:
     ON_ENTITY_CREATE_CBS[filterName] = [data]
 
-def addOnEntityInfoCreate(cb, filterName='*', description=''):
+def addOnEntitySchemaInfoCreate(cb, filterName='*', description=''):
   '''
   Adds the callback and places it at the front of the onEntityInfoCreate
   callback list.
@@ -338,11 +355,11 @@ def addOnEntityInfoCreate(cb, filterName='*', description=''):
   }
 
   try:
-    ON_ENTITY_INFO_CREATE_CBS[filterName].insert(0, data)
+    ON_ENTITY_SCHEMA_INFO_CREATE_CBS[filterName].insert(0, data)
   except:
-    ON_ENTITY_INFO_CREATE_CBS[filterName] = [data]
+    ON_ENTITY_SCHEMA_INFO_CREATE_CBS[filterName] = [data]
 
-def appendOnEntityInfoCreate(cb, filterName='*', description=''):
+def appendOnEntitySchemaInfoCreate(cb, filterName='*', description=''):
   '''
   Adds the callback and places it at the end of the onEntityInfoCreate
   callback list.
@@ -366,9 +383,9 @@ def appendOnEntityInfoCreate(cb, filterName='*', description=''):
   }
 
   try:
-    ON_ENTITY_INFO_CREATE_CBS[filterName].append(data)
+    ON_ENTITY_SCHEMA_INFO_CREATE_CBS[filterName].append(data)
   except:
-    ON_ENTITY_INFO_CREATE_CBS[filterName] = [data]
+    ON_ENTITY_SCHEMA_INFO_CREATE_CBS[filterName] = [data]
 
 def addOnFieldChanged(cb, filterName='*', description=''):
   '''
@@ -573,27 +590,27 @@ def onEntityCreate(sgEntity):
   for i in cbs:
     i['cb'](sgEntity)
 
-def onEntityInfoCreate(sgEntityInfo):
+def onEntitySchemaInfoCreate(sgEntityInfo):
   '''
   This function is called anytime an Entity info object is created.
   '''
 
   entityType = sgEntityInfo.name()
 
-  if ON_ENTITY_INFO_CREATE_CBS.has_key(entityType):
-    cbs = ON_ENTITY_INFO_CREATE_CBS[entityType]
+  if ON_ENTITY_SCHEMA_INFO_CREATE_CBS.has_key(entityType):
+    cbs = ON_ENTITY_SCHEMA_INFO_CREATE_CBS[entityType]
 
     for i in cbs:
       i['cb'](sgEntityInfo)
 
   if sgEntityInfo.isCustom():
-    if ON_ENTITY_INFO_CREATE_CBS.has_key(sgEntityInfo.label()):
-      cbs = ON_ENTITY_INFO_CREATE_CBS[sgEntityInfo.label()]
+    if ON_ENTITY_SCHEMA_INFO_CREATE_CBS.has_key(sgEntityInfo.label()):
+      cbs = ON_ENTITY_SCHEMA_INFO_CREATE_CBS[sgEntityInfo.label()]
 
       for i in cbs:
         i['cb'](sgEntityInfo)
 
-  cbs = ON_ENTITY_INFO_CREATE_CBS['*']
+  cbs = ON_ENTITY_SCHEMA_INFO_CREATE_CBS['*']
 
   for i in cbs:
     i['cb'](sgEntityInfo)

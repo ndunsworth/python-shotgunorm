@@ -408,8 +408,8 @@ def parseToLogicalOp(sgEntityInfo, sgSearchExp, sgArgs=[]):
   Parses a search expression and returns the Shotgun formated search filter.
 
   Args:
-    * (SgEntityInfo) sgEntityInfo:
-      SgEntityInfo that the search expression will reference.
+    * (SgEntitySchemaInfo) sgEntityInfo:
+      SgEntitySchemaInfo that the search expression will reference.
 
     * (str) sgSearchExp:
       Search expression string.

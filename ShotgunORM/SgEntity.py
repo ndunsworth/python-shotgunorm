@@ -26,7 +26,7 @@
 
 __all__ = [
   'SgEntity',
-  'SgEntityInfo'
+  'SgEntitySchemaInfo'
 ]
 
 # Python imports
@@ -41,37 +41,39 @@ from xml.etree import ElementTree as ET
 # This module imports
 import ShotgunORM
 
-class SgEntityInfo(object):
+class SgEntitySchemaInfo(object):
   '''
   Class for representing basic information about a Shotgun Entity.
   '''
 
   def __repr__(self):
     if self.isCustom():
-      return '<SgEntityInfo("%s"|"%s")>' % (self.name(), self.label())
+      return '<SgEntitySchemaInfo("%s"|"%s")>' % (self.name(), self.label())
     else:
-      return '<SgEntityInfo("%s")>' % self.name()
+      return '<SgEntitySchemaInfo("%s")>' % self.name()
 
-  def __init__(self, schema, name, label, fieldInfos):
+  def __init__(self, schema, name, label, fieldInfos, fieldInfosUnsupported):
     self._schema = schema
     self._name = str(name)
     self._label = str(label)
     self._fieldInfos = fieldInfos
+    self._fieldInfosUnsupported = fieldInfosUnsupported
     self._isCustom = name.startswith('CustomEntity') or name.startswith('CustomNonProjectEntity')
 
   @classmethod
   def fromSg(cls, sgSchema, sgEntityName, sgEntityLabel, sgFieldSchemas):
     '''
-    From the passed Shotgun schema info a new SgEntityInfo is returned.
+    From the passed Shotgun schema info a new SgEntitySchemaInfo is returned.
     '''
 
     fieldInfos = {}
+    fieldInfosUnsupported = {}
 
     for fieldName, schemaData in sgFieldSchemas.items():
       if fieldName.startswith('step_'):
         continue
 
-      fieldInfo = ShotgunORM.SgFieldInfo.fromSg(sgEntityName, sgEntityLabel, fieldName, schemaData)
+      fieldInfo = ShotgunORM.SgFieldSchemaInfo.fromSg(sgEntityName, sgEntityLabel, fieldName, schemaData)
 
       # Skip fields that have an unsupported return type!
       if fieldInfo.returnType() == ShotgunORM.SgField.RETURN_TYPE_UNSUPPORTED:
@@ -82,14 +84,14 @@ class SgEntityInfo(object):
           )
         )
 
-        continue
+        fieldInfosUnsupported[fieldName] = fieldInfo
+      else:
+        fieldInfos[fieldName] = fieldInfo
 
-      fieldInfos[fieldName] = fieldInfo
-
-    result = cls(sgSchema, sgEntityName, sgEntityLabel, fieldInfos)
+    result = cls(sgSchema, sgEntityName, sgEntityLabel, fieldInfos, fieldInfosUnsupported)
 
     try:
-      ShotgunORM.onEntityInfoCreate(result)
+      ShotgunORM.onEntitySchemaInfoCreate(result)
     except Exception, e:
       ShotgunORM.LoggerORM.warn(e)
     finally:
@@ -98,7 +100,7 @@ class SgEntityInfo(object):
   @classmethod
   def fromXML(cls, sgSchema, sgXmlElement):
     '''
-    From the passed XML data a new SgEntityInfo is returned.
+    From the passed XML data a new SgEntitySchemaInfo is returned.
     '''
 
     if sgXmlElement.tag != 'SgEntity':
@@ -116,7 +118,7 @@ class SgEntityInfo(object):
 
     for field in fields:
       # Skip fields that have an unsupported return type!
-      fieldInfo = ShotgunORM.SgFieldInfo.fromXML(entityName, entityLabel, field)
+      fieldInfo = ShotgunORM.SgFieldSchemaInfo.fromXML(entityName, entityLabel, field)
 
       if fieldInfo.returnType() == ShotgunORM.SgField.RETURN_TYPE_UNSUPPORTED:
         ShotgunORM.LoggerEntity.warning('field %s.%s ignored because of return type unsupported' % (fieldInfo.name(), entityName))
@@ -128,7 +130,7 @@ class SgEntityInfo(object):
     result = cls(sgSchema, entityName, entityLabel, entityFieldInfos)
 
     try:
-      ShotgunORM.onEntityInfoCreate(result)
+      ShotgunORM.onEntitySchemaInfoCreate(result)
     except Exception, e:
       ShotgunORM.LoggerORM.warn(e)
     finally:
@@ -136,14 +138,14 @@ class SgEntityInfo(object):
 
   def fieldInfo(self, sgField):
     '''
-    Returns the SgFieldInfo for the field.
+    Returns the SgFieldSchemaInfo for the field.
     '''
 
     return self._fieldInfos.get(sgField, None)
 
   def fieldInfos(self, sgReturnTypes=None):
     '''
-    Returns a list of ShotgunORM.SgFieldInfo objects used by the Entity.
+    Returns a dict of ShotgunORM.SgFieldSchemaInfo objects used by the Entity.
 
     Args:
       * (list) sgReturnTypes:
@@ -166,6 +168,13 @@ class SgEntityInfo(object):
       result[name] = info
 
     return result
+
+  def fieldInfosUnsupported(self):
+    '''
+    Returns a dict of all unsupported ShotgunORM.SgFieldSchemaInfo objects.
+    '''
+
+    return dict(self._fieldInfosUnsupported)
 
   def fieldNames(self, sgReturnTypes=None):
     '''
@@ -428,7 +437,7 @@ class SgEntity(object):
 
       del sgData['id']
 
-      self.field('type')._value = self.info().name()
+      self.field('type')._value = self.schemaInfo().name()
 
       if sgData.has_key('type'):
         sgData['type']
@@ -665,7 +674,7 @@ class SgEntity(object):
     '''
     Sub-class portion of SgEntity.buildFields().
 
-    Default function iterates over the incoming SgFieldInfos and creates the
+    Default function iterates over the incoming SgFieldSchemaInfos and creates the
     fields.
     '''
 
@@ -697,7 +706,7 @@ class SgEntity(object):
     self._fields['type'] = ShotgunORM.SgFieldType(self)
     self._fields['id'] = ShotgunORM.SgFieldID(self)
 
-    entityFieldInfos = self.info().fieldInfos()
+    entityFieldInfos = self.schemaInfo().fieldInfos()
 
     # Dont pass the "id" field as its manually built as a user field.  Same
     # for the type field.
@@ -1069,6 +1078,33 @@ class SgEntity(object):
 
     return result
 
+  def fieldsValid(self, sgFields=None, sgReturnTypes=None, includeWithSyncUpdate=True):
+    '''
+    Returns a list of field names that are valid.
+
+    Args:
+      * (list) sgFields:
+        List of specific fields to return.
+
+      * (list) sgReturnTypes:
+        List of specific field return types to filter by.
+
+      * (bool) includeWithSyncUpdate:
+        When True fields that are not yet valid but have a pending sync update
+        are considered valid.
+    '''
+
+    result = []
+
+    with self:
+      for name, field in self.fields(sgFields, sgReturnTypes).items():
+        if field.isValid() or (field.hasSyncUpdate() and includeWithSyncUpdate):
+          result.append(name)
+
+    result.sort()
+
+    return result
+
   def fieldValues(self, sgFields=None, sgReturnTypes=None):
     '''
     Returns a dict containing the value of all specified fields.
@@ -1157,13 +1193,6 @@ class SgEntity(object):
 
     return False
 
-  def info(self):
-    '''
-    Returns the SgEntityInfo object that defines this Entity.
-    '''
-
-    return self.__classinfo__
-
   def isBuildingFields(self):
     '''
     Returns True when the Entity is building its fields.
@@ -1183,7 +1212,7 @@ class SgEntity(object):
     Returns True if the Entity is a custom Shotgun entity, example CustomEntity01.
     '''
 
-    return self.info().isCustom()
+    return self.schemaInfo().isCustom()
 
   def isMarkedForDeletion(self):
     '''
@@ -1198,7 +1227,7 @@ class SgEntity(object):
     Returns the user visible Shotgun label of the Entity.
     '''
 
-    return self.info().label()
+    return self.schemaInfo().label()
 
   def lastEventLog(self, sgEventType=None):
     '''
@@ -1312,6 +1341,13 @@ class SgEntity(object):
         raise RuntimeError('entity does not exist, can not generate request data for type revive')
 
       self.connection().revive(self)
+
+  def schemaInfo(self):
+    '''
+    Returns the SgEntitySchemaInfo object that defines this Entity.
+    '''
+
+    return self.__classinfo__
 
   def sync(self, sgFields=None, ignoreValid=False, ignoreWithUpdate=True, backgroundPull=True):
     '''
@@ -1519,7 +1555,7 @@ class SgEntity(object):
 
     return result
 
-  def valuesSg(self, sgFields=None):
+  def valuesSg(self, sgFields=None, sgReturnTypes=None):
     '''
     Returns field values from Shotgun for the specified fields.
 
@@ -1530,6 +1566,9 @@ class SgEntity(object):
     Args:
       * (list) sgFields:
         List of fields to fetch from Shotgun.
+
+      * (list) sgReturnTypes:
+        List of specific field return types to filter by.
     '''
 
     ShotgunORM.LoggerEntity.debug('%(entity)s.valuesSg()', {'entity': self})
@@ -1545,11 +1584,14 @@ class SgEntity(object):
 
     pullFields = []
 
-    for fieldName, field in self.fields(sgFields).items():
+    for fieldName, field in self.fields(sgFields, sgReturnTypes).items():
       if not field.isQueryable():
         continue
 
       pullFields.append(field.name())
+
+    if len(pullFields) <= 0:
+      return {}
 
     result = self.connection()._sg_find_one(
       self.type,
