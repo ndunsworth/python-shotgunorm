@@ -34,7 +34,7 @@ import re
 # This module imports
 import ShotgunORM
 
-class SgVersion(SgEntity):
+class SgVersion(ShotgunORM.SgEntity):
   '''
   Class that represents a Version Entity.
   '''
