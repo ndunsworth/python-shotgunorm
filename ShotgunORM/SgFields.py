@@ -154,7 +154,12 @@ class SgFieldColor(ShotgunORM.SgField):
     if self._value == None:
       return None
 
-    return self._value.split(',')
+    result = []
+
+    for i in self._value.split(','):
+      result.append(int(i))
+
+    return result
 
 class SgFieldColor2(ShotgunORM.SgField):
   '''
@@ -242,19 +247,36 @@ class SgFieldColor2(ShotgunORM.SgField):
 
     return True
 
-  def _Value(self):
-    if self._value == None:
+  def value(self, linkEvaluate=True):
+    '''
+    Args:
+      * (bool) linkEvaluate:
+        When True and the color field is a link to another Entity's color field
+        the value of the linked color field will be returned.
+
+        If linkEvaluate is False a string may be returned instead of a list.
+    '''
+
+    result = super(SgFieldColor2, self).value()
+
+    if result == None:
       return None
+
+    if not linkEvaluate and result == self._linkString:
+      return result
 
     parent = self.parentEntity()
 
     if parent == None:
-      if self._value == self._linkString:
+      if result == self._linkString:
         return None
 
-      return self._value.split(',')
+      newResult = []
 
-    if self._value == self._linkString:
+      for i in result.split(','):
+        newResult.append(int(i))
+
+    if result == self._linkString:
       linkObj = self.parentEntity()[self._linkField]
 
       if linkObj == None:
@@ -262,7 +284,10 @@ class SgFieldColor2(ShotgunORM.SgField):
 
       return linkObj['color']
     else:
-      return self._value.split(',')
+      newResult = []
+
+      for i in result.split(','):
+        newResult.append(int(i))
 
 class SgFieldDate(ShotgunORM.SgField):
   '''
