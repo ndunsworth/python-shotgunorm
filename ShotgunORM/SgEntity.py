@@ -455,7 +455,7 @@ class SgEntity(object):
 
           fieldObj.fromFieldData(value)
 
-          #fieldObj.validate()
+          #fieldObj.validate(forReal=False)
       else:
         for field, value in sgData.items():
           fieldObj = self.field(field)
@@ -470,7 +470,7 @@ class SgEntity(object):
           fieldObj._updateValue = value
           fieldObj.setHasSyncUpdate(True)
 
-          #fieldObj.validate()
+          #fieldObj.validate(forReal=False)
 
   def _lock(self):
     '''
@@ -1414,11 +1414,11 @@ class SgEntity(object):
             fieldObj.setHasSyncUpdate(True)
 
             # Don't slow down the sync process by calling validate!
-            #fieldObj.validate()
+            #fieldObj.validate(forReal=False)
 
       if len(nonQueryableFields) >= 1:
         for field in nonQueryableFields:
-          field.validate()
+          field.validate(forReal=True)
 
       return result
 

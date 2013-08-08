@@ -613,7 +613,7 @@ class SgField(object):
         raise RuntimeError('%s is not editable!' % ShotgunORM.mkEntityFieldString(self))
 
       if not ShotgunORM.config.DISABLE_FIELD_VALIDATE_ON_SET_VALUE:
-        self.validate()
+        self.validate(forReal=True)
 
       result = self._fromFieldData(sgData)
 
@@ -999,7 +999,7 @@ class SgField(object):
         raise RuntimeError('%s is not editable!' % ShotgunORM.mkEntityFieldString(self))
 
       if not ShotgunORM.config.DISABLE_FIELD_VALIDATE_ON_SET_VALUE:
-        self.validate()
+        self.validate(forReal=True)
 
       if sgData == None:
         sgData = self.defaultValue()
@@ -1070,7 +1070,7 @@ class SgField(object):
     '''
 
     with self:
-      self.validate()
+      self.validate(forReal=True)
 
       return self._toFieldData()
 
@@ -1086,12 +1086,13 @@ class SgField(object):
 
     widget.update()
 
-  def _validate(self):
+  def _validate(self, forReal=False):
     '''
     Sub-class portion of SgField.validate().
 
-    SgField.changed() and SgField.setValid() are called by the main validate()
-    call so you do not need to set them in _validate().
+    The return value of _validate() is what isValid() will be set to.  Return
+    True if the field was properly validated and its value is True otherwise
+    return False.
 
     For sub-classes that do not plan on implementing the setting of the fields
     value, make sure to call the base classes _validate() function.
@@ -1101,7 +1102,11 @@ class SgField(object):
       'sgField': self
     })
 
-    if self.hasSyncUpdate():
+    result = False
+
+    if self.hasCommit():
+      result = True
+    elif self.hasSyncUpdate():
       validSyncUpdate = False
 
       ShotgunORM.LoggerField.debug('    * hasSyncUpdate()')
@@ -1125,24 +1130,37 @@ class SgField(object):
 
         self.setHasSyncUpdate(False)
 
-      if not validSyncUpdate:
+      if validSyncUpdate:
+        result = True
+      elif forReal:
         self.setValueFromShotgun()
-    elif self.hasCommit():
-      pass
-    else:
+
+        result = True
+    elif forReal:
       self.setValueFromShotgun()
 
-  def validate(self, force=False):
+      result = True
+
+    return result
+
+  def validate(self, forReal=False, force=False):
     '''
     Validates the field so that isValid() returns True.
 
     If the field has not yet pulled its value from Shotgun validate() will do
-    the pull.
+    the pull when the arg "forReal" is True.
 
     Note:
       When isValid() is already True then this function returns immediately.
 
     Args:
+      * (bool) forReal:
+        When False classes should not do anything expensive such as hitting
+        Shotgun.  If forReal is True then Shotgun can/should be queried.
+
+        forReal False allows fields that have a pending update from sync to
+        mark themselves as being valid.
+
       * (bool) force:
         Forces validate to execute even if isValid() is True.
     '''
@@ -1163,15 +1181,16 @@ class SgField(object):
 
       # Don't allow __isValidating to remain True!
       try:
-        self._validate()
+        valid = self._validate(forReal=forReal)
       finally:
         self.__isValidating = False
 
-      self.setValid(True)
+      if valid:
+        self.setValid(True)
 
-      self.changed()
+        self.changed()
 
-      return True
+      return valid
 
   def _Value(self):
     '''
@@ -1199,7 +1218,7 @@ class SgField(object):
       if self.isValid():
         return self._Value()
 
-      self.validate()
+      self.validate(forReal=True)
 
       return self._Value()
 
