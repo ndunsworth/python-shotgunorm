@@ -44,6 +44,9 @@ import ShotgunORM
 # Set later in this file.
 FIELD_RETURN_TYPES = {}
 
+# Set later in this file.
+FIELD_RETURN_TYPE_NAMES = {}
+
 class SgFieldQueryProfiler(object):
   '''
   Field profiler.
@@ -117,7 +120,65 @@ class SgFieldSchemaInfo(object):
     self._validValues = sgFieldAttribs['valid_values']
 
   @classmethod
-  def fromSg(self, sgEntityName, sgEntityLabel, sgFieldName, sgSchema):
+  def createSchemaData(
+    cls,
+    parent,
+    name,
+    returnType,
+    defaultValue=None,
+    doc=None,
+    editable=False,
+    label=None,
+    required=False,
+    returnTypeName=None,
+    summaryInfo=None,
+    validTypes=None,
+    validValues=None
+  ):
+    '''
+    Returns a dict that is formatted correctly and can be used to create a new
+    SgFieldSchemaInfo object.
+
+    SgField subclasses can use this to build the info data for the field instead
+    of having to create the dict struct by hand.
+    '''
+
+    if isinstance(parent, ShotgunORM.SgEntity):
+      parent = parent.schemaInfo().name()
+
+    if label == None:
+      label = name
+
+    returnType = int(returnType)
+
+    if returnTypeName == None:
+      typeName = FIELD_RETURN_TYPE_NAMES.get(returnType)
+
+      if typeName == None:
+        raise RuntimeError('could not determine return type name, please specify it')
+
+      returnTypeName = typeName
+
+    if doc == None:
+      doc = ''
+
+    return {
+      'default_value': defaultValue,
+      'doc': doc,
+      'editable': bool(editable),
+      'label': label,
+      'name': name,
+      'parent': parent,
+      'required': bool(required),
+      'return_type': returnType,
+      'return_type_name': returnTypeName,
+      'summary_info': summaryInfo,
+      'value_types': None,
+      'valid_values': None
+    }
+
+  @classmethod
+  def fromSg(cls, sgEntityName, sgEntityLabel, sgFieldName, sgSchema):
     '''
     Returns a new SgFieldSchemaInfo that is constructed from the arg "sgSchema".
     '''
@@ -167,10 +228,10 @@ class SgFieldSchemaInfo(object):
 
       data['summary_info'] = copy.deepcopy(expData)
 
-    return self(data)
+    return cls(data)
 
   @classmethod
-  def fromXML(self, sgEntityName, sgEntityLabel, sgXmlElement):
+  def fromXML(cls, sgEntityName, sgEntityLabel, sgXmlElement):
     '''
     Returns a new SgFieldSchemaInfo that is constructed from the arg "sgXmlElement".
     '''
@@ -203,7 +264,7 @@ class SgFieldSchemaInfo(object):
     else:
       data['valid_values'] = data['valid_values'].split(',')
 
-    return self(data)
+    return cls(data)
 
   def defaultValue(self):
     '''
@@ -1427,4 +1488,25 @@ FIELD_RETURN_TYPES = {
   'url': SgField.RETURN_TYPE_URL,
   'url_template': SgField.RETURN_TYPE_TEXT,
   'uuid': SgField.RETURN_TYPE_TEXT
+}
+
+FIELD_RETURN_TYPE_NAMES = {
+  SgField.RETURN_TYPE_UNSUPPORTED: 'unsupported',
+  SgField.RETURN_TYPE_CHECKBOX: 'checkbox',
+  SgField.RETURN_TYPE_COLOR: 'color',
+  SgField.RETURN_TYPE_COLOR2: 'color2',
+  SgField.RETURN_TYPE_DATE: 'date',
+  SgField.RETURN_TYPE_DATE_TIME: 'date_time',
+  SgField.RETURN_TYPE_ENTITY: 'entity',
+  SgField.RETURN_TYPE_FLOAT: 'float',
+  SgField.RETURN_TYPE_IMAGE: 'image',
+  SgField.RETURN_TYPE_INT: 'number',
+  SgField.RETURN_TYPE_LIST: 'list',
+  SgField.RETURN_TYPE_MULTI_ENTITY: 'multi_entity',
+  SgField.RETURN_TYPE_SERIALIZABLE: 'serializable',
+  SgField.RETURN_TYPE_STATUS_LIST: 'status_list',
+  SgField.RETURN_TYPE_SUMMARY: 'summary',
+  SgField.RETURN_TYPE_TAG_LIST: 'tag_list',
+  SgField.RETURN_TYPE_TEXT: 'text',
+  SgField.RETURN_TYPE_URL: 'url'
 }

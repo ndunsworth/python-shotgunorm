@@ -399,6 +399,9 @@ class SgFieldEntity(ShotgunORM.SgField):
         'type': sgData['type'],
         'id': sgData['id']
       }
+
+      if sgData.has_key('name'):
+        newValue['name'] = sgData['name']
     except Exception, e:
       ShotgunORM.LoggerField.error('%(field)s: %(error)s', {
         'field': self,
@@ -543,6 +546,9 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
 
         if e in newValue:
           continue
+
+        if i.has_key('name'):
+          e['name'] = i['name']
 
         newValue.append(e)
     except Exception, e:
@@ -1708,22 +1714,15 @@ class SgFieldID(ShotgunORM.SgUserField):
     return False
 
   def __init__(self, parentEntity):
-    info = ShotgunORM.SgFieldSchemaInfo(
-      {
-        'default_value': None,
-        'doc': '',
-        'editable': False,
-        'label': 'Id',
-        'name': 'id',
-        'parent': parentEntity.schemaInfo().name(),
-        'required': False,
-        'return_type': ShotgunORM.SgField.RETURN_TYPE_INT,
-        'return_type_name': 'number',
-        'summary_info': None,
-        'value_types': None,
-        'valid_values': None
-      }
+    infoData = ShotgunORM.SgFieldSchemaInfo.createSchemaData(
+      parentEntity,
+      'id',
+      ShotgunORM.SgField.RETURN_TYPE_INT,
+      doc='Entity ID',
+      label='Id'
     )
+
+    info = ShotgunORM.SgFieldSchemaInfo(infoData)
 
     super(SgFieldID, self).__init__(parentEntity, info)
 
@@ -1807,22 +1806,15 @@ class SgFieldType(ShotgunORM.SgUserField):
     return False
 
   def __init__(self, parentEntity):
-    info = ShotgunORM.SgFieldSchemaInfo(
-      {
-        'default_value': None,
-        'doc': '',
-        'editable': False,
-        'label': 'Type',
-        'name': 'type',
-        'parent': parentEntity.schemaInfo().name(),
-        'required': False,
-        'return_type': ShotgunORM.SgField.RETURN_TYPE_TEXT,
-        'return_type_name': 'text',
-        'summary_info': None,
-        'value_types': None,
-        'valid_values': None
-      }
+    infoData = ShotgunORM.SgFieldSchemaInfo.createSchemaData(
+      parentEntity,
+      'type',
+      ShotgunORM.SgField.RETURN_TYPE_TEXT,
+      doc='Type of Entity',
+      label='Type'
     )
+
+    info = ShotgunORM.SgFieldSchemaInfo(infoData)
 
     super(SgFieldType, self).__init__(parentEntity, info)
 
