@@ -247,6 +247,13 @@ class SgFieldColor2(ShotgunORM.SgField):
 
     return True
 
+  def linkField(self):
+    '''
+    Returns the link field this color field can possibly link to.
+    '''
+
+    return self._linkField
+
   def value(self, linkEvaluate=True):
     '''
     Args:
@@ -1768,7 +1775,7 @@ class SgFieldID(ShotgunORM.SgUserField):
 
     return False
 
-  def validate(self, force=False):
+  def validate(self, forReal=False, force=False):
     '''
     Always returns False for ID fields.
     '''
@@ -1869,7 +1876,7 @@ class SgFieldType(ShotgunORM.SgUserField):
 
     return False
 
-  def validate(self, force=False):
+  def validate(self, forReal=False, force=False):
     '''
     Always returns False for Type fields.
     '''
