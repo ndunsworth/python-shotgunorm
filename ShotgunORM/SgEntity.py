@@ -858,13 +858,16 @@ class SgEntity(object):
       else:
         self._markedForDeletion = True
 
-  def eventLogs(self, sgEventType=None, sgRecordLimit=0):
+  def eventLogs(self, sgEventType=None, sgFields=None, sgRecordLimit=0):
     '''
     Returns the event log Entities for this Entity
 
     Args:
       * (str) sgEventType:
         Event type filter such as "Shotgun_Asset_Change".
+
+      * (list) sgFields:
+        List of fields to populate the results with.
 
       * (int) sgRecordLimit:
         Limits the amount of returned events.
@@ -892,7 +895,8 @@ class SgEntity(object):
 
     result = connection.find(
       'EventLogEntry',
-      filters=filters,
+      filters,
+      sgFields,
       order=order,
       limit=sgRecordLimit
     )
@@ -1229,51 +1233,24 @@ class SgEntity(object):
 
     return self.schemaInfo().label()
 
-  def lastEventLog(self, sgEventType=None):
+  def lastEventLog(self, sgEventType=None, sgFields=None):
     '''
     Returns the last event log Entity for this field.
 
     Args:
       * (str) sgEventType:
         Event type filter such as "Shotgun_Asset_Change".
+
+      * (list) sgFields:
+        List of fields to populate the result with.
     '''
 
-    if not self.exists():
+    events = self.eventLogs(sgEventType, sgFields, sgRecordLimit=1)
+
+    if len(events) <= 0:
       return None
 
-    connection = self.connection()
-
-    filters = [
-      [
-        'entity',
-        'is',
-        self.toEntityFieldData()
-      ]
-    ]
-
-    order = [
-      {
-        'field_name': 'created_at',
-        'direction':'desc'
-      }
-    ]
-
-    if sgEventType != None:
-      filters.append(
-        [
-          'event_type',
-          'is',
-          sgEventType
-        ]
-      )
-
-    result = connection.findOne(
-      'EventLogEntry',
-      filters=filters,
-      order=order
-    )
-
-    return result
+    return events[0]
 
   def _makeWidget(self):
     '''
@@ -1402,7 +1379,7 @@ class SgEntity(object):
 
       if len(pullFields) >= 1:
         # Only pull if the Entity exists in Shotgun!
-        if backgroundPull and self.exists():
+        if backgroundPull:
           self.connection().queryEngine().addQueue(self, pullFields)
         else:
           values = self.valuesSg(pullFields)

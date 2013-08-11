@@ -510,7 +510,7 @@ class SgField(object):
 
     return self.schemaInfo().doc()
 
-  def eventLogs(self, sgEventType=None, sgRecordLimit=0):
+  def eventLogs(self, sgEventType=None, sgFields=None, sgRecordLimit=0):
     '''
     Returns the event log Entities for the field.
 
@@ -519,7 +519,10 @@ class SgField(object):
 
     Args:
       * (str) sgEventType:
-        Event type filter such as "Shotgun_Asset_Change".
+        Event type filter such as "Shotgun_Asset_Change
+
+      * (list) sgFields:
+        List of fields to populate the results with.
 
       * (int) sgRecordLimit:
         Limits the amount of returned events.
@@ -566,6 +569,7 @@ class SgField(object):
     result = connection.find(
       'EventLogEntry',
       filters,
+      sgFields,
       order=order,
       limit=sgRecordLimit
     )
@@ -783,7 +787,7 @@ class SgField(object):
 
     return self.schemaInfo().label()
 
-  def lastEventLog(self, sgEventType=None):
+  def lastEventLog(self, sgEventType=None, sgFields=None):
     '''
     Returns the last event log Entity for this field.
 
@@ -793,51 +797,76 @@ class SgField(object):
     Args:
       * (str) sgEventType:
         Event type filter such as "Shotgun_Asset_Change".
+
+      * (list) sgFields:
+        List of fields to populate the result with.
+    '''
+
+    events = self.eventLogs(sgEventType, sgFields, sgRecordLimit=1)
+
+    if len(events) <= 0:
+      return None
+
+    return events[0]
+
+  def lastModifiedAt(self):
+    '''
+    Returns the User Entity that last modified the fields value, None if the
+    field has never been modified.
+    '''
+
+    info = self.lastModifiedInfo()
+
+    if info == None:
+      return None
+
+    return info['modified_at']
+
+  def lastModifiedBy(self):
+    '''
+    Returns a datetime object of the fields last modification date, None if the
+    field has never been modified.
+    '''
+
+    info = self.lastModifiedInfo()
+
+    if info == None:
+      return None
+
+    return info['modified_by']
+
+  def lastModifiedInfo(self):
+    '''
+    Returns information about the last time the fields value was modified.  If
+    the field has no modifications None is returned.
+
+    Result: {
+      'modified_at': Datetime_Object
+      'modified_by': User_Entity
+    }
     '''
 
     parent = self.parentEntity()
 
-    if parent == None or not parent.exists():
+    if not parent.exists():
       return None
 
-    connection = parent.connection()
+    eventType = 'Shotgun_%(type)s_Change' % parent
 
-    filters = [
-      [
-        'entity',
-        'is',
-        parent
-      ],
-      [
-        'attribute_name',
-        'is',
-        self.name()
-      ]
-    ]
-
-    order = [
-      {
-        'field_name': 'created_at',
-        'direction': 'desc'
-      }
-    ]
-
-    if sgEventType != None:
-      filters.append(
-        [
-          'event_type',
-          'is',
-          sgEventType
-        ]
-      )
-
-    result = connection.findOne(
-      'EventLogEntry',
-      filters,
-      order=order
+    event = self.lastEventLog(
+      sgEventType=eventType,
+      sgFields=['created_at', 'user']
     )
 
-    return result
+    print event.fieldValues()
+
+    if event == None:
+      return None
+    else:
+      return {
+        'modified_at': event['created_at'],
+        'modified_by': event['user']
+      }
 
   def _makeWidget(self):
     '''
