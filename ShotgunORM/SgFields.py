@@ -382,11 +382,16 @@ class SgFieldEntity(ShotgunORM.SgField):
   Entity field that stores a link to another Entity.
   '''
 
-  def _fromFieldData(self, sgData):
-    # Dont check for valid value types since this function is only given data
-    # straight from the Shotgun db.  Fail on Shotguns part if they should ever
-    # pass you something that is not a valid value type.
+  ##############################################################################
+  #
+  # IMPORTANT!!!!
+  #
+  # Any changes to _fromFieldData, _setValue, _toFieldData, value functions
+  # should also be applied to the SgUserFieldAbstractEntity class.
+  #
+  ##############################################################################
 
+  def _fromFieldData(self, sgData):
     if sgData == None:
       result = self._value != None
 
@@ -465,6 +470,14 @@ class SgFieldEntity(ShotgunORM.SgField):
     return dict(self._value)
 
   def value(self, sgSyncFields=None):
+    '''
+    Returns the fields value as a Entity object.
+
+    Args:
+      * (list) sgSyncFields:
+        List of field names to populate the returned Entity with.
+    '''
+
     v = super(SgFieldEntity, self).value()
 
     parent = self.parentEntity()
@@ -522,6 +535,15 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
 
   Example: [Entity01, Entity02, ...]
   '''
+
+  ##############################################################################
+  #
+  # IMPORTANT!!!!
+  #
+  # Any changes to _fromFieldData, _setValue, _toFieldData, value functions
+  # should also be applied to the SgUserFieldAbstractMultiEntity class.
+  #
+  ##############################################################################
 
   def _fromFieldData(self, sgData):
     if isinstance(sgData, (tuple, set)):
@@ -648,6 +670,14 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
     return result
 
   def value(self, sgSyncFields=None):
+    '''
+    Returns the fields value as a list of Entity objects.
+
+    Args:
+      * (list) sgSyncFields:
+        List of field names to populate the returned Entities with.
+    '''
+
     result = super(SgFieldEntityMulti, self).value()
 
     if result in [None, []]:

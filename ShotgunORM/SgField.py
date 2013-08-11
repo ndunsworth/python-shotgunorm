@@ -831,6 +831,15 @@ class SgField(object):
 
     return not self.__isUpdatingEvent.isSet()
 
+  def isUserField(self):
+    '''
+    Returns True if the field is a SgUserField.
+
+    Default returns False.
+    '''
+
+    return False
+
   def isValid(self):
     '''
     Returns True if the field is valid.
@@ -1422,6 +1431,13 @@ class SgUserField(SgField):
     '''
 
     return False
+
+  def isUserField(self):
+    '''
+    Returns True
+    '''
+
+    return True
 
   def lastEventLog(self, sgEventType=None):
     '''

@@ -121,6 +121,15 @@ del SgFields
 
 from SgFields import *
 
+# User fields
+import SgUserFields
+
+__all__.extend(SgUserFields.__all__)
+
+del SgUserFields
+
+from SgUserFields import *
+
 ################################################################################
 #
 # Import scripting engine and script fields
