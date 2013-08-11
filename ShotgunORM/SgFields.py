@@ -405,8 +405,11 @@ class SgFieldEntity(ShotgunORM.SgField):
         'id': sgData['id']
       }
 
-      if sgData.has_key('name'):
-        newValue['name'] = sgData['name']
+      # This fixes the two Entities as their name field is only available when
+      # returned as another Entities field value.
+      if newValue['type'] in ['AppWelcome', 'Banner'] and sgData.has_key('name'):
+          newValue['name'] = sgData['name']
+
     except Exception, e:
       ShotgunORM.LoggerField.error('%(field)s: %(error)s', {
         'field': self,
@@ -569,8 +572,10 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
         if e in newValue:
           continue
 
-        if i.has_key('name'):
-          e['name'] = i['name']
+        # This fixes the two Entities as their name field is only available when
+        # returned as another Entities field value.
+        if e['type'] in ['AppWelcome', 'Banner'] and i.has_key('name'):
+            e['name'] = i['name']
 
         newValue.append(e)
     except Exception, e:
