@@ -521,10 +521,6 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
   '''
 
   def _fromFieldData(self, sgData):
-    # Dont check for valid value types since this function is only given data
-    # straight from the Shotgun db.  Fail on Shotguns part if they should ever
-    # pass you something that is not a valid value type.
-
     if isinstance(sgData, (tuple, set)):
       sgData = list(sgData)
 

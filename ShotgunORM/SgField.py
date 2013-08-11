@@ -1263,6 +1263,11 @@ class SgField(object):
     For an example of a custom valueSg see the SgFieldSummary class.
     '''
 
+    parent = self.parentEntity()
+
+    if parent == None or not parent.exists():
+      return None
+
     result = self.parentEntity().valuesSg([self.name()])
 
     if not result.has_key(self.name()):
@@ -1276,11 +1281,6 @@ class SgField(object):
     '''
 
     ShotgunORM.LoggerField.debug('%(field)s.valueSg()', {'field': self})
-
-    parent = self.parentEntity()
-
-    if parent == None or not parent.exists():
-      return None
 
     return self._valueSg()
 
@@ -1382,15 +1382,15 @@ class SgUserField(SgField):
 
     pass
 
-  def setValueFromShotgun(self):
-    '''
-    Sub-classes can implement this to mimic setting the fields value from
-    Shotgun.
-
-    Default does nothing and returns False.
-    '''
-
-    return False
+  #def setValueFromShotgun(self):
+  #  '''
+  #  Sub-classes can implement this to mimic setting the fields value from
+  #  Shotgun.
+  #
+  #  Default does nothing and returns False.
+  #  '''
+  #
+  #  return False
 
   def _valueSg(self):
     '''
