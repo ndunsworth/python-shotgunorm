@@ -1567,6 +1567,8 @@ class SgEntity(object):
 
       pullFields.append(field.name())
 
+    ShotgunORM.LoggerEntity.debug('    * pulling: %(sgFields)s', {'sgFields': pullFields})
+
     if len(pullFields) <= 0:
       return {}
 
