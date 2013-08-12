@@ -485,7 +485,7 @@ class SgFieldEntity(ShotgunORM.SgField):
 
     parent = self.parentEntity()
 
-    if v == None or parent == None:
+    if value == None or parent == None:
       return None
 
     connection = parent.connection()
