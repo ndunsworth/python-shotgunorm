@@ -50,20 +50,21 @@ def _entityFix(schema, schemaData):
     2: AppWelcome Entity
   '''
 
-  nameInfoData = ShotgunORM.SgFieldSchemaInfo.createSchemaData(
-    'Banner',
-    'name',
-    ShotgunORM.SgField.RETURN_TYPE_TEXT,
-    label='Name'
-  )
-
-
   idInfoData = ShotgunORM.SgFieldSchemaInfo.createSchemaData(
     'Banner',
     'id',
     ShotgunORM.SgField.RETURN_TYPE_INT,
+    editable=False,
     doc='Entity ID',
     label='Id'
+  )
+
+  nameInfoData = ShotgunORM.SgFieldSchemaInfo.createSchemaData(
+    'Banner',
+    'name',
+    ShotgunORM.SgField.RETURN_TYPE_TEXT,
+    editable=False,
+    label='Name'
   )
 
   bannerFieldInfos = {
@@ -79,19 +80,23 @@ def _entityFix(schema, schemaData):
     {}
   )
 
-  nameInfoData = ShotgunORM.SgFieldSchemaInfo.createSchemaData(
-    'AppWelcome',
-    'name',
-    ShotgunORM.SgField.RETURN_TYPE_TEXT,
-    label='Name'
-  )
+  ShotgunORM.onEntitySchemaInfoCreate(BannerEntity)
 
   idInfoData = ShotgunORM.SgFieldSchemaInfo.createSchemaData(
     'AppWelcome',
     'id',
     ShotgunORM.SgField.RETURN_TYPE_INT,
     doc='Entity ID',
+    editable=False,
     label='Id'
+  )
+
+  nameInfoData = ShotgunORM.SgFieldSchemaInfo.createSchemaData(
+    'AppWelcome',
+    'name',
+    ShotgunORM.SgField.RETURN_TYPE_TEXT,
+    editable=False,
+    label='Name'
   )
 
   appwelcomeFieldInfos = {
@@ -106,6 +111,8 @@ def _entityFix(schema, schemaData):
     appwelcomeFieldInfos,
     {}
   )
+
+  ShotgunORM.onEntitySchemaInfoCreate(AppWelcomeEntity)
 
   schemaData['AppWelcome'] = AppWelcomeEntity
   schemaData['Banner'] = BannerEntity

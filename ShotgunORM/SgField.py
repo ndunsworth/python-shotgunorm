@@ -27,7 +27,7 @@
 __all__ = [
   'SgField',
   'SgFieldSchemaInfo',
-  'SgUserField'
+  'SgFieldSchemaInfo2'
 ]
 
 # Python imports
@@ -106,12 +106,14 @@ class SgFieldSchemaInfo(object):
   def __init__(self, sgFieldAttribs):
     self._initialized = False
 
+    self._commitable = sgFieldAttribs['commitable']
     self._defaultValue = sgFieldAttribs['default_value']
     self._doc = sgFieldAttribs['doc']
     self._editable = sgFieldAttribs['editable']
     self._label = sgFieldAttribs['label']
     self._name = sgFieldAttribs['name']
     self._parent = sgFieldAttribs['parent']
+    self._queryable = sgFieldAttribs['queryable']
     self._required = sgFieldAttribs['required']
     self._returnType = sgFieldAttribs['return_type']
     self._returnTypeName = sgFieldAttribs['return_type_name']
@@ -147,7 +149,7 @@ class SgFieldSchemaInfo(object):
       parent = parent.schemaInfo().name()
 
     if label == None:
-      label = name
+      label = string.capitalize(name)
 
     returnType = int(returnType)
 
@@ -163,12 +165,14 @@ class SgFieldSchemaInfo(object):
       doc = ''
 
     return {
+      'commitable': True,
       'default_value': defaultValue,
       'doc': doc,
       'editable': bool(editable),
       'label': label,
       'name': name,
       'parent': parent,
+      'queryable': True,
       'required': bool(required),
       'return_type': returnType,
       'return_type_name': returnTypeName,
@@ -184,12 +188,14 @@ class SgFieldSchemaInfo(object):
     '''
 
     data = {
+      'commitable': True,
       'default_value': sgSchema['properties']['default_value']['value'],
       'doc': '',
       'editable': sgSchema['editable']['value'],
       'label': sgSchema['name']['value'],
       'name': sgFieldName,
       'parent': sgSchema['entity_type']['value'],
+      'queryable': True,
       'required': sgSchema['mandatory']['value'],
       'return_type': FIELD_RETURN_TYPES.get(
         sgSchema['data_type']['value'],
@@ -240,12 +246,14 @@ class SgFieldSchemaInfo(object):
       raise RuntimeError('invalid tag "%s"' % sgXmlElement.tag)
 
     data = {
+      'commitable': True,
       'default_value': sgXmlElement.attrib.get('default_value'),
       'doc': sgXmlElement.attrib.get('doc'),
       'editable': sgXmlElement.attrib.get('editable') == 'True',
       'label': sgXmlElement.attrib.get('label'),
       'name': sgXmlElement.attrib.get('name'),
       'parent': sgXmlElement.attrib.get('parent'),
+      'queryable': True,
       'required': bool(sgXmlElement.attrib.get('required')),
       'return_type': int(sgXmlElement.attrib.get('return_type')),
       'return_type_name': sgXmlElement.attrib.get('return_type_name'),
@@ -279,6 +287,26 @@ class SgFieldSchemaInfo(object):
     '''
 
     return self._doc
+
+  def isCommitable(self):
+    '''
+    Returns True if the field is commitable to Shotgun.
+
+    This is used by fields to determine if they are a user field or a field that
+    is part of an Entity schema.
+    '''
+
+    return self._commitable
+
+  def isQueryable(self):
+    '''
+    Returns True if the field is queryable from Shotgun.
+
+    This is used by fields to determine if they are a user field or a field that
+    is part of an Entity schema.
+    '''
+
+    return self._queryable
 
   def isEditable(self):
     '''
@@ -360,12 +388,12 @@ class SgFieldSchemaInfo(object):
     if value_types == None:
       value_types = ''
     else:
-      value_types = string.join(value_types, ',')
+      value_types = ','.join(value_types)
 
     if valid_values == None:
       valid_values = ''
     else:
-      valid_values = string.join(valid_values, ',')
+      valid_values = ','.join(valid_values)
 
     result = ET.Element(
       'SgField',
@@ -407,6 +435,96 @@ class SgFieldSchemaInfo(object):
     '''
 
     return self._valueTypes
+
+class SgFieldSchemaInfo2(SgFieldSchemaInfo):
+  '''
+
+  '''
+
+  @classmethod
+  def createSchemaData(
+    cls,
+    parent,
+    name,
+    returnType,
+    defaultValue=None,
+    doc=None,
+    editable=True,
+    label=None,
+    required=False,
+    returnTypeName=None,
+    summaryInfo=None,
+    validTypes=None,
+    validValues=None
+  ):
+    result = SgFieldSchemaInfo.createSchemaData(
+      parent,
+      name,
+      returnType,
+      defaultValue,
+      doc,
+      editable,
+      label,
+      required,
+      returnTypeName,
+      summaryInfo,
+      validTypes,
+      validValues
+    )
+
+    result['commitable'] = False
+    result['queryable'] = False
+
+    return result
+
+  def setDoc(self, doc):
+    '''
+    Set the documentation string for the field.
+    '''
+
+    self._doc = str(doc)
+
+  def setEditable(self, value):
+    '''
+    Set the fields editable state.
+    '''
+
+    self._editable = bool(value)
+
+  def setLabel(self, label):
+    '''
+    Sets the fields label.
+    '''
+
+    self._label = str(label)
+
+  def setName(self, name):
+    '''
+    Sets the fields name.
+    '''
+
+    self._name = str(name)
+
+  def setParentEntity(self, sgEntityType):
+    '''
+    Sets the parent Entity type of the field.
+    '''
+
+    self._parent = sgEntityType
+
+  def setValidValues(self, values):
+    '''
+    Sets the valid values the field excepts.
+    '''
+
+    self._validValues = list(values)
+
+  def setValueTypes(self, valueTypes):
+    '''
+    Sets the valid value types the field excepts.
+    '''
+
+    self._valueTypes = list(values)
 
 class SgField(object):
   '''
@@ -462,13 +580,9 @@ class SgField(object):
 
     return False
 
-  def __init__(self, parentEntity, fieldInfo):
-    self._parent = weakref.ref(parentEntity)
-    self._info = fieldInfo
-    self._widget = None
-
-    self._value = fieldInfo.defaultValue()
-    self._updateValue = None
+  def __init__(self, name, label=None, sgFieldSchemaInfo=None):
+    self.__parent = None
+    self.__info = None
 
     self.__hasCommit = False
     self.__hasSyncUpdate = False
@@ -479,6 +593,24 @@ class SgField(object):
     self.__isUpdatingEvent = threading.Event(verbose=True)
 
     self.__isUpdatingEvent.set()
+
+    self._value = None
+    self._updateValue = None
+    self._widget = None
+
+    if sgFieldSchemaInfo == None:
+      infoData = SgFieldSchemaInfo2.createSchemaData(
+        None,
+        name,
+        self.returnType(),
+        label=label
+      )
+
+      self.__setFieldSchemaInfo(
+        SgFieldSchemaInfo2(infoData)
+      )
+    else:
+      self.__setFieldSchemaInfo(sgFieldSchemaInfo)
 
   @classmethod
   def registerFieldClass(cls, sgFieldReturnType, sgFieldClass):
@@ -494,6 +626,28 @@ class SgField(object):
     '''
 
     cls.__fieldclasses__[sgFieldReturnType] = sgFieldClass
+
+  def __setParentEntity(self, parent):
+    '''
+    Internal function that sets the Entity the field belongs to
+    '''
+
+    if parent == None:
+      self.__parent = None
+    else:
+      self.__parent = weakref.ref(parent)
+
+      if self.isUserField():
+        self.__info.setParentEntity(parent.schemaInfo().name())
+
+    self.parentChanged()
+
+  def __setFieldSchemaInfo(self, fieldInfo):
+    '''
+
+    '''
+
+    self.__info = fieldInfo
 
   def canSync(self):
     '''
@@ -785,11 +939,9 @@ class SgField(object):
   def isCommittable(self):
     '''
     Returns True if the field is allowed to make commits to Shotgun.
-
-    Default returns self.isQueryable()
     '''
 
-    return self.isQueryable()
+    return self.schemaInfo().isQueryable()
 
   def isCustom(self):
     '''
@@ -816,11 +968,9 @@ class SgField(object):
   def isQueryable(self):
     '''
     Returns True if the field is queryable in Shotgun.
-
-    Default returns True.
     '''
 
-    return True
+    return self.schemaInfo().isQueryable()
 
   def isSyncUpdating(self):
     '''
@@ -834,11 +984,9 @@ class SgField(object):
   def isUserField(self):
     '''
     Returns True if the field is a SgUserField.
-
-    Default returns False.
     '''
 
-    return False
+    return isinstance(self.__info, SgFieldSchemaInfo2)
 
   def isValid(self):
     '''
@@ -963,6 +1111,13 @@ class SgField(object):
 
     return self.schemaInfo().name()
 
+  def parentChanged(self):
+    '''
+
+    '''
+
+    pass
+
   def parentEntity(self):
     '''
     Returns the parent SgEntity that the field is attached to.
@@ -975,24 +1130,24 @@ class SgField(object):
     may possibly return None.
     '''
 
-    if self._parent == None:
+    if self.__parent == None:
       return None
 
-    return self._parent()
+    return self.__parent()
 
   def returnType(self):
     '''
     Returns the SgEntity.RETURN_TYPE.
     '''
 
-    return self.schemaInfo().returnType()
+    return SgField.RETURN_TYPE_UNSUPPORTED
 
   def schemaInfo(self):
     '''
     Returns the SgFieldSchemaInfo object that describes the field.
     '''
 
-    return self._info
+    return self.__info
 
   def setHasCommit(self, valid):
     '''
@@ -1005,6 +1160,9 @@ class SgField(object):
       * (bool) valid:
         Value of state.
     '''
+
+    if not self.isCommittable():
+      return
 
     self.__hasCommit = bool(valid)
 
@@ -1372,95 +1530,6 @@ class SgField(object):
 
     with self:
       return self._widget
-
-class SgUserField(SgField):
-  '''
-  A Class that represents a Shotgun Entity field.
-
-  This field differs from SgField in that it does not represent a field which
-  exists as part of an Entities schema.
-
-  User fields are additional fields that can be added to an Entity that are not
-  stored in the Shotgun database.
-
-  A couple examples of a SgUserField are Entities "id" and "type" fields.  See
-  SgFields.py.
-  '''
-
-  def hasCommit(self):
-    '''
-    This should always return False so that when an Entity is commited the value
-    of this field is not added to the commit.
-    '''
-
-    return False
-
-  def eventLogs(self, sgEventType=None, sgRecordLimit=0):
-    '''
-    Sub-classes can implement this to mimic event log Entities for the field.
-
-    Default returns an empty list.
-
-    Args:
-      * (str) sgEventType:
-        Event type filter such as "Shotgun_Asset_Change".
-
-      * (int) sgRecordLimit:
-        Limits the amount of returned events.
-    '''
-
-    return []
-
-  def isCommittable(self):
-    '''
-    Returns False.
-    '''
-
-    return False
-
-  def isQueryable(self):
-    '''
-    This should always return False because UserField objects do not represent
-    fields in the Shotgun database.
-    '''
-
-    return False
-
-  def isUserField(self):
-    '''
-    Returns True
-    '''
-
-    return True
-
-  def lastEventLog(self, sgEventType=None):
-    '''
-    Sub-classes can implement this to mimic event log Entities for the field.
-
-    Default returns None.
-
-    Args:
-      * (str) sgEventType:
-        Event type filter such as "Shotgun_Asset_Change".
-    '''
-
-    return None
-
-  def setHasCommit(self, valid):
-    '''
-    This should never set hasCommit() to True
-    '''
-
-    pass
-
-  def _valueSg(self):
-    '''
-    Sub-classes can implement this to mimic a pull from Shotgun.
-
-    Default returns an empty dict.
-    '''
-
-    return {}
 
 FIELD_RETURN_TYPES = {
   'unsupported': SgField.RETURN_TYPE_UNSUPPORTED,

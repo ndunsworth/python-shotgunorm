@@ -160,6 +160,9 @@ class SgEntitySchemaInfo(object):
     else:
       sgReturnTypes = set(sgReturnTypes)
 
+    if len(sgReturnTypes) <= 0:
+      return dict(self._fieldInfos)
+
     result = {}
 
     for name, info in self._fieldInfos.items():
@@ -475,6 +478,24 @@ class SgEntity(object):
 
     self.__lock.release()
 
+  def addField(self, sgField):
+    '''
+    Adds the passed field to the Entity.
+    '''
+
+    with self:
+      if not sgField.isUserField():
+        raise RuntimeError('unable to add a field from another Entity')
+
+      fieldName = sgField.name()
+
+      if self.hasField(fieldName):
+        raise RuntimeError('Entity already has a field named "%s"' % fieldName)
+
+      sgField._SgField__setParentEntity(self)
+
+      self._fields[fieldName] = sgField
+
   def _afterCommit(self, sgBatchData, sgBatchResult, sgCommitData, sgCommitError):
     '''
     Sub-class portion of SgEntity.afterCommit().
@@ -681,22 +702,27 @@ class SgEntity(object):
     if self.__hasBuiltFields:
       return
 
-    # Add the type field.
-    self._fields['type'] = ShotgunORM.SgFieldType(self)
-    self._fields['id'] = ShotgunORM.SgFieldID(self)
-
     entityFieldInfos = self.schemaInfo().fieldInfos()
+
+    # Add the type field.
+    self._fields['type'] = ShotgunORM.SgFieldType(self, entityFieldInfos['type'])
+    self._fields['id'] = ShotgunORM.SgFieldID(self, entityFieldInfos['id'])
 
     # Dont pass the "id" field as its manually built as a user field.  Same
     # for the type field.
     del entityFieldInfos['id']
+    del entityFieldInfos['type']
 
     fieldClasses = ShotgunORM.SgField.__fieldclasses__
 
     for fieldInfo in entityFieldInfos.values():
       fieldName = fieldInfo.name()
 
-      newField = fieldClasses.get(fieldInfo.returnType(), None)(self, fieldInfo)
+      fieldClass = fieldClasses.get(fieldInfo.returnType(), None)
+
+      newField = fieldClass(None, sgFieldSchemaInfo=fieldInfo)
+
+      newField._SgField__setParentEntity(self)
 
       if hasattr(self.__class__, fieldName):
         ShotgunORM.LoggerField.warn(
@@ -1286,6 +1312,23 @@ class SgEntity(object):
         raise RuntimeError('entity does not exist, can not generate request data for type revive')
 
       self.connection().revive(self)
+
+  def removeField(self, fieldName):
+    '''
+    Removes the specified use field from the Entity'
+    '''
+
+    with self:
+      if not self.hasField(fieldName):
+        raise RuntimeError('invalid field name "%s"' % fieldName)
+
+      if self.field(fieldName).isUserField():
+        raise RuntimeError('unable to delete a non-user field')
+
+      del self._fields[fieldName]
+
+      # Because the field can still exist in another scope unset its parent!
+      self.field(fieldName)._SgField__setParentEntity(None)
 
   def schemaInfo(self):
     '''

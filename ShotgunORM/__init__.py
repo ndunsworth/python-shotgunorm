@@ -110,7 +110,7 @@ from SgSchema import SgSchema
 ################################################################################
 
 from SgEntity import SgEntity, SgEntitySchemaInfo
-from SgField import SgField, SgFieldSchemaInfo, SgUserField
+from SgField import SgField, SgFieldSchemaInfo
 
 # Fields
 import SgFields
@@ -120,15 +120,6 @@ __all__.extend(SgFields.__all__)
 del SgFields
 
 from SgFields import *
-
-# User fields
-import SgUserFields
-
-__all__.extend(SgUserFields.__all__)
-
-del SgUserFields
-
-from SgUserFields import *
 
 ################################################################################
 #
