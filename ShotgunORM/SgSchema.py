@@ -50,40 +50,26 @@ def _entityFix(schema, schemaData):
     2: AppWelcome Entity
   '''
 
-  nameData = {
-    'default_value': None,
-    'doc': '',
-    'editable': False,
-    'label': 'Name',
-    'name': 'name',
-    'parent': 'Banner',
-    'required': False,
-    'return_type': ShotgunORM.SgField.RETURN_TYPE_TEXT,
-    'return_type_name': 'text',
-    'summary_info': None,
-    'value_types': None,
-    'valid_values': []
-  }
+  idInfoData = ShotgunORM.SgFieldSchemaInfo.createSchemaData(
+    'Banner',
+    'id',
+    ShotgunORM.SgField.RETURN_TYPE_INT,
+    editable=False,
+    doc='Entity ID',
+    label='Id'
+  )
 
-  idData = {
-    'default_value': None,
-    'doc': '',
-    'editable': False,
-    'expression': None,
-    'label': 'Id',
-    'name': 'id',
-    'parent': 'Banner',
-    'required': False,
-    'return_type': ShotgunORM.SgField.RETURN_TYPE_INT,
-    'return_type_name': 'number',
-    'summary_info': None,
-    'value_types': None,
-    'valid_values': []
-  }
+  nameInfoData = ShotgunORM.SgFieldSchemaInfo.createSchemaData(
+    'Banner',
+    'name',
+    ShotgunORM.SgField.RETURN_TYPE_TEXT,
+    editable=False,
+    label='Name'
+  )
 
   bannerFieldInfos = {
-    'name': ShotgunORM.SgFieldSchemaInfo(nameData),
-    'id': ShotgunORM.SgFieldSchemaInfo(idData)
+    'name': ShotgunORM.SgFieldSchemaInfo(nameInfoData),
+    'id': ShotgunORM.SgFieldSchemaInfo(idInfoData)
   }
 
   BannerEntity = ShotgunORM.SgEntitySchemaInfo(
@@ -94,39 +80,28 @@ def _entityFix(schema, schemaData):
     {}
   )
 
-  nameData = {
-    'default_value': None,
-    'doc': '',
-    'editable': False,
-    'label': 'Name',
-    'name': 'name',
-    'parent': 'AppWelcome',
-    'required': False,
-    'return_type': ShotgunORM.SgField.RETURN_TYPE_TEXT,
-    'return_type_name': 'text',
-    'summary_info': None,
-    'value_types': None,
-    'valid_values': []
-  }
+  ShotgunORM.onEntitySchemaInfoCreate(BannerEntity)
 
-  idData = {
-    'default_value': None,
-    'doc': '',
-    'editable': False,
-    'label': 'Id',
-    'name': 'id',
-    'parent': 'AppWelcome',
-    'required': False,
-    'return_type': ShotgunORM.SgField.RETURN_TYPE_INT,
-    'return_type_name': 'number',
-    'summary_info': None,
-    'value_types': None,
-    'valid_values': []
-  }
+  idInfoData = ShotgunORM.SgFieldSchemaInfo.createSchemaData(
+    'AppWelcome',
+    'id',
+    ShotgunORM.SgField.RETURN_TYPE_INT,
+    doc='Entity ID',
+    editable=False,
+    label='Id'
+  )
+
+  nameInfoData = ShotgunORM.SgFieldSchemaInfo.createSchemaData(
+    'AppWelcome',
+    'name',
+    ShotgunORM.SgField.RETURN_TYPE_TEXT,
+    editable=False,
+    label='Name'
+  )
 
   appwelcomeFieldInfos = {
-    'name': ShotgunORM.SgFieldSchemaInfo(nameData),
-    'id': ShotgunORM.SgFieldSchemaInfo(idData)
+    'name': ShotgunORM.SgFieldSchemaInfo(nameInfoData),
+    'id': ShotgunORM.SgFieldSchemaInfo(idInfoData)
   }
 
   AppWelcomeEntity = ShotgunORM.SgEntitySchemaInfo(
@@ -136,6 +111,8 @@ def _entityFix(schema, schemaData):
     appwelcomeFieldInfos,
     {}
   )
+
+  ShotgunORM.onEntitySchemaInfoCreate(AppWelcomeEntity)
 
   schemaData['AppWelcome'] = AppWelcomeEntity
   schemaData['Banner'] = BannerEntity

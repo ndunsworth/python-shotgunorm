@@ -405,7 +405,12 @@ def SgQueryEngineWorker(connection, lock, block, event, entityQueue, pendingQuer
     try:
       ShotgunORM.LoggerQueryEngine.debug('    * Searching')
 
-      sgSearch = con._sg_find(entityType, [['id', 'in', entityIds]], entityFields)
+      sgSearch = None
+
+      if len(entityIds) == 1:
+        sgSearch = con._sg_find(entityType, [['id', 'is', entityIds[0]]], entityFields)
+      else:
+        sgSearch = con._sg_find(entityType, [['id', 'in', entityIds]], entityFields)
 
       ShotgunORM.LoggerQueryEngine.debug('    * Searching complete!')
     except Exception, e:

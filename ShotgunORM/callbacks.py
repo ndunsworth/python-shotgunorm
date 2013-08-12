@@ -68,6 +68,22 @@ def _defaultOnEntityCreate(sgEntity):
   ShotgunORM.LoggerCallback.debug('onEntityCreate: %s' % sgEntity)
 
 def _defaultOnEntitySchemaInfoCreate(sgEntitySchemaInfo):
+  fieldInfoData = ShotgunORM.SgFieldSchemaInfo.createSchemaData(
+    sgEntitySchemaInfo.name(),
+    'type',
+    ShotgunORM.SgField.RETURN_TYPE_TEXT,
+    editable=False,
+    label='Type'
+  )
+
+  fieldInfoData['commitable'] = False
+  fieldInfoData['queryable'] = False
+
+  fieldInfo = ShotgunORM.SgFieldSchemaInfo(fieldInfoData)
+
+  sgEntitySchemaInfo._fieldInfos['type'] = fieldInfo
+
+def _defaultOnEntitySchemaInfoCreatePhaseTask(sgEntitySchemaInfo):
   colorField = sgEntitySchemaInfo.fieldInfo('color')
 
   colorField._returnType = ShotgunORM.SgField.RETURN_TYPE_COLOR2
@@ -135,16 +151,21 @@ ON_ENTITY_CREATE_CBS = {
 }
 
 ON_ENTITY_SCHEMA_INFO_CREATE_CBS = {
-  '*': [],
-  'Phase': [
+  '*': [
     {
       'cb': _defaultOnEntitySchemaInfoCreate,
+      'description': 'adds the type field to all Entity classes'
+    }
+  ],
+  'Phase': [
+    {
+      'cb': _defaultOnEntitySchemaInfoCreatePhaseTask,
       'description': 'changes color field return type to color2'
     }
   ],
   'Task': [
     {
-      'cb': _defaultOnEntitySchemaInfoCreate,
+      'cb': _defaultOnEntitySchemaInfoCreatePhaseTask,
       'description': 'changes color field return type to color2'
     }
   ]

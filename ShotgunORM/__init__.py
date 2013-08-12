@@ -110,7 +110,7 @@ from SgSchema import SgSchema
 ################################################################################
 
 from SgEntity import SgEntity, SgEntitySchemaInfo
-from SgField import SgField, SgFieldSchemaInfo, SgUserField
+from SgField import SgField, SgFieldSchemaInfo
 
 # Fields
 import SgFields

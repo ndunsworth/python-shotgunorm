@@ -34,6 +34,7 @@ from exceptions import AttributeError, KeyError
 
 import copy
 import threading
+import weakref
 import webbrowser
 
 from xml.etree import ElementTree as ET
@@ -158,6 +159,9 @@ class SgEntitySchemaInfo(object):
       sgReturnTypes = set([sgReturnTypes])
     else:
       sgReturnTypes = set(sgReturnTypes)
+
+    if len(sgReturnTypes) <= 0:
+      return dict(self._fieldInfos)
 
     result = {}
 
@@ -402,8 +406,7 @@ class SgEntity(object):
     self._markedForDeletion = False
     self.__isCommitting = False
 
-    self._hasBuiltFields = False
-    self._createCompleted = False
+    self.__hasBuiltFields = False
 
     self._widget = None
 
@@ -442,35 +445,24 @@ class SgEntity(object):
       if sgData.has_key('type'):
         sgData['type']
 
-      if isNewEntity:
-        for field, value in sgData.items():
-          fieldObj = self.field(field)
+      for field, value in sgData.items():
+        fieldObj = self.field(field)
 
-          # Skip expression summary fields.
-          if fieldObj == None or fieldObj.returnType() == ShotgunORM.SgField.RETURN_TYPE_SUMMARY:
-            continue
+        # Skip expression summary fields.
+        if fieldObj == None:
+          ShotgunORM.LoggerEntity.warn('no field named "%s"' % field)
 
-          #if value == None:
-          #  value = fieldObj.defaultValue()
+          continue
 
-          fieldObj.fromFieldData(value)
+        if fieldObj.returnType() == ShotgunORM.SgField.RETURN_TYPE_SUMMARY:
+          continue
 
-          #fieldObj.validate()
-      else:
-        for field, value in sgData.items():
-          fieldObj = self.field(field)
+        fieldObj._fromFieldData(value)
 
-          # Skip expression summary fields.
-          if fieldObj == None or fieldObj.returnType() == ShotgunORM.SgField.RETURN_TYPE_SUMMARY:
-            continue
+        fieldObj.setValid(True)
 
-          #if value == None:
-          #  value = fieldObj.defaultValue()
-
-          fieldObj._updateValue = value
-          fieldObj.setHasSyncUpdate(True)
-
-          #fieldObj.validate()
+        if isNewEntity:
+          fieldObj.setHasCommit(True)
 
   def _lock(self):
     '''
@@ -485,6 +477,24 @@ class SgEntity(object):
     '''
 
     self.__lock.release()
+
+  def addField(self, sgField):
+    '''
+    Adds the passed field to the Entity.
+    '''
+
+    with self:
+      if not sgField.isUserField():
+        raise RuntimeError('unable to add a field from another Entity')
+
+      fieldName = sgField.name()
+
+      if self.hasField(fieldName):
+        raise RuntimeError('Entity already has a field named "%s"' % fieldName)
+
+      sgField._SgField__setParentEntity(self)
+
+      self._fields[fieldName] = sgField
 
   def _afterCommit(self, sgBatchData, sgBatchResult, sgCommitData, sgCommitError):
     '''
@@ -670,22 +680,12 @@ class SgEntity(object):
     if error != None:
       raise error
 
-  def _buildFields(self, sgFieldInfos):
+  def _buildFields(self):
     '''
     Sub-class portion of SgEntity.buildFields().
-
-    Default function iterates over the incoming SgFieldSchemaInfos and creates the
-    fields.
     '''
 
-    fieldClasses = ShotgunORM.SgField.__fieldclasses__
-
-    for field in sgFieldInfos.values():
-      fieldName = field.name()
-
-      newField = fieldClasses.get(field.returnType(), None)
-
-      self._fields[fieldName] = newField(self, field)
+    pass
 
   def buildFields(self):
     '''
@@ -699,53 +699,44 @@ class SgEntity(object):
     '''
 
     # Only build the fields once!
-    if self._hasBuiltFields:
+    if self.__hasBuiltFields:
       return
 
-    # Add the type field.
-    self._fields['type'] = ShotgunORM.SgFieldType(self)
-    self._fields['id'] = ShotgunORM.SgFieldID(self)
-
     entityFieldInfos = self.schemaInfo().fieldInfos()
+
+    # Add the type field.
+    self._fields['type'] = ShotgunORM.SgFieldType(self, entityFieldInfos['type'])
+    self._fields['id'] = ShotgunORM.SgFieldID(self, entityFieldInfos['id'])
 
     # Dont pass the "id" field as its manually built as a user field.  Same
     # for the type field.
     del entityFieldInfos['id']
+    del entityFieldInfos['type']
 
-    self._buildFields(entityFieldInfos)
+    fieldClasses = ShotgunORM.SgField.__fieldclasses__
 
-    self.buildUserFields()
+    for fieldInfo in entityFieldInfos.values():
+      fieldName = fieldInfo.name()
 
-    for field in self._fields.keys():
-      if hasattr(self.__class__, field):
+      fieldClass = fieldClasses.get(fieldInfo.returnType(), None)
+
+      newField = fieldClass(None, sgFieldSchemaInfo=fieldInfo)
+
+      newField._SgField__setParentEntity(self)
+
+      if hasattr(self.__class__, fieldName):
         ShotgunORM.LoggerField.warn(
           'Entity type %(entity)s field name "%(name)s confilicts with class method of same name' % {
-            'entity': self.type,
-            'name': field
+            'entity': self.schemaInfo().name(),
+            'name': fieldName
           }
         )
 
-    self._hasBuiltFields = True
+      self._fields[fieldName] = newField
 
-  def _buildUserFields(self):
-    '''
-    Sub-class portion of SgEntity.buildFields().
+    self._buildFields()
 
-    Default function adds the "type" field to Entities.
-    '''
-
-    pass
-
-  def buildUserFields(self):
-    '''
-    Builds the user fields for the Entity.
-    '''
-
-    # Only build the fields once!
-    if self._hasBuiltFields:
-      return
-
-    self._buildUserFields()
+    self.__hasBuiltFields = True
 
   def clone(self, inheritFields=[], numberOfEntities=1):
     '''
@@ -858,13 +849,16 @@ class SgEntity(object):
       else:
         self._markedForDeletion = True
 
-  def eventLogs(self, sgEventType=None, sgRecordLimit=0):
+  def eventLogs(self, sgEventType=None, sgFields=None, sgRecordLimit=0):
     '''
     Returns the event log Entities for this Entity
 
     Args:
       * (str) sgEventType:
         Event type filter such as "Shotgun_Asset_Change".
+
+      * (list) sgFields:
+        List of fields to populate the results with.
 
       * (int) sgRecordLimit:
         Limits the amount of returned events.
@@ -892,7 +886,8 @@ class SgEntity(object):
 
     result = connection.find(
       'EventLogEntry',
-      filters=filters,
+      filters,
+      sgFields,
       order=order,
       limit=sgRecordLimit
     )
@@ -948,7 +943,7 @@ class SgEntity(object):
     if w != None:
       w.fieldChanged(sgField)
 
-    if not self.isBuildingFields() and self._createCompleted:
+    if not self.isBuildingFields():
       ShotgunORM.onFieldChanged(sgField)
 
   def fieldLabels(self, sgFields=None, sgReturnTypes=None):
@@ -1105,7 +1100,7 @@ class SgEntity(object):
 
     return result
 
-  def fieldValues(self, sgFields=None, sgReturnTypes=None):
+  def fieldValues(self, sgFields=None, sgReturnTypes=None, sgSyncFields=None):
     '''
     Returns a dict containing the value of all specified fields.
 
@@ -1118,6 +1113,9 @@ class SgEntity(object):
 
       * (list) sgReturnTypes:
         List of specific field return types to filter by.
+
+      * (dict) sgSyncFields:
+        D of field names to populate any returned Entities with.
     '''
 
     with self:
@@ -1157,7 +1155,7 @@ class SgEntity(object):
 
         try:
           for field in entityFields:
-            result[field.name()] = field.value()
+            result[field.name()] = field.value(sgSyncFields=sgSyncFields)
         finally:
           qEngine.unblock()
 
@@ -1198,7 +1196,7 @@ class SgEntity(object):
     Returns True when the Entity is building its fields.
     '''
 
-    return not self._hasBuiltFields
+    return not self.__hasBuiltFields
 
   def isCommitting(self):
     '''
@@ -1229,51 +1227,24 @@ class SgEntity(object):
 
     return self.schemaInfo().label()
 
-  def lastEventLog(self, sgEventType=None):
+  def lastEventLog(self, sgEventType=None, sgFields=None):
     '''
     Returns the last event log Entity for this field.
 
     Args:
       * (str) sgEventType:
         Event type filter such as "Shotgun_Asset_Change".
+
+      * (list) sgFields:
+        List of fields to populate the result with.
     '''
 
-    if not self.exists():
+    events = self.eventLogs(sgEventType, sgFields, sgRecordLimit=1)
+
+    if len(events) <= 0:
       return None
 
-    connection = self.connection()
-
-    filters = [
-      [
-        'entity',
-        'is',
-        self.toEntityFieldData()
-      ]
-    ]
-
-    order = [
-      {
-        'field_name': 'created_at',
-        'direction':'desc'
-      }
-    ]
-
-    if sgEventType != None:
-      filters.append(
-        [
-          'event_type',
-          'is',
-          sgEventType
-        ]
-      )
-
-    result = connection.findOne(
-      'EventLogEntry',
-      filters=filters,
-      order=order
-    )
-
-    return result
+    return events[0]
 
   def _makeWidget(self):
     '''
@@ -1342,6 +1313,23 @@ class SgEntity(object):
 
       self.connection().revive(self)
 
+  def removeField(self, fieldName):
+    '''
+    Removes the specified use field from the Entity'
+    '''
+
+    with self:
+      if not self.hasField(fieldName):
+        raise RuntimeError('invalid field name "%s"' % fieldName)
+
+      if self.field(fieldName).isUserField():
+        raise RuntimeError('unable to delete a non-user field')
+
+      del self._fields[fieldName]
+
+      # Because the field can still exist in another scope unset its parent!
+      self.field(fieldName)._SgField__setParentEntity(None)
+
   def schemaInfo(self):
     '''
     Returns the SgEntitySchemaInfo object that defines this Entity.
@@ -1402,7 +1390,7 @@ class SgEntity(object):
 
       if len(pullFields) >= 1:
         # Only pull if the Entity exists in Shotgun!
-        if backgroundPull and self.exists():
+        if backgroundPull:
           self.connection().queryEngine().addQueue(self, pullFields)
         else:
           values = self.valuesSg(pullFields)
@@ -1414,11 +1402,11 @@ class SgEntity(object):
             fieldObj.setHasSyncUpdate(True)
 
             # Don't slow down the sync process by calling validate!
-            #fieldObj.validate()
+            #fieldObj.validate(forReal=False)
 
       if len(nonQueryableFields) >= 1:
         for field in nonQueryableFields:
-          field.validate()
+          field.validate(forReal=True)
 
       return result
 
@@ -1589,6 +1577,8 @@ class SgEntity(object):
         continue
 
       pullFields.append(field.name())
+
+    ShotgunORM.LoggerEntity.debug('    * pulling: %(sgFields)s', {'sgFields': pullFields})
 
     if len(pullFields) <= 0:
       return {}
