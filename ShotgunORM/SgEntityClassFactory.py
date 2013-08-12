@@ -166,8 +166,6 @@ class SgEntityClassFactory(object):
     result.buildFields()
     result._fromFieldData(sgData)
 
-    result._createCompleted = True
-
     return result
 
   def entityClass(self, sgEntityType):

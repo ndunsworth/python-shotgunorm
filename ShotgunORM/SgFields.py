@@ -481,7 +481,7 @@ class SgFieldEntity(ShotgunORM.SgField):
         List of field names to populate the returned Entity with.
     '''
 
-    v = super(SgFieldEntity, self).value()
+    value = super(SgFieldEntity, self).value()
 
     parent = self.parentEntity()
 
@@ -490,18 +490,18 @@ class SgFieldEntity(ShotgunORM.SgField):
 
     connection = parent.connection()
 
+    if isinstance(sgSyncFields, dict):
+      sgSyncFields = sgSyncFields.get(parent.type, None)
+    elif isinstance(sgSyncFields, str):
+      sgSyncFields = [sgSyncFields]
+
     if sgSyncFields == None:
-      sgSyncFields = connection.defaultEntityQueryFields(v['type'])
+      sgSyncFields = connection.defaultEntityQueryFields(value['type'])
 
       if len(sgSyncFields) <= 0:
         sgSyncFields = None
     else:
-      pullFields = []
-
-      if isinstance(sgSyncFields, str):
-        pullFields = set([sgSyncFields])
-      else:
-        pullFields = set(sgSyncFields)
+      pullFields = set(sgSyncFields)
 
       extraFields = []
 
@@ -515,7 +515,7 @@ class SgFieldEntity(ShotgunORM.SgField):
       elif 'default' in pullFields:
         pullFields.remove('default')
 
-        extraFields = connection.defaultEntityQueryFields(v['type'])
+        extraFields = connection.defaultEntityQueryFields(value['type'])
 
       pullFields.update(extraFields)
 
@@ -525,8 +525,8 @@ class SgFieldEntity(ShotgunORM.SgField):
         sgSyncFields = None
 
     result = connection._createEntity(
-      v['type'],
-      v,
+      value['type'],
+      value,
       sgSyncFields=sgSyncFields
     )
 
@@ -679,8 +679,9 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
     Returns the fields value as a list of Entity objects.
 
     Args:
-      * (list) sgSyncFields:
-        List of field names to populate the returned Entities with.
+      * (dict) sgSyncFields:
+        Dict of entity types and field names to populate the returned Entities
+        with.
     '''
 
     result = super(SgFieldEntityMulti, self).value()
@@ -1489,7 +1490,7 @@ class SgFieldText(ShotgunORM.SgField):
     if self._value == sgData:
       return False
 
-    self._value = sgData
+    self._value = str(sgData)
 
     return True
 
