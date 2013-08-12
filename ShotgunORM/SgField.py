@@ -928,8 +928,6 @@ class SgField(object):
       sgFields=['created_at', 'user']
     )
 
-    print event.fieldValues()
-
     if event == None:
       return None
     else:
@@ -1131,13 +1129,14 @@ class SgField(object):
 
       self.invalidate()
 
-      self._fromFieldData(self.valueSg())
+      result = self._fromFieldData(self.valueSg())
 
       self.setValid(True)
 
-      self.changed()
+      if result:
+        self.changed()
 
-      return True
+      return result
 
   def setValueToDefault(self):
     '''
@@ -1201,10 +1200,8 @@ class SgField(object):
       'sgField': self
     })
 
-    result = False
-
     if self.hasCommit():
-      result = True
+      pass
     elif self.hasSyncUpdate():
       validSyncUpdate = False
 
@@ -1212,7 +1209,7 @@ class SgField(object):
 
       # isSyncUpdating() might be True but if the search raised an exception it
       # didnt flag hasSyncUpdate() so fall back to just pulling from Shotgun
-      # manually with setValueFromShotgun().
+      # manually.
 
       try:
         self._fromFieldData(self._updateValue)
@@ -1230,17 +1227,12 @@ class SgField(object):
         self.setHasSyncUpdate(False)
 
       if validSyncUpdate:
-        result = True
+        if not forReal:
+          self.setValid(True)
       elif forReal:
-        self.setValueFromShotgun()
-
-        result = True
+        self._fromFieldData(self.valueSg())
     elif forReal:
-      self.setValueFromShotgun()
-
-      result = True
-
-    return result
+      self._fromFieldData(self.valueSg())
 
   def validate(self, forReal=False, force=False):
     '''
@@ -1270,9 +1262,10 @@ class SgField(object):
       if self.isValid() and not force:
         return False
 
-      ShotgunORM.LoggerField.debug('%(sgField)s.validate(curState=%(state)s, force=%(force)s)', {
+      ShotgunORM.LoggerField.debug('%(sgField)s.validate(curState=%(state)s, forReal=%(forReal)s, force=%(force)s)', {
         'sgField': self,
         'state': self.isValid(),
+        'forReal': forReal,
         'force': force
       })
 
@@ -1280,16 +1273,17 @@ class SgField(object):
 
       # Don't allow __isValidating to remain True!
       try:
-        valid = self._validate(forReal=forReal)
+        self._validate(forReal=forReal)
+
+        if forReal and not self.isValid():
+          self.setValid(True)
       finally:
         self.__isValidating = False
 
-      if valid:
-        self.setValid(True)
-
+      if self.isValid():
         self.changed()
 
-      return valid
+    return True
 
   def _Value(self):
     '''
@@ -1458,16 +1452,6 @@ class SgUserField(SgField):
     '''
 
     pass
-
-  #def setValueFromShotgun(self):
-  #  '''
-  #  Sub-classes can implement this to mimic setting the fields value from
-  #  Shotgun.
-  #
-  #  Default does nothing and returns False.
-  #  '''
-  #
-  #  return False
 
   def _valueSg(self):
     '''
