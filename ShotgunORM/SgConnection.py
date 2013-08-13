@@ -553,7 +553,7 @@ class SgConnection(SgConnectionPriv):
     else:
       return sgFilters
 
-  def _batch(self, requests):
+  def _batch(self, requests, sgDryRun):
     def undoEntities(batchConfigs, exception):
       if len(batchConfigs) <= 0:
         return
@@ -564,7 +564,7 @@ class SgConnection(SgConnectionPriv):
         commitData = data['commit_data']
 
         try:
-          entity.afterCommit(batchData, None, commitData, exception)
+          entity.afterCommit(batchData, None, commitData, sgDryRun, exception)
         except:
           pass
 
@@ -583,10 +583,10 @@ class SgConnection(SgConnectionPriv):
       commitData = {}
 
       try:
-        entity.beforeCommit(entityBatchData, commitData)
+        entity.beforeCommit(entityBatchData, commitData, sgDryRun)
       except Exception, e:
         try:
-          entity.afterCommit(entityBatchData, None, commitData, e)
+          entity.afterCommit(entityBatchData, None, commitData, sgDryRun, e)
         except:
           pass
 
@@ -606,7 +606,35 @@ class SgConnection(SgConnectionPriv):
       batchSize.append(len(entityBatchData))
 
     try:
-      sgResult = self._sg_batch(batchData)
+      if sgDryRun:
+        sgResult = []
+
+        for batchJob in batchData:
+          jobType = batchJob['request_type']
+
+          if jobType == 'update':
+            data = {
+              'type': batchJob['entity_type'],
+              'id': batchJob['entity_id'],
+            }
+
+            data.update(batchJob['data'])
+
+            sgResult.append(data)
+          elif jobType == 'create':
+            data = {
+              'type': batchJob['entity_type'],
+            }
+
+            data.update(batchJob['data'])
+
+            data['id'] = -1
+
+            sgResult.append(data)
+          elif jobType in ['delete', 'revive']:
+            sgResult.append(True)
+      else:
+        sgResult = self._sg_batch(batchData)
 
       result = copy.deepcopy(sgResult)
     except Exception, e:
@@ -629,7 +657,7 @@ class SgConnection(SgConnectionPriv):
         entityResult.append(sgResult.pop(0))
 
       try:
-        entity.afterCommit(entityBatchData, entityResult, entityCommitData, None)
+        entity.afterCommit(entityBatchData, entityResult, entityCommitData, sgDryRun, None)
       except Exception, e:
         if exception == None:
           exception = e
@@ -639,7 +667,7 @@ class SgConnection(SgConnectionPriv):
 
     return result
 
-  def batch(self, requests):
+  def batch(self, requests, sgDryRun=False):
     '''
     Make a batch request of several create, update, and/or delete calls at one
     time. This is for performance when making large numbers of requests, as it
@@ -679,7 +707,7 @@ class SgConnection(SgConnectionPriv):
           }
         )
 
-      result = self._batch(batchRequests)
+      result = self._batch(batchRequests, sgDryRun)
 
       return result
     finally:
@@ -785,7 +813,7 @@ class SgConnection(SgConnectionPriv):
 
       return result
 
-  def delete(self, sgEntity):
+  def delete(self, sgEntity, sgDryRun=False):
     '''
     Deletes the passed Entity from Shotgun.
 
@@ -813,7 +841,7 @@ class SgConnection(SgConnectionPriv):
         }
       ]
 
-      sgResult = self._batch(commitData)
+      sgResult = self._batch(commitData, sgDryRun)
 
       return sgResult[0]
 
@@ -1054,7 +1082,7 @@ class SgConnection(SgConnectionPriv):
 
     return self.__qEngine
 
-  def revive(self, sgEntity):
+  def revive(self, sgEntity, sgDryRun=False):
     '''
     Revives (un-deletes) the Entity matching entity_type and entity_id.
 
@@ -1078,10 +1106,10 @@ class SgConnection(SgConnectionPriv):
       commitData = {}
 
       try:
-        sgEntity.beforeCommit(batchData, commitData)
+        sgEntity.beforeCommit(batchData, commitData, sgDryRun)
       except Exception, e:
         try:
-          sgEntity.afterCommit(batchData, None, commitData, e)
+          sgEntity.afterCommit(batchData, None, commitData, sgDryRun, e)
         except:
           pass
 
@@ -1090,16 +1118,19 @@ class SgConnection(SgConnectionPriv):
       sgResult = None
 
       try:
-        sgResult = self._sg_revive(sgEntity.type, sgEntity['id'])
+        if sgDryRun:
+          sgResult = True
+        else:
+          sgResult = self._sg_revive(sgEntity.type, sgEntity['id'])
       except Exception, e:
         try:
-          sgEntity.afterCommit(batchData, None, commitData, e)
+          sgEntity.afterCommit(batchData, None, commitData, sgDryRun, e)
         except:
           pass
 
         raise e
 
-      sgEntity.afterCommit(batchData, [sgResult], commitData)
+      sgEntity.afterCommit(batchData, [sgResult], commitData, sgDryRun)
 
       return sgResult
 
