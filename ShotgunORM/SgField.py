@@ -178,7 +178,7 @@ class SgFieldSchemaInfo(object):
       'return_type_name': returnTypeName,
       'summary_info': summaryInfo,
       'value_types': None,
-      'valid_values': None
+      'valid_values': []
     }
 
   @classmethod
@@ -420,12 +420,7 @@ class SgFieldSchemaInfo(object):
     values.
     '''
 
-    result = []
-
-    for i in self._validValues:
-      result.append(i)
-
-    return result
+    return list(self._validValues)
 
   def valueTypes(self):
     '''
