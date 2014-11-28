@@ -887,7 +887,7 @@ class SgField(object):
     '''
 
     with self:
-      if not self.isValid() and not force:
+      if not self.isValid() and not self.hasSyncUpdate() and not force:
         return False
 
       ShotgunORM.LoggerField.debug('%(sgField)s.invalidate(force=%(force)s)', {

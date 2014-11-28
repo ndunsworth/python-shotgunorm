@@ -1312,16 +1312,11 @@ class SgEntity(object):
       result = False
 
       for field in self.fields(sgFields).values():
-        if not field.isValid():
-          continue
-
         if (field.isValid() and ignoreValid) or (field.hasCommit() and ignoreWithUpdate):
           continue
 
-        if not field.invalidate():
-          continue
-
-        result = True
+        if field.invalidate():
+          result = True
 
       return result
 
