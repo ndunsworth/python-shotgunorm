@@ -1712,7 +1712,13 @@ class SgFieldUrl(ShotgunORM.SgField):
       if result['link_type'] in ['upload', 'web']:
         result['url'] = sgData['url']
       else:
+        result['id'] = sgData['id']
+        result['local_path'] = sgData['local_path']
+        result['local_path_linux'] = sgData['local_path_linux']
+        result['local_path_mac'] = sgData['local_path_mac']
+        result['local_path_windows'] = sgData['local_path_windows']
         result['local_storage'] = sgData['local_storage']
+        result['type'] = sgData['type']
 
       result['name'] = sgData['name']
       result['content_type'] = sgData.get('content_type', None)
