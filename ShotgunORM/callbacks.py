@@ -58,10 +58,10 @@ import socket
 # This module imports
 import ShotgunORM
 
-def _defaultAfterEntityCommit(sgEntity, sgBatchData, sgBatchResult, sgCommitData, sgCommitError):
+def _defaultAfterEntityCommit(sgEntity, sgBatchData, sgBatchResult, sgCommitData, sgDryRun, sgCommitError):
   ShotgunORM.LoggerCallback.debug('afterEntityCommit: %s' % sgEntity)
 
-def _defaultBeforeEntityCommit(sgEntity, sgBatchData, sgCommitData):
+def _defaultBeforeEntityCommit(sgEntity, sgBatchData, sgCommitData, sgDryRun):
   ShotgunORM.LoggerCallback.debug('beforeEntityCommit: %s' % sgEntity)
 
 def _defaultOnEntityCreate(sgEntity):
@@ -195,7 +195,7 @@ def addAfterEntityCommit(cb, filterName='*', description=''):
     The callback must contain 5 args.  See the documentation for
     ShotgunORM.afterEntityCommit() for detailed arg information.
 
-    def myCallback(sgEntity, sgBatchData, sgBatchResult, sgCommitData, sgCommitError):
+    def myCallback(sgEntity, sgBatchData, sgBatchResult, sgCommitData, sgDryRun, sgCommitError):
       ...
   '''
 
@@ -223,7 +223,7 @@ def appendAfterEntityCommit(cb, filterName='*', description=''):
     The callback must contain 5 args.  See the documentation for
     ShotgunORM.afterEntityCommit() for detailed arg information.
 
-    def myCallback(sgEntity, sgBatchData, sgBatchResult, sgCommitData, sgCommitError):
+    def myCallback(sgEntity, sgBatchData, sgBatchResult, sgCommitData, sgDryRun, sgCommitError):
       ...
   '''
 
@@ -251,7 +251,7 @@ def addBeforeEntityCommit(cb, filterName='*', description=''):
     The callback must contain 3 args.  See the documentation for
     ShotgunORM.beforeEntityCommit() for detailed arg information.
 
-    def myCallback(sgEntity, sgBatchData, sgCommitData):
+    def myCallback(sgEntity, sgBatchData, sgCommitData, sgDryRun):
       ...
   '''
 
@@ -279,7 +279,7 @@ def appendBeforeEntityCommit(cb, filterName='*', description=''):
     The callback must contain 3 args.  See the documentation for
     ShotgunORM.beforeEntityCommit() for detailed arg information.
 
-    def myCallback(sgEntity, sgBatchData, sgCommitData):
+    def myCallback(sgEntity, sgBatchData, sgCommitData, sgDryRun):
       ...
   '''
 
@@ -520,7 +520,7 @@ def appendOnSchemaChanged(cb, filterName='*', description=''):
   except:
     ON_SCHEMA_CHANGED_CBS[filterName] = [data]
 
-def afterEntityCommit(sgEntity, sgBatchData, sgBatchResult, sgCommitData, sgCommitError):
+def afterEntityCommit(sgEntity, sgBatchData, sgBatchResult, sgCommitData, sgDryRun, sgCommitError):
   '''
   This function is called after an Entity has been committed to Shotgun.
 
@@ -538,6 +538,10 @@ def afterEntityCommit(sgEntity, sgBatchData, sgBatchResult, sgCommitData, sgComm
       Dictionary used to pass user data between beforeCommit() and
       afterCommit().
 
+    * (bool) sgDryRun:
+      When True the commit is not updating Shotgun with any modifications,
+      it is only in a test phase.
+
     * (Exception) sgCommitError:
       Exception raised anytime during the commit process.  When this is not None
       perform cleanup operations because the commit failed.
@@ -549,14 +553,14 @@ def afterEntityCommit(sgEntity, sgBatchData, sgBatchResult, sgCommitData, sgComm
     cbs = AFTER_ENTITY_COMMIT_CBS[entityType]
 
     for i in cbs:
-      i['cb'](sgEntity, sgBatchData, sgBatchResult, sgCommitData, sgCommitError)
+      i['cb'](sgEntity, sgBatchData, sgBatchResult, sgCommitData, sgDryRun, sgCommitError)
 
   cbs = AFTER_ENTITY_COMMIT_CBS['*']
 
   for i in cbs:
-    i['cb'](sgEntity, sgBatchData, sgBatchResult, sgCommitData, sgCommitError)
+    i['cb'](sgEntity, sgBatchData, sgBatchResult, sgCommitData, sgDryRun, sgCommitError)
 
-def beforeEntityCommit(sgEntity, sgBatchData, sgCommitData):
+def beforeEntityCommit(sgEntity, sgBatchData, sgCommitData, sgDryRun):
   '''
   This function is called before an Entity has been committed to Shotgun.
 
@@ -570,6 +574,10 @@ def beforeEntityCommit(sgEntity, sgBatchData, sgCommitData):
     * (dict) sgCommitData:
       Dictionary used to pass user data between beforeCommit() and
       afterCommit().
+
+    * (bool) sgDryRun:
+      When True the commit is not updating Shotgun with any modifications,
+      it is only in a test phase.
   '''
 
   entityType = sgEntity.type
@@ -578,12 +586,12 @@ def beforeEntityCommit(sgEntity, sgBatchData, sgCommitData):
     cbs = BEFORE_ENTITY_COMMIT_CBS[entityType]
 
     for i in cbs:
-      i['cb'](sgEntity, sgCommitType, sgCommitData)
+      i['cb'](sgEntity, sgCommitType, sgCommitData, sgDryRun)
 
   cbs = BEFORE_ENTITY_COMMIT_CBS['*']
 
   for i in cbs:
-    i['cb'](sgEntity, sgBatchData, sgCommitData)
+    i['cb'](sgEntity, sgBatchData, sgCommitData, sgDryRun)
 
 def onEntityCreate(sgEntity):
   '''

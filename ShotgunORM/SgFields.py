@@ -935,7 +935,7 @@ class SgFieldSerializable(ShotgunORM.SgField):
 
       return result
 
-    if not isinstance(sgData, dict):
+    if not isinstance(sgData, (dict, list)):
       raise ValueError('%s invalid data from Shotgun "%s", expected a dict' % (self, sgData))
 
     if self._value == sgData:
@@ -959,7 +959,7 @@ class SgFieldSerializable(ShotgunORM.SgField):
 
       return result
 
-    if not isinstance(sgData, dict):
+    if not isinstance(sgData, (dict, list)):
       raise TypeError('%s invalid value type "%s", expected a dict' % (self, type(sgData).__name__))
 
     if self._value == sgData:
@@ -1815,7 +1815,7 @@ class SgFieldID(SgFieldInt):
 
     self._SgField__valid = True
 
-  def invalidate(self):
+  def invalidate(self, force=True):
     '''
     Does nothing for ID fields.
     '''
@@ -1892,7 +1892,7 @@ class SgFieldType(SgFieldText):
 
     self._SgField__valid = True
 
-  def invalidate(self):
+  def invalidate(self, force=False):
     '''
     Always returns False for Type fields.
     '''

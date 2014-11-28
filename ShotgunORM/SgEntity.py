@@ -496,7 +496,7 @@ class SgEntity(object):
 
       self._fields[fieldName] = sgField
 
-  def _afterCommit(self, sgBatchData, sgBatchResult, sgCommitData, sgCommitError):
+  def _afterCommit(self, sgBatchData, sgBatchResult, sgCommitData, dryRun, sgCommitError):
     '''
     Sub-class portion of SgEntity.afterCommit().
 
@@ -525,7 +525,7 @@ class SgEntity(object):
 
     pass
 
-  def afterCommit(self, sgBatchData, sgBatchResult, sgCommitData, sgCommitError=None):
+  def afterCommit(self, sgBatchData, sgBatchResult, sgCommitData, sgDryRun, sgCommitError=None):
     '''
     Called in the moments immediately after the call to Shotgun has returned.
 
@@ -545,6 +545,10 @@ class SgEntity(object):
         Dictionary used to pass user data between beforeCommit() and
         afterCommit().
 
+      * (bool) sgDryRun:
+        When True the commit is not updating Shotgun with any modifications,
+        it is only in a test phase.
+
       * (Exception) sgCommitError:
         The Exception object if the commit raised an error.
     '''
@@ -553,6 +557,7 @@ class SgEntity(object):
     ShotgunORM.LoggerEntity.debug('    * sgBatchData: %(value)s', {'value': sgBatchData})
     ShotgunORM.LoggerEntity.debug('    * sgBatchResult: %(value)s', {'value': sgBatchResult})
     ShotgunORM.LoggerEntity.debug('    * sgCommitData: %(value)s', {'value': sgCommitData})
+    ShotgunORM.LoggerEntity.debug('    * sgDryRun: %(value)s', {'value': sgDryRun})
     ShotgunORM.LoggerEntity.debug('    * sgCommitError: %(value)s', {'value': sgCommitError})
 
     self.__isCommitting = False
@@ -571,7 +576,8 @@ class SgEntity(object):
           for field in self.fields(fieldNames).values():
             field.setIsCommitting(False)
 
-            field.setHasCommit(False)
+            if not sgDryRun:
+              field.setHasCommit(False)
 
         if commitType == 'create':
           self.field('id')._value = result['id']
@@ -590,14 +596,14 @@ class SgEntity(object):
     error = None
 
     try:
-      self._afterCommit(sgBatchData, sgBatchResult, sgCommitData, sgCommitError)
+      self._afterCommit(sgBatchData, sgBatchResult, sgCommitData, sgDryRun, sgCommitError)
     except Exception, e:
       error = e
 
     batchDataCopy = copy.deepcopy(sgBatchData)
 
     try:
-      ShotgunORM.afterEntityCommit(self, batchDataCopy, sgBatchResult, sgCommitData, sgCommitError)
+      ShotgunORM.afterEntityCommit(self, batchDataCopy, sgBatchResult, sgCommitData, sgDryRun, sgCommitError)
     except Exception, e:
       if error == None:
         error = e
@@ -605,7 +611,7 @@ class SgEntity(object):
     if error != None:
       raise error
 
-  def _beforeCommit(self, sgBatchData, sgCommitData):
+  def _beforeCommit(self, sgBatchData, sgCommitData, sgDryRun):
     '''
     Subclass portion of SgEntity.beforeCommit().
 
@@ -618,11 +624,15 @@ class SgEntity(object):
       * (dict) sgCommitData:
         Dictionary used to pass data user between beforeCommit() and
         afterCommit().
+
+      * (bool) sgDryRun:
+        When True the commit is not updating Shotgun with any modifications,
+        it is only in a test phase.
     '''
 
     pass
 
-  def beforeCommit(self, sgBatchData, sgCommitData):
+  def beforeCommit(self, sgBatchData, sgCommitData, sgDryRun):
     '''
     This function is called in the moments before the call to Shotgun.
 
@@ -637,11 +647,16 @@ class SgEntity(object):
       * (dict) sgCommitData:
         Dictionary used to pass data user between beforeCommit() and
         afterCommit().
+
+      * (bool) sgDryRun:
+        When True the commit is not updating Shotgun with any modifications,
+        it is only in a test phase.
     '''
 
     ShotgunORM.LoggerEntity.debug('%(entity)s.beforeCommit()', {'entity': self})
     ShotgunORM.LoggerEntity.debug('    * sgBatchData: %(value)s', {'value': sgBatchData})
     ShotgunORM.LoggerEntity.debug('    * sgCommitData: %(value)s', {'value': sgCommitData})
+    ShotgunORM.LoggerEntity.debug('    * sgDryRun: %(value)s', {'value': sgDryRun})
 
     self.__isCommitting = True
 
@@ -665,14 +680,14 @@ class SgEntity(object):
     error = None
 
     try:
-      self._beforeCommit(sgBatchData, sgCommitData)
+      self._beforeCommit(sgBatchData, sgCommitData, sgDryRun)
     except Exception, e:
       error = e
 
     batchDataCopy = copy.deepcopy(sgBatchData)
 
     try:
-      ShotgunORM.beforeEntityCommit(self, batchDataCopy, sgCommitData)
+      ShotgunORM.beforeEntityCommit(self, batchDataCopy, sgCommitData, sgDryRun)
     except Exception, e:
       if error == None:
         error = e
@@ -789,7 +804,7 @@ class SgEntity(object):
         numberOfEntities=numberOfEntities
       )
 
-  def commit(self, sgFields=None):
+  def commit(self, sgFields=None, sgDryRun=False):
     '''
     Commits any modified Entity fields that have not yet been published to the
     Shotgun database.
@@ -800,6 +815,10 @@ class SgEntity(object):
       * (dict) sgFields:
         List of fields to commit.  When specified only those fields will be
         commited.
+
+      * (bool) sgDryRun:
+        When True no field updates will be pushed to Shotgun.  Only the before
+        and after commit calls will process.
     '''
 
     with self:
@@ -819,7 +838,8 @@ class SgEntity(object):
             'entity': self,
             'batch_data': batchData
           }
-        ]
+        ],
+        sgDryRun
       )
 
       return True
@@ -831,7 +851,7 @@ class SgEntity(object):
 
     return self.__connection
 
-  def delete(self, sgCommit=False):
+  def delete(self, sgCommit=False, sgDryRun=False):
     '''
     Deletes the Entity from Shotgun.
 
@@ -844,8 +864,11 @@ class SgEntity(object):
       if not self.exists():
         raise RuntimeError('entity does not exist, can not generate request data for type delete')
 
+      if sgCommit == False and sgDryRun == True:
+        raise RuntimeError('cant dry run when sgCommit is False')
+
       if sgCommit:
-        self.connection().delete(self)
+        self.connection().delete(self, sgDryRun)
       else:
         self._markedForDeletion = True
 
@@ -1289,20 +1312,15 @@ class SgEntity(object):
       result = False
 
       for field in self.fields(sgFields).values():
-        if not field.isValid():
-          continue
-
         if (field.isValid() and ignoreValid) or (field.hasCommit() and ignoreWithUpdate):
           continue
 
-        if not field.invalidate():
-          continue
-
-        result = True
+        if field.invalidate():
+          result = True
 
       return result
 
-  def revive(self):
+  def revive(self, sgDryRun=False):
     '''
     Revives the Entity.
     '''
@@ -1311,7 +1329,7 @@ class SgEntity(object):
       if not self.exists():
         raise RuntimeError('entity does not exist, can not generate request data for type revive')
 
-      self.connection().revive(self)
+      self.connection().revive(self, sgDryRun)
 
   def removeField(self, fieldName):
     '''
@@ -1322,7 +1340,7 @@ class SgEntity(object):
       if not self.hasField(fieldName):
         raise RuntimeError('invalid field name "%s"' % fieldName)
 
-      if self.field(fieldName).isUserField():
+      if not self.field(fieldName).isUserField():
         raise RuntimeError('unable to delete a non-user field')
 
       del self._fields[fieldName]
