@@ -319,7 +319,7 @@ class SgConnection(SgConnectionPriv):
   def __exit__(self, exc_type, exc_value, traceback):
     self.__lockCache.release()
 
-  def __init__(self, url, login, key):
+  def __init__(self, url, login, key, baseEntityClasses):
     super(SgConnection, self).__init__(url, login, key)
 
     self.__lockCache = threading.RLock()
@@ -327,9 +327,19 @@ class SgConnection(SgConnectionPriv):
     self._fieldQueryDefaults = 'default'
     self._fieldQueryDefaultsFallback = 'default'
 
+    baseClasses = self.baseEntityClasses()
+
+    if baseClasses == None:
+      baseClasses = {}
+
+    baseClasses.update(baseEntityClasses)
+
     self.__qEngine = ShotgunORM.SgQueryEngine(self)
     self.__schema = ShotgunORM.SgSchema.createSchema(self._url)
-    self._factory = ShotgunORM.SgEntityClassFactory(self)
+    self._factory = ShotgunORM.SgEntityClassFactory(
+      self,
+      baseClasses
+    )
 
     self.__entityCache = {}
     self.__entityCaching = ShotgunORM.config.DEFAULT_CONNECTION_CACHING
@@ -666,6 +676,21 @@ class SgConnection(SgConnectionPriv):
       raise exception
 
     return result
+
+  def baseEntityClasses(self):
+    '''
+    Returns a dict that will be passed to the connections class factory during
+    initialization.
+
+    The dictionary keys should be Entity names and the value a pointer to the
+    class which will be used as the base class for that particular Entity
+    type.
+
+    Sub-classes can implement this function to allow a connection to specifiy
+    custom Entity classes without overriding the global base Entity class.
+    '''
+
+    return {}
 
   def batch(self, requests, sgDryRun=False):
     '''
