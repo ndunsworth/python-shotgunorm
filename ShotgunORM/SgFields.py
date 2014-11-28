@@ -1815,7 +1815,7 @@ class SgFieldID(SgFieldInt):
 
     self._SgField__valid = True
 
-  def invalidate(self):
+  def invalidate(self, force=True):
     '''
     Does nothing for ID fields.
     '''
