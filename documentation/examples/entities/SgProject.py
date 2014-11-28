@@ -164,7 +164,7 @@ class SgProject(ShotgunORM.SgEntity):
     if not self.exists():
       return result
 
-    seqShots = self.shots(sgFields=['code'])
+    seqShots = self.shots(sgSequences=sgSequences, sgFields=['code'])
 
     for seq, shots in seqShots.items():
       shotNames = []
