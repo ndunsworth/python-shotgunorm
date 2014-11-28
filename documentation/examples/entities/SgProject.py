@@ -134,7 +134,7 @@ class SgProject(ShotgunORM.SgEntity):
         [
           'project',
           'is',
-          {'type': 'Project', 'id': 64}
+          self
         ],
         [
           'sg_sequence',
