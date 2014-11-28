@@ -1892,7 +1892,7 @@ class SgFieldType(SgFieldText):
 
     self._SgField__valid = True
 
-  def invalidate(self):
+  def invalidate(self, force=False):
     '''
     Always returns False for Type fields.
     '''
