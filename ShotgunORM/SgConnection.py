@@ -319,7 +319,7 @@ class SgConnection(SgConnectionPriv):
   def __exit__(self, exc_type, exc_value, traceback):
     self.__lockCache.release()
 
-  def __init__(self, url, login, key, baseEntityClasses):
+  def __init__(self, url, login, key, baseEntityClasses={}):
     super(SgConnection, self).__init__(url, login, key)
 
     self.__lockCache = threading.RLock()
@@ -331,6 +331,9 @@ class SgConnection(SgConnectionPriv):
 
     if baseClasses == None:
       baseClasses = {}
+
+    if baseEntityClasses == None:
+      baseEntityClasses = {}
 
     baseClasses.update(baseEntityClasses)
 
