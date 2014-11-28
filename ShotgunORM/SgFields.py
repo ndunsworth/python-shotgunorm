@@ -1657,11 +1657,11 @@ class SgFieldImage(SgFieldText):
 
       parent = self.parentEntity()
 
-      if not parent.type == 'Version':
-        raise RuntimeError('only valid on Version Entities')
-
       if parent == None or not parent.exist():
         raise RuntimeError('parent entity does not exists')
+
+      if not parent.type == 'Version':
+        raise RuntimeError('only valid on Version Entities')
 
       sgconnection = parent.connection().connection()
 
