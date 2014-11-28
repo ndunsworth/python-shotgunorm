@@ -1340,7 +1340,7 @@ class SgEntity(object):
       if not self.hasField(fieldName):
         raise RuntimeError('invalid field name "%s"' % fieldName)
 
-      if self.field(fieldName).isUserField():
+      if not self.field(fieldName).isUserField():
         raise RuntimeError('unable to delete a non-user field')
 
       del self._fields[fieldName]
