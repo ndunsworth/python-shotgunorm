@@ -1604,10 +1604,8 @@ class SgFieldImage(SgFieldText):
 
     url = self.value()
 
-    if url == None:
-      url = ''
-
-    webbrowser.open(url)
+    if url != None and url != '':
+      webbrowser.open(url)
 
   def returnType(self):
     return self.RETURN_TYPE_IMAGE
