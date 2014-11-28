@@ -108,7 +108,8 @@ class SgEntityClassFactory(object):
 
 
         fieldProps = {
-          '__classinfo__': entityInfo
+          '__classinfo__': entityInfo,
+          '__sg_base_class__': entityBaseClass
         }
 
         ShotgunORM.LoggerFactory.debug('        + Using %(baseClass)s', {'baseClass': entityBaseClass})
@@ -177,4 +178,3 @@ class SgEntityClassFactory(object):
       raise RuntimeError('unknown Entity type "%s"' % sgEntityType)
 
     return self._classCache[sgEntityType]
-
