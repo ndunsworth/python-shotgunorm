@@ -375,7 +375,7 @@ class SgVersion(ShotgunORM.SgEntity):
         Ignore the project field when searchign for other versions.
     '''
 
-    return self._changeVersion(-1, True, sgFields=sgFields, ignoreProject=ignoreProject)
+    return self._changeVersion(-1, doSub=True, sgFields=sgFields, ignoreProject=ignoreProject)
 
   def prevVersion(self, sgFields=None, ignoreProject=False):
     '''
@@ -394,7 +394,7 @@ class SgVersion(ShotgunORM.SgEntity):
         Ignore the project field when searchign for other versions.
     '''
 
-    return self._changeVersion(-1, False, sgFields=sgFields, ignoreProject=ignoreProject)
+    return self._changeVersion(-1, doSub=False, sgFields=sgFields, ignoreProject=ignoreProject)
 
   def nextSubVersion(self, sgFields=None, ignoreProject=False):
     '''
@@ -413,7 +413,7 @@ class SgVersion(ShotgunORM.SgEntity):
         Ignore the project field when searchign for other versions.
     '''
 
-    return self._changeVersion(1, True, sgFields=sgFields, ignoreProject=ignoreProject)
+    return self._changeVersion(1, doSub=True, sgFields=sgFields, ignoreProject=ignoreProject)
 
   def nextVersion(self, sgFields=None, ignoreProject=False):
     '''
@@ -432,7 +432,7 @@ class SgVersion(ShotgunORM.SgEntity):
         Ignore the project field when searchign for other versions.
     '''
 
-    return self._changeVersion(1, False, sgFields=sgFields, ignoreProject=ignoreProject)
+    return self._changeVersion(1, doSub=False, sgFields=sgFields, ignoreProject=ignoreProject)
 
   def otherSubVersions(self, sgFields=None, ignoreProject=False):
     '''
@@ -582,7 +582,7 @@ class SgVersion(ShotgunORM.SgEntity):
     if int(subVersion) == self.subVersionNumber():
       return self
 
-    return self._changeVersion(int(subVersion), True, True, sgFields=sgFields, ignoreProject=ignoreProject)
+    return self._changeVersion(int(subVersion), doSub=True, valueIsVersion=True, sgFields=sgFields, ignoreProject=ignoreProject)
 
   def subVersionNumber(self):
     '''
@@ -685,7 +685,7 @@ class SgVersion(ShotgunORM.SgEntity):
     if int(version) == self.versionNumber():
       return self
 
-    return self._changeVersion(int(version), False, True, sgFields=sgFields, ignoreProject=ignoreProject)
+    return self._changeVersion(int(version), doSub=False, valueIsVersion=True, sgFields=sgFields, ignoreProject=ignoreProject)
 
   def versionNumber(self):
     '''
