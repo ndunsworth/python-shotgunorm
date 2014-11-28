@@ -1103,6 +1103,30 @@ class SgConnection(SgConnectionPriv):
 
     return self.__entityCaching
 
+  def project(self, sgProject, sgFields=None):
+    '''
+    Returns the project Entity named "sgProject".
+
+    Args:
+      * (str) sgProject:
+        Name of the project.
+
+      * (list) sgFields:
+        List of fields to populate the result with.
+    '''
+
+    return self.findOne(
+      'Project',
+      [
+        [
+          'name',
+          'is',
+          sgProject
+        ]
+      ],
+      sgFields
+    )
+
   def projects(self, sgFields=None, sgProjectTypes=None, sgStatus=['Active']):
     '''
     Returns a list of project Entity objects.
@@ -1361,3 +1385,67 @@ class SgConnection(SgConnectionPriv):
       raise TypeError('expected a str for sgQueryTemplate, got %s' % type(sgQueryTemplate).__name__)
 
     self._fieldQueryDefaultsFallback = sgQueryTemplate
+
+  def user(self, sgUser, sgFields=None):
+    '''
+    Returns the HumanUser Entity belonging to the user "sgUser".
+
+    Args:
+      * (str) sgUser:
+        Name of the Shotgun user.
+
+      * (list) sgFields:
+        List of fields to populate the result with.
+    '''
+
+    return self.findOne(
+      'HumanUser',
+      [
+        [
+          'name',
+          'is',
+          sgUser
+        ]
+      ],
+      sgFields
+    )
+
+  def users(self, sgFields=None, sgActiveOnly=True):
+    '''
+    Returns a list of HumanUser Entities
+    Args:
+      * (list) sgFields:
+        List of fields to populate the results with.
+
+      * (bool) sgActiveOnly:
+        Return only active users when True.
+    '''
+
+    # Filter bogus users
+    filters = [
+      [
+        'name',
+        'is_not',
+        'Shotgun Support'
+      ],
+      [
+        'name',
+        'not_contains',
+        'Template User'
+      ]
+    ]
+
+    if sgActiveOnly:
+      filters.append(
+        [
+          'sg_status_list',
+          'is',
+          'act'
+        ]
+      )
+
+    return self.find(
+      'HumanUser',
+      filters,
+      sgFields
+    )
