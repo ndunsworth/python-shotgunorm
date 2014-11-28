@@ -61,7 +61,7 @@ class SgProject(ShotgunORM.SgEntity):
         ],
         [
           'code',
-          'name_is',
+          'is',
           sequence
         ]
       ],
