@@ -720,7 +720,7 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
     result = super(SgFieldEntityMulti, self).value()
 
     if result in [None, []]:
-      return result
+      return []
 
     parent = self.parentEntity()
 
