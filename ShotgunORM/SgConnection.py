@@ -1103,6 +1103,47 @@ class SgConnection(SgConnectionPriv):
 
     return self.__entityCaching
 
+  def projects(self, sgFields=None, sgProjectTypes=None, sgStatus=['Active']):
+    '''
+    Returns a list of project Entity objects.
+
+    Args:
+      * (list) sgFields:
+        List of fields to populate the results with.
+
+      * (list) sgProjectTypes:
+        List of project type names to filter the results by.
+
+      * (list) sgStatus:
+        List of project status values to filter the results by.
+    '''
+
+    filters = []
+
+    if sgStatus != None and sgStatus != []:
+      filters.append(
+        [
+          'sg_status',
+          'in',
+          sgStatus
+        ]
+      )
+
+    if sgProjectTypes != None and sgProjectTypes != []:
+      filters.append(
+        [
+          'sg_type',
+          'in',
+          sgProjectTypes
+        ]
+      )
+
+    return self.find(
+      'Project',
+      filters,
+      sgFields
+    )
+
   def queryEngine(self):
     '''
     Query Engine that performs background Entity field pulling.
