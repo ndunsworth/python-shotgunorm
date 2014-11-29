@@ -891,6 +891,20 @@ class SgFieldSelectionList(ShotgunORM.SgField):
 
     return True
 
+  def displayValue(self):
+    '''
+    Returns the display string of the selections value.
+
+    If no display string exists then the selections value is returned instead.
+    '''
+
+    val = self.value()
+
+    return self.schemaInfo().displayValues().get(
+      val,
+      val
+    )
+
   def returnType(self):
     return self.RETURN_TYPE_LIST
 

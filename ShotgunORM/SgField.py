@@ -108,6 +108,7 @@ class SgFieldSchemaInfo(object):
 
     self._commitable = sgFieldAttribs['commitable']
     self._defaultValue = sgFieldAttribs['default_value']
+    self._displayValues = sgFieldAttribs['display_values']
     self._doc = sgFieldAttribs['doc']
     self._editable = sgFieldAttribs['editable']
     self._label = sgFieldAttribs['label']
@@ -134,6 +135,7 @@ class SgFieldSchemaInfo(object):
     required=False,
     returnTypeName=None,
     summaryInfo=None,
+    displayValues=None,
     validTypes=None,
     validValues=None
   ):
@@ -164,9 +166,22 @@ class SgFieldSchemaInfo(object):
     if doc == None:
       doc = ''
 
+    if displayValues == None:
+      displayValues = {}
+
+    if summaryInfo == None:
+      summaryInfo = {}
+
+    if validTypes == None:
+      validTypes = []
+
+    if validValues == None:
+      validValues = []
+
     return {
       'commitable': True,
       'default_value': defaultValue,
+      'display_values': displayValues,
       'doc': doc,
       'editable': bool(editable),
       'label': label,
@@ -177,8 +192,8 @@ class SgFieldSchemaInfo(object):
       'return_type': returnType,
       'return_type_name': returnTypeName,
       'summary_info': summaryInfo,
-      'value_types': None,
-      'valid_values': []
+      'value_types': validTypes,
+      'valid_values': validValues
     }
 
   @classmethod
@@ -189,6 +204,7 @@ class SgFieldSchemaInfo(object):
 
     data = {
       'commitable': True,
+      'display_values': {},
       'default_value': sgSchema['properties']['default_value']['value'],
       'doc': '',
       'editable': sgSchema['editable']['value'],
@@ -202,10 +218,17 @@ class SgFieldSchemaInfo(object):
         SgField.RETURN_TYPE_UNSUPPORTED
       ),
       'return_type_name': sgSchema['data_type']['value'],
-      'summary_info': None,
-      'value_types': None,
+      'summary_info': {},
+      'value_types': [],
       'valid_values': []
     }
+
+    try:
+      data['display_values'] = copy.deepcopy(
+        sgSchema['properties']['display_values']['value']
+      )
+    except:
+      pass
 
     try:
       data['value_types'] = copy.deepcopy(
@@ -248,6 +271,7 @@ class SgFieldSchemaInfo(object):
     data = {
       'commitable': True,
       'default_value': sgXmlElement.attrib.get('default_value'),
+      'display_values': eval(sgXmlElement.attrib.get('display_values', '{}')),
       'doc': sgXmlElement.attrib.get('doc'),
       'editable': sgXmlElement.attrib.get('editable') == 'True',
       'label': sgXmlElement.attrib.get('label'),
@@ -257,19 +281,15 @@ class SgFieldSchemaInfo(object):
       'required': bool(sgXmlElement.attrib.get('required')),
       'return_type': int(sgXmlElement.attrib.get('return_type')),
       'return_type_name': sgXmlElement.attrib.get('return_type_name'),
-      'summary_info': eval(sgXmlElement.attrib.get('summary_info')),
-      'value_types': sgXmlElement.attrib.get('value_types'),
-      'valid_values': sgXmlElement.attrib.get('valid_values'),
+      'summary_info': eval(sgXmlElement.attrib.get('summary_info', '{}')),
+      'value_types': sgXmlElement.attrib.get('value_types', []),
+      'valid_values': sgXmlElement.attrib.get('valid_values', [])
     }
 
-    if data['value_types'] == '':
-      data['value_types'] = []
-    else:
+    if data['value_types'] != []:
       data['value_types'] = data['value_types'].split(',')
 
-    if data['valid_values'] == '':
-      data['valid_values'] = []
-    else:
+    if data['valid_values'] != []:
       data['valid_values'] = data['valid_values'].split(',')
 
     return cls(data)
@@ -280,6 +300,14 @@ class SgFieldSchemaInfo(object):
     '''
 
     return self._defaultValue
+
+  def displayValues(self):
+    '''
+    Returns a dictionary containing the display names for a selection list
+    field.
+    '''
+
+    return dict(self._displayValues)
 
   def doc(self):
     '''
@@ -373,41 +401,37 @@ class SgFieldSchemaInfo(object):
     SgSchema.export(...)
     '''
 
-    doc = self.doc()
-    editable = str(self.isEditable())
-    label = self.label()
-    name = self.name()
-    parent = self.parentEntity()
-    required = str(self.isRequired())
-    return_type = str(self.returnType())
-    return_type_name = self.returnTypeName()
-    summary_info = str(self.summaryInfo())
-    value_types = self.valueTypes()
-    valid_values = self.validValues()
+    data = {
+      'doc': self.doc(),
+      'editable': str(self.isEditable()),
+      'label': self.label(),
+      'name': self.name(),
+      'parent': self.parentEntity(),
+      'required': str(self.isRequired()),
+      'return_type': str(self.returnType()),
+      'return_type_name': self.returnTypeName(),
+    }
 
-    if value_types == None:
-      value_types = ''
-    else:
-      value_types = ','.join(value_types)
+    displayValues = self.displayValues()
+    summaryInfo = self.summaryInfo()
+    validValues = self.validValues()
+    valueTypes = self.valueTypes()
 
-    if valid_values == None:
-      valid_values = ''
-    else:
-      valid_values = ','.join(valid_values)
+    if len(displayValues) > 0:
+      data['display_values'] = str(self.displayValues())
+
+    if len(summaryInfo) > 0:
+      data['summary_info'] = str(summaryInfo)
+
+    if len(validValues) > 0:
+      data['valid_values'] = ','.join(validValues)
+
+    if len(valueTypes) > 0:
+      data['value_types'] = ','.join(valueTypes)
 
     result = ET.Element(
       'SgField',
-      doc=doc,
-      editable=editable,
-      label=label,
-      name=name,
-      parent=parent,
-      required=required,
-      return_type=return_type,
-      return_type_name=return_type_name,
-      summary_info=summary_info,
-      value_types=value_types,
-      valid_values=valid_values
+      **data
     )
 
     return result
@@ -449,6 +473,7 @@ class SgFieldSchemaInfo2(SgFieldSchemaInfo):
     required=False,
     returnTypeName=None,
     summaryInfo=None,
+    displayValues=None,
     validTypes=None,
     validValues=None
   ):
@@ -463,6 +488,7 @@ class SgFieldSchemaInfo2(SgFieldSchemaInfo):
       required,
       returnTypeName,
       summaryInfo,
+      displayValues,
       validTypes,
       validValues
     )
