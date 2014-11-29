@@ -36,6 +36,38 @@ class SgProject(ShotgunORM.SgEntity):
   Class that represents a Project Entity.
   '''
 
+  def sequence(self, sequence, sgFields=None):
+    '''
+    Returns the sequence Entity for this project.
+
+    Args:
+      * (str) sequence:
+        Name of the sequence.
+
+      * (list) sgFields:
+        List of fields to populate the result with.
+    '''
+
+    if not self.exists():
+      return None
+
+    return self.connection().findOne(
+      'Sequence',
+      [
+        [
+          'project',
+          'is',
+          self
+        ],
+        [
+          'code',
+          'is',
+          sequence
+        ]
+      ],
+      sgFields
+    )
+
   def sequenceNames(self):
     '''
     Returns a list of all Sequence names for this project.
@@ -78,6 +110,46 @@ class SgProject(ShotgunORM.SgEntity):
       sgFields
     )
 
+  def shot(self, sequence, shot, sgFields=None):
+    '''
+    Returns the Shot Entity for the sequence of this project.
+
+    Args:
+      * (str) sequence:
+        Name of the sequence the shot belongs to.
+
+      * (str) shot:
+        Name of the shot.
+
+      * (list) sgFields:
+        List of fields to populate the result with.
+    '''
+
+    if not self.exists():
+      return None
+
+    return self.connection().findOne(
+      'Shot',
+      [
+        [
+          'project',
+          'is',
+          self
+        ],
+        [
+          'sg_sequence',
+          'name_is',
+          sequence
+        ],
+        [
+          'code',
+          'is',
+          shot
+        ]
+      ],
+      sgFields
+    )
+
   def shotNames(self, sgSequences=None):
     '''
     Returns a dict containing of all Shot names for this project.
@@ -92,7 +164,7 @@ class SgProject(ShotgunORM.SgEntity):
     if not self.exists():
       return result
 
-    seqShots = self.shots(sgFields=['code'])
+    seqShots = self.shots(sgSequences=sgSequences, sgFields=['code'])
 
     for seq, shots in seqShots.items():
       shotNames = []
@@ -121,7 +193,7 @@ class SgProject(ShotgunORM.SgEntity):
     if not self.exists():
       return result
 
-    if isinstance(sgSequences, (str, SgEntity)):
+    if isinstance(sgSequences, (str, ShotgunORM.SgEntity)):
       sgSequences = [sgSequences]
 
     if sgSequences == None:
@@ -168,7 +240,7 @@ class SgProject(ShotgunORM.SgEntity):
     finally:
       qEngine.unblock()
 
-    return
+    return result
 
 # Register the custom class.
 ShotgunORM.SgEntity.registerDefaultEntityClass(

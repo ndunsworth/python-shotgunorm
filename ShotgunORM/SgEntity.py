@@ -108,6 +108,7 @@ class SgEntitySchemaInfo(object):
       raise RuntimeError('invalid tag "%s"' % sgXmlElement.tag)
 
     entityFieldInfos = {}
+    entityFieldInfosUnsupported = {}
 
     fields = sgXmlElement.find('fields')
 
@@ -124,11 +125,17 @@ class SgEntitySchemaInfo(object):
       if fieldInfo.returnType() == ShotgunORM.SgField.RETURN_TYPE_UNSUPPORTED:
         ShotgunORM.LoggerEntity.warning('field %s.%s ignored because of return type unsupported' % (fieldInfo.name(), entityName))
 
-        continue
+        entityFieldInfosUnsupported[fieldInfo.name()] = fieldInfo
+      else:
+        entityFieldInfos[fieldInfo.name()] = fieldInfo
 
-      entityFieldInfos[field.attrib.get('name')] = fieldInfo
-
-    result = cls(sgSchema, entityName, entityLabel, entityFieldInfos)
+    result = cls(
+      sgSchema,
+      entityName,
+      entityLabel,
+      entityFieldInfos,
+      entityFieldInfosUnsupported
+    )
 
     try:
       ShotgunORM.onEntitySchemaInfoCreate(result)

@@ -49,6 +49,7 @@ import datetime
 import os
 import re
 import threading
+import time
 import urllib2
 import webbrowser
 
@@ -720,7 +721,7 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
     result = super(SgFieldEntityMulti, self).value()
 
     if result in [None, []]:
-      return result
+      return []
 
     parent = self.parentEntity()
 
@@ -890,6 +891,20 @@ class SgFieldSelectionList(ShotgunORM.SgField):
     self._value = sgData
 
     return True
+
+  def displayValue(self):
+    '''
+    Returns the display string of the selections value.
+
+    If no display string exists then the selections value is returned instead.
+    '''
+
+    val = self.value()
+
+    return self.schemaInfo().displayValues().get(
+      val,
+      val
+    )
 
   def returnType(self):
     return self.RETURN_TYPE_LIST
@@ -1566,6 +1581,35 @@ class SgFieldImage(SgFieldText):
   See SgFieldText.
   '''
 
+  REGEXP_EXPIRETIME = re.compile(r'&Expires=(\d+)&Signature=')
+
+  def __init__(self, name, label=None, sgFieldSchemaInfo=None):
+    super(SgFieldImage, self).__init__(name, label, sgFieldSchemaInfo)
+
+    self.__expireTime = None
+
+  def _invalidate(self):
+    self.__expireTime = None
+
+  def _validate(self, forReal=False):
+    result = super(SgFieldImage, self)._validate(forReal)
+
+    if forReal and self._value != None:
+      search = self.REGEXP_EXPIRETIME.search(self._value)
+
+      if search == None:
+        ShotgunORM.LoggerField.warn(
+          '%(sgField)s._validate() unable to find image expire time in %(image)s',
+          {
+            'sgField': self,
+            'image': self._value
+          }
+        )
+      else:
+        self.__expireTime = int(search.group(1))
+
+    return result
+
   def downloadThumbnail(self, path):
     '''
     Downloads the image to the specified path.
@@ -1597,6 +1641,20 @@ class SgFieldImage(SgFieldText):
 
     return True
 
+  def isValid(self):
+    if super(SgFieldImage, self).isValid():
+      expires = self.__expireTime
+
+      if expires != None:
+        t = time.time()
+
+        if t >= expires:
+          return False
+
+      return True
+
+    return False
+
   def openInBrowser(self):
     '''
     Opens the image in a web-browser
@@ -1604,10 +1662,8 @@ class SgFieldImage(SgFieldText):
 
     url = self.value()
 
-    if url == None:
-      url = ''
-
-    webbrowser.open(url)
+    if url != None and url != '':
+      webbrowser.open(url)
 
   def returnType(self):
     return self.RETURN_TYPE_IMAGE
@@ -1659,11 +1715,11 @@ class SgFieldImage(SgFieldText):
 
       parent = self.parentEntity()
 
-      if not parent.type == 'Version':
-        raise RuntimeError('only valid on Version Entities')
-
       if parent == None or not parent.exist():
         raise RuntimeError('parent entity does not exists')
+
+      if not parent.type == 'Version':
+        raise RuntimeError('only valid on Version Entities')
 
       sgconnection = parent.connection().connection()
 
@@ -1712,7 +1768,13 @@ class SgFieldUrl(ShotgunORM.SgField):
       if result['link_type'] in ['upload', 'web']:
         result['url'] = sgData['url']
       else:
+        result['id'] = sgData['id']
+        result['local_path'] = sgData['local_path']
+        result['local_path_linux'] = sgData['local_path_linux']
+        result['local_path_mac'] = sgData['local_path_mac']
+        result['local_path_windows'] = sgData['local_path_windows']
         result['local_storage'] = sgData['local_storage']
+        result['type'] = sgData['type']
 
       result['name'] = sgData['name']
       result['content_type'] = sgData.get('content_type', None)

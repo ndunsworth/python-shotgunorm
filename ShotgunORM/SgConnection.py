@@ -319,7 +319,7 @@ class SgConnection(SgConnectionPriv):
   def __exit__(self, exc_type, exc_value, traceback):
     self.__lockCache.release()
 
-  def __init__(self, url, login, key):
+  def __init__(self, url, login, key, baseEntityClasses={}):
     super(SgConnection, self).__init__(url, login, key)
 
     self.__lockCache = threading.RLock()
@@ -327,9 +327,22 @@ class SgConnection(SgConnectionPriv):
     self._fieldQueryDefaults = 'default'
     self._fieldQueryDefaultsFallback = 'default'
 
+    baseClasses = self.baseEntityClasses()
+
+    if baseClasses == None:
+      baseClasses = {}
+
+    if baseEntityClasses == None:
+      baseEntityClasses = {}
+
+    baseClasses.update(baseEntityClasses)
+
     self.__qEngine = ShotgunORM.SgQueryEngine(self)
     self.__schema = ShotgunORM.SgSchema.createSchema(self._url)
-    self._factory = ShotgunORM.SgEntityClassFactory(self)
+    self._factory = ShotgunORM.SgEntityClassFactory(
+      self,
+      baseClasses
+    )
 
     self.__entityCache = {}
     self.__entityCaching = ShotgunORM.config.DEFAULT_CONNECTION_CACHING
@@ -666,6 +679,21 @@ class SgConnection(SgConnectionPriv):
       raise exception
 
     return result
+
+  def baseEntityClasses(self):
+    '''
+    Returns a dict that will be passed to the connections class factory during
+    initialization.
+
+    The dictionary keys should be Entity names and the value a pointer to the
+    class which will be used as the base class for that particular Entity
+    type.
+
+    Sub-classes can implement this function to allow a connection to specifiy
+    custom Entity classes without overriding the global base Entity class.
+    '''
+
+    return {}
 
   def batch(self, requests, sgDryRun=False):
     '''
@@ -1075,6 +1103,71 @@ class SgConnection(SgConnectionPriv):
 
     return self.__entityCaching
 
+  def project(self, sgProject, sgFields=None):
+    '''
+    Returns the project Entity named "sgProject".
+
+    Args:
+      * (str) sgProject:
+        Name of the project.
+
+      * (list) sgFields:
+        List of fields to populate the result with.
+    '''
+
+    return self.findOne(
+      'Project',
+      [
+        [
+          'name',
+          'is',
+          sgProject
+        ]
+      ],
+      sgFields
+    )
+
+  def projects(self, sgFields=None, sgProjectTypes=None, sgStatus=['Active']):
+    '''
+    Returns a list of project Entity objects.
+
+    Args:
+      * (list) sgFields:
+        List of fields to populate the results with.
+
+      * (list) sgProjectTypes:
+        List of project type names to filter the results by.
+
+      * (list) sgStatus:
+        List of project status values to filter the results by.
+    '''
+
+    filters = []
+
+    if sgStatus != None and sgStatus != []:
+      filters.append(
+        [
+          'sg_status',
+          'in',
+          sgStatus
+        ]
+      )
+
+    if sgProjectTypes != None and sgProjectTypes != []:
+      filters.append(
+        [
+          'sg_type',
+          'in',
+          sgProjectTypes
+        ]
+      )
+
+    return self.find(
+      'Project',
+      filters,
+      sgFields
+    )
+
   def queryEngine(self):
     '''
     Query Engine that performs background Entity field pulling.
@@ -1292,3 +1385,67 @@ class SgConnection(SgConnectionPriv):
       raise TypeError('expected a str for sgQueryTemplate, got %s' % type(sgQueryTemplate).__name__)
 
     self._fieldQueryDefaultsFallback = sgQueryTemplate
+
+  def user(self, sgUser, sgFields=None):
+    '''
+    Returns the HumanUser Entity belonging to the user "sgUser".
+
+    Args:
+      * (str) sgUser:
+        Name of the Shotgun user.
+
+      * (list) sgFields:
+        List of fields to populate the result with.
+    '''
+
+    return self.findOne(
+      'HumanUser',
+      [
+        [
+          'name',
+          'is',
+          sgUser
+        ]
+      ],
+      sgFields
+    )
+
+  def users(self, sgFields=None, sgActiveOnly=True):
+    '''
+    Returns a list of HumanUser Entities
+    Args:
+      * (list) sgFields:
+        List of fields to populate the results with.
+
+      * (bool) sgActiveOnly:
+        Return only active users when True.
+    '''
+
+    # Filter bogus users
+    filters = [
+      [
+        'name',
+        'is_not',
+        'Shotgun Support'
+      ],
+      [
+        'name',
+        'not_contains',
+        'Template User'
+      ]
+    ]
+
+    if sgActiveOnly:
+      filters.append(
+        [
+          'sg_status_list',
+          'is',
+          'act'
+        ]
+      )
+
+    return self.find(
+      'HumanUser',
+      filters,
+      sgFields
+    )
