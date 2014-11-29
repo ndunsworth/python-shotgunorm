@@ -343,6 +343,13 @@ class SgFieldSchemaInfo(object):
 
     return self._editable
 
+  def isUserField(self):
+    '''
+    Returns True if the field is a custom user field.
+    '''
+
+    return False
+
   def isRequired(self):
     '''
     Returns True if the field is required for the Entity.
@@ -497,6 +504,13 @@ class SgFieldSchemaInfo2(SgFieldSchemaInfo):
     result['queryable'] = False
 
     return result
+
+  def isUserField(self):
+    '''
+    Returns True if the field is a custom user field.
+    '''
+
+    return True
 
   def setDoc(self, doc):
     '''
@@ -715,7 +729,7 @@ class SgField(object):
     Returns the default value for the field.
     '''
 
-    return self.schemaInfo().defaultValue()
+    return self.__info.defaultValue()
 
   def _deleteWidget(self):
     '''
@@ -747,7 +761,7 @@ class SgField(object):
     Returns the fields doc string.
     '''
 
-    return self.schemaInfo().doc()
+    return self.__info.doc()
 
   def eventLogs(self, sgEventType=None, sgFields=None, sgRecordLimit=0):
     '''
@@ -965,7 +979,7 @@ class SgField(object):
     Returns True if the field is allowed to make commits to Shotgun.
     '''
 
-    return self.schemaInfo().isQueryable()
+    return self.__info.isQueryable()
 
   def isCustom(self):
     '''
@@ -985,16 +999,16 @@ class SgField(object):
     parent = self.parentEntity()
 
     if parent == None:
-      return self.schemaInfo().isEditable()
+      return self.__info.isEditable()
     else:
-      return self.schemaInfo().isEditable() or not parent.exists()
+      return self.__info.isEditable() or not parent.exists()
 
   def isQueryable(self):
     '''
     Returns True if the field is queryable in Shotgun.
     '''
 
-    return self.schemaInfo().isQueryable()
+    return self.__info.isQueryable()
 
   def isSyncUpdating(self):
     '''
@@ -1010,7 +1024,7 @@ class SgField(object):
     Returns True if the field is a SgUserField.
     '''
 
-    return isinstance(self.__info, SgFieldSchemaInfo2)
+    return self.__info.isUserField()
 
   def isValid(self):
     '''
@@ -1027,7 +1041,7 @@ class SgField(object):
     Returns the user visible string of the field.
     '''
 
-    return self.schemaInfo().label()
+    return self.__info.label()
 
   def lastEventLog(self, sgEventType=None, sgFields=None):
     '''
@@ -1133,7 +1147,7 @@ class SgField(object):
     Returns the Shotgun API string used to reference the field on an Entity.
     '''
 
-    return self.schemaInfo().name()
+    return self.__info.name()
 
   def parentChanged(self):
     '''
@@ -1535,14 +1549,14 @@ class SgField(object):
     Returns a list of valid values supported by the field.
     '''
 
-    return self.schemaInfo().validValues()
+    return self.__info.validValues()
 
   def valueTypes(self):
     '''
     Returns a list of valid value types supported by the field.
     '''
 
-    return self.schemaInfo().valueTypes()
+    return self.__info.valueTypes()
 
   def widget(self):
     '''
