@@ -727,8 +727,8 @@ class SgEntity(object):
     entityFieldInfos = self.schemaInfo().fieldInfos()
 
     # Add the type field.
-    self._fields['type'] = ShotgunORM.SgFieldType(self, entityFieldInfos['type'])
-    self._fields['id'] = ShotgunORM.SgFieldID(self, entityFieldInfos['id'])
+    self._fields['type'] = ShotgunORM.SgFieldType(entityFieldInfos['type'], self)
+    self._fields['id'] = ShotgunORM.SgFieldID(entityFieldInfos['id'], self)
 
     # Dont pass the "id" field as its manually built as a user field.  Same
     # for the type field.
@@ -742,9 +742,7 @@ class SgEntity(object):
 
       fieldClass = fieldClasses.get(fieldInfo.returnType(), None)
 
-      newField = fieldClass(None, sgFieldSchemaInfo=fieldInfo)
-
-      newField._SgField__setParentEntity(self)
+      newField = fieldClass(None, sgFieldSchemaInfo=fieldInfo, sgEntity=self)
 
       if hasattr(self.__class__, fieldName):
         ShotgunORM.LoggerField.warn(

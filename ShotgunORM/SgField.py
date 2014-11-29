@@ -601,7 +601,7 @@ class SgField(object):
 
     return False
 
-  def __init__(self, name, label=None, sgFieldSchemaInfo=None):
+  def __init__(self, name, label=None, sgFieldSchemaInfo=None, sgEntity=None):
     self.__parent = None
     self.__info = None
 
@@ -632,6 +632,9 @@ class SgField(object):
       )
     else:
       self.__setFieldSchemaInfo(sgFieldSchemaInfo)
+
+    if sgEntity != None:
+      self.__parent = weakref.ref(parent)
 
   @classmethod
   def registerFieldClass(cls, sgFieldReturnType, sgFieldClass):
@@ -1134,7 +1137,7 @@ class SgField(object):
 
   def parentChanged(self):
     '''
-
+    Called when the fields parent Entity changes.
     '''
 
     pass

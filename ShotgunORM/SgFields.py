@@ -185,8 +185,13 @@ class SgFieldColor2(ShotgunORM.SgField):
   REGEXP_TASK_COLOR = re.compile(r'(\d+,\d+,\d+)|(pipeline_step)')
   REGEXP_PHASE_COLOR = re.compile(r'(\d+,\d+,\d+)|(project)')
 
-  def __init__(self, name, label=None, sgFieldSchemaInfo=None):
-    super(SgFieldColor2, self).__init__(name, label=label, sgFieldSchemaInfo=sgFieldSchemaInfo)
+  def __init__(self, name, label=None, sgFieldSchemaInfo=None, sgEntity=None):
+    super(SgFieldColor2, self).__init__(
+      name,
+      label=label,
+      sgFieldSchemaInfo=sgFieldSchemaInfo,
+      sgEntity=sgEntity
+    )
 
     self._regexp = self.REGEXP_COLOR
     self._linkString = None
@@ -1005,8 +1010,13 @@ class SgFieldSummary(ShotgunORM.SgField):
 
   DATE_REGEXP = re.compile(r'(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2}) UTC')
 
-  def __init__(self, name, label=None, sgFieldSchemaInfo=None):
-    super(SgFieldSummary, self).__init__(name, label=label, sgFieldSchemaInfo=sgFieldSchemaInfo)
+  def __init__(self, name, label=None, sgFieldSchemaInfo=None, sgEntity=None):
+    super(SgFieldSummary, self).__init__(
+      name,
+      label=label,
+      sgFieldSchemaInfo=sgFieldSchemaInfo,
+      sgEntity=sgEntity
+    )
 
     self.__buildLock = threading.Lock()
 
@@ -1583,8 +1593,13 @@ class SgFieldImage(SgFieldText):
 
   REGEXP_EXPIRETIME = re.compile(r'&Expires=(\d+)&Signature=')
 
-  def __init__(self, name, label=None, sgFieldSchemaInfo=None):
-    super(SgFieldImage, self).__init__(name, label, sgFieldSchemaInfo)
+  def __init__(self, name, label=None, sgFieldSchemaInfo=None, sgEntity=None):
+    super(SgFieldImage, self).__init__(
+      name,
+      label=label,
+      sgFieldSchemaInfo=sgFieldSchemaInfo,
+      sgEntity=sgEntity
+    )
 
     self.__expireTime = None
 
@@ -1870,12 +1885,10 @@ class SgFieldID(SgFieldInt):
   def __exit__(self, exc_type, exc_value, traceback):
     return False
 
-  def __init__(self, parentEntity, sgFieldSchemaInfo):
-    super(SgFieldID, self).__init__(None, None, sgFieldSchemaInfo)
+  def __init__(self, sgFieldSchemaInfo, sgEntity):
+    super(SgFieldID, self).__init__(None, None, sgFieldSchemaInfo, sgEntity)
 
-    self._SgField__setParentEntity(parentEntity)
-
-    self._SgField__valid = True
+    super(SgFieldID, self).setValid(True)
 
   def invalidate(self, force=True):
     '''
@@ -1947,12 +1960,10 @@ class SgFieldType(SgFieldText):
   def __exit__(self, exc_type, exc_value, traceback):
     return False
 
-  def __init__(self, parentEntity, sgFieldSchemaInfo):
-    super(SgFieldType, self).__init__(None, None, sgFieldSchemaInfo)
+  def __init__(self, sgFieldSchemaInfo, sgEntity):
+    super(SgFieldType, self).__init__(None, None, sgFieldSchemaInfo, sgEntity)
 
-    self._SgField__setParentEntity(parentEntity)
-
-    self._SgField__valid = True
+    super(SgFieldType, self).setValid(True)
 
   def invalidate(self, force=False):
     '''
