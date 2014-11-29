@@ -634,7 +634,7 @@ class SgField(object):
       self.__setFieldSchemaInfo(sgFieldSchemaInfo)
 
     if sgEntity != None:
-      self.__parent = weakref.ref(parent)
+      self.__parent = weakref.ref(sgEntity)
 
   @classmethod
   def registerFieldClass(cls, sgFieldReturnType, sgFieldClass):
