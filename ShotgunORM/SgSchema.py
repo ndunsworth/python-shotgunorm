@@ -156,6 +156,7 @@ class SgSchema(object):
     self.__valid = False
     self.__buildId = 0
     self.__isBuilding = False
+    self.__builtFromCache = False
 
   @classmethod
   def createSchema(cls, url):
@@ -355,6 +356,8 @@ class SgSchema(object):
 
       if loadedCache == False:
         newSchema = self._fromSG(sgConnection)
+      else:
+        self.__builtFromCache = True
 
       _entityFix(self, newSchema)
 
@@ -501,6 +504,11 @@ class SgSchema(object):
     '''
 
     with self:
+      if self.__builtFromCache:
+        ShotgunORM.LoggerSchema.warn(
+          'exporting schema when current schema was built from a cache file'
+        )
+
       if not self.isInitialized():
         self.__buildEvent.wait(self.BUILD_EVENT_TIMEOUT)
 
