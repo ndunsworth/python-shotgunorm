@@ -1656,17 +1656,20 @@ class SgFieldImage(SgFieldText):
 
     return True
 
+  def isLinkExpired(self):
+    '''
+    Returns True if the image fields value has expired and can no longer be
+    downloaded.
+    '''
+
+    return (
+      self.__expireTime != None and
+      time.time() >= self.__expireTime
+    )
+
   def isValid(self):
     if super(SgFieldImage, self).isValid():
-      expires = self.__expireTime
-
-      if expires != None:
-        t = time.time()
-
-        if t >= expires:
-          return False
-
-      return True
+      return not self.isLinkExpired()
 
     return False
 
