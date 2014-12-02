@@ -39,6 +39,7 @@ __all__ = [
   'SgFieldSelectionList',
   'SgFieldTagList',
   'SgFieldText',
+  'SgFieldTimeCode',
   'SgFieldType',
   'SgFieldUrl'
 ]
@@ -1586,6 +1587,55 @@ class SgFieldText(ShotgunORM.SgField):
 
     return True
 
+class SgFieldTimeCode(ShotgunORM.SgField):
+  '''
+  Entity field that stores timecode.
+  '''
+
+  def _fromFieldData(self, sgData):
+    if sgData != None:
+      try:
+        sgData = int(sgData)
+      except:
+        raise ValueError('%s invalid data from Shotgun "%s", expected a int' % (self, sgData))
+
+      if abs(sgData) > 86400000:
+        ShotgunORM.LoggerField.warn(
+          '%(sgField)s._fromFieldData(sgData) timecode value from shotgun is '
+          'greater than the milliseconds in a day, value=%(value)s',
+          {
+            'sgField': self,
+            'value': sgData
+          }
+        )
+
+    if self._value == sgData:
+      return False
+
+    self._value = sgData
+
+    return True
+
+  def returnType(self):
+    return self.RETURN_TYPE_TIMECODE
+
+  def _setValue(self, sgData):
+    if sgData != None:
+      try:
+        sgData = int(sgData)
+      except:
+        raise TypeError('%s invalid value type "%s", expected a int' % (self, type(sgData).__name__))
+
+      if abs(sgData) > 86400000:
+        raise ValueError('timecode value can not be greater than 86400000')
+
+    if self._value == sgData:
+      return False
+
+    self._value = sgData
+
+    return True
+
 class SgFieldImage(SgFieldText):
   '''
   See SgFieldText.
@@ -1868,6 +1918,7 @@ ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_STATUS_LIST
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_SUMMARY, SgFieldSummary)
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_TAG_LIST, SgFieldTagList)
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_TEXT, SgFieldText)
+ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_TIMECODE, SgFieldTimeCode)
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_URL, SgFieldUrl)
 
 ################################################################################

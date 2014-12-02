@@ -583,7 +583,8 @@ class SgField(object):
   RETURN_TYPE_SUMMARY = 13
   RETURN_TYPE_TAG_LIST = 14
   RETURN_TYPE_TEXT = 15
-  RETURN_TYPE_URL = 16
+  RETURN_TYPE_TIMECODE = 16
+  RETURN_TYPE_URL = 17
 
   # Custom return types should start at 201.
   RETURN_TYPE_RESERVED = 200
@@ -1592,6 +1593,7 @@ FIELD_RETURN_TYPES = {
   'summary': SgField.RETURN_TYPE_SUMMARY,
   'tag_list': SgField.RETURN_TYPE_TAG_LIST,
   'text': SgField.RETURN_TYPE_TEXT,
+  'timecode': SgField.RETURN_TYPE_TIMECODE,
   'url': SgField.RETURN_TYPE_URL,
   'url_template': SgField.RETURN_TYPE_TEXT,
   'uuid': SgField.RETURN_TYPE_TEXT
@@ -1615,5 +1617,6 @@ FIELD_RETURN_TYPE_NAMES = {
   SgField.RETURN_TYPE_SUMMARY: 'summary',
   SgField.RETURN_TYPE_TAG_LIST: 'tag_list',
   SgField.RETURN_TYPE_TEXT: 'text',
+  SgField.RETURN_TYPE_TIMECODE: 'timecode',
   SgField.RETURN_TYPE_URL: 'url'
 }
