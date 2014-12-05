@@ -176,9 +176,7 @@ class SgSchema(object):
 
       result = cls(url)
 
-      urlLower = result.url().lower()
-
-      cls.__cache__[urlLower] = result
+      cls.__cache__[result.url().lower()] = result
 
       return result
 
@@ -191,12 +189,7 @@ class SgSchema(object):
     '''
 
     with cls.__lock__:
-      urlLower = url.lower()
-
-      try:
-        return cls.__cache__[urlLower]
-      except KeyError:
-        return None
+      return cls.__cache__.get(url.lower(), None)
 
   @classmethod
   def registerDefaultQueryFields(cls, sgEntityType, sgQueryTemplates, sgFields):
@@ -529,13 +522,13 @@ class SgSchema(object):
     not initialized.
     '''
 
+    event.set()
+
     with self:
       if self.isInitialized():
         return
 
-      event.set()
-
-      self._build(sgConnection)
+      self.build(sgConnection)
 
   def initialize(self, sgConnection, thread=True):
     '''
