@@ -25,7 +25,8 @@
 #
 
 __all__ = [
-  'SgConnection'
+  'SgConnection',
+  'SgConnectionMeta'
 ]
 
 # Python imports
@@ -60,7 +61,7 @@ class SgConnectionMeta(type):
 
       urlLower = result.url().lower()
 
-      classConnections = cls.__connections__
+      classConnections = result.__connections__
 
       login = result.login()
       key = result.key()
@@ -119,10 +120,16 @@ class SgConnectionMeta(type):
 
     url = url.lower()
 
-    if not SgConnectionMeta.__connections__.has_key(url):
-      return []
+    with SgConnectionMeta.__lock__:
+      connections = []
 
-    return SgConnectionMeta.__connections__[url].values()
+      for weakConnection in SgConnectionMeta.__connections__.get(url.lower(), {}).values():
+          connection = weakConnection
+
+          if connection:
+            connections.append(connection)
+
+      return connections
 
 class SgConnectionPriv(object):
   '''
@@ -182,10 +189,10 @@ class SgConnectionPriv(object):
     This will lock the global Shotgun Python API lock.
     '''
 
-    with ShotgunORM.SHOTGUN_API_LOCK:
-      if fields != None:
-        fields = list(fields)
+    if fields != None:
+      fields = list(fields)
 
+    with ShotgunORM.SHOTGUN_API_LOCK:
       return self.connection().find(
         entity_type,
         filters,
@@ -212,10 +219,10 @@ class SgConnectionPriv(object):
     This will lock the global Shotgun Python API lock.
     '''
 
-    with ShotgunORM.SHOTGUN_API_LOCK:
-      if fields != None:
-        fields = list(fields)
+    if fields != None:
+      fields = list(fields)
 
+    with ShotgunORM.SHOTGUN_API_LOCK:
       return self.connection().find_one(
         entity_type,
         filters,
@@ -360,57 +367,6 @@ class SgConnection(SgConnectionPriv):
         'cache': {}
       }
 
-  def _cacheEntity(self, sgEntity):
-    '''
-    Internal function!
-
-    Caches the passed Entities field values.
-
-    Only fields that contain no commit update and are either valid or have
-    pending sync updates are cached.
-
-    Returns immediately if isCaching() is False.
-    '''
-
-    with self:
-      if not self.isCaching():
-        return
-
-      # Bail if the cache has been cleared.  The Entity is dirty!
-      if not self.__entityCache.has_key(sgEntity.type) or not self.__entityCache[sgEntity.type].has_key(sgEntity['id']):
-        return
-
-      cache = self.__entityCache[sgEntity.type][sgEntity['id']]
-
-      e = cache['entity']()
-
-      # If the cache was cleared and a new Entity object created this one is
-      # dirty and don't allow it to store cache data.
-      if e != None:
-        if id(e) != id(sgEntity):
-          return
-
-      data = {}
-
-      with sgEntity:
-        if not sgEntity.exists():
-          return
-
-        for name, field in sgEntity.fields().items():
-          if not field.isCacheable():
-            continue
-
-          if field.hasSyncUpdate():
-            data[name] = copy.deepcopy(field._updateValue)
-          else:
-            data[name] = field.toFieldData()
-
-        #data['id'] = sgEntity['id']
-        #data['type'] = sgEntity['type']
-
-      cache['cache'] = data
-      cache['entity'] = None
-
   def _createEntity(self, sgEntityType, sgData, sgSyncFields=None):
     '''
     Internal function!
@@ -454,24 +410,25 @@ class SgConnection(SgConnectionPriv):
       # have data contained in the passed sgData.  If not found create the
       # Entity and add it to the cache.]
       if self.__entityCache[sgEntityType].has_key(eId):
-        result = self.__entityCache[sgEntityType][eId]['entity']
+        cacheData = self.__entityCache[sgEntityType][eId]
+        result = cacheData['entity']
 
         if result != None:
           result = result()
 
         if result == None:
-          cacheData = self.__entityCache[sgEntityType][eId]['cache']
-
           tmpData = {
             'id': eId,
             'type': sgEntityType
           }
 
-          tmpData.update(cacheData)
+          tmpData.update(cacheData['cache'])
 
           result = factory.createEntity(self, sgEntityType, tmpData)
 
-          self.__entityCache[sgEntityType][eId]['entity'] = weakref.ref(result)
+          result._SgEntity__caching = cacheData['cache_state']
+
+          cacheData['entity'] = weakref.ref(result)
 
           onCreate = True
 
@@ -495,7 +452,8 @@ class SgConnection(SgConnectionPriv):
 
         self.__entityCache[sgEntityType][eId] = {
           'entity': weakref.ref(result),
-          'cache': {}
+          'cache': {},
+          'cache_state': -1
         }
 
         onCreate = True
@@ -742,6 +700,57 @@ class SgConnection(SgConnectionPriv):
       for entity in requests:
         entity._unlock()
 
+  def cacheEntity(self, sgEntity):
+    '''
+    Caches the passed Entities field values.
+
+    Only fields that contain no commit update and are either valid or have
+    pending sync updates are cached.
+
+    Returns immediately if sgEntity.isCaching() is False.
+
+    Args:
+      * (SgEntity) sgEntity:
+        Entity that will have its data cache.
+    '''
+
+    with sgEntity:
+      if not sgEntity.exists() or not sgEntity.isCaching():
+        return
+
+      with self:
+        # Bail if the cache has been cleared.  The Entity is dirty!
+        if not self.__entityCache.has_key(sgEntity.type) or not self.__entityCache[sgEntity.type].has_key(sgEntity['id']):
+          return
+
+        cache = self.__entityCache[sgEntity.type][sgEntity['id']]
+
+        e = cache['entity']()
+
+        # If the cache was cleared and a new Entity object created this one is
+        # dirty and don't allow it to store cache data.
+        if e != None:
+          if id(e) != id(sgEntity):
+            return
+
+        data = {}
+
+        with sgEntity:
+          for name, field in sgEntity.fields().items():
+            if not field.isCacheable():
+              continue
+
+            if field.hasSyncUpdate():
+              data[name] = copy.deepcopy(field._updateValue)
+            else:
+              data[name] = field.toFieldData()
+
+          #data['id'] = sgEntity['id']
+          #data['type'] = sgEntity['type']
+
+        cache['cache'] = data
+        cache['cache_state'] = sgEntity.caching()
+
   def classFactory(self):
     '''
     Returns the SgEntityClassFactory used by this connection to create Entity
@@ -788,8 +797,40 @@ class SgConnection(SgConnectionPriv):
             sgEntityTypes = [sgEntityTypes]
 
           for i in sgEntityTypes:
-            if self.__entityCache.has_key(i):
+            try:
               del self.__entityCache[i]
+            except KeyError:
+              pass
+
+  def clearCacheForEntity(self, sgEntity, fieldValuesOnly=True):
+    '''
+    Removes any cached data for a specific Entity.
+
+    Args:
+      * (SgEntity) sgEntity:
+        Entity that will have its cache data purged.
+
+      * (bool) fieldValuesOnly:
+        Only clear field values for the Entity that are not currently in scope.
+        This will leave any weakref links to the Entity object alone.
+    '''
+
+    with sgEntity:
+      if not sgEntity.exists():
+        return
+
+      with self:
+        entityTypeCacheData = self.__entityCache.get(sgEntity.type, {})
+
+        try:
+          entityTypeCacheData[sgEntity.id]['cache_state'] = sgEntity.caching()
+
+          if fieldValuesOnly:
+            entityTypeCacheData[sgEntity.id]['cache'].clear()
+          else:
+            del entityTypeCacheData[sgEntity.id]
+        except KeyError:
+          pass
 
   def create(self, sgEntityType, sgData={}, sgCommit=False, numberOfEntities=1):
     '''
@@ -920,12 +961,7 @@ class SgConnection(SgConnectionPriv):
     '''
 
     with self:
-      if self.isCaching():
-        return False
-
       self.__entityCaching = True
-
-      return True
 
   def fieldQueryTemplate(self):
     '''
@@ -1119,7 +1155,7 @@ class SgConnection(SgConnectionPriv):
       'Project',
       [
         [
-          'name',
+          'code',
           'is',
           sgProject
         ]

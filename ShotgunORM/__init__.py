@@ -32,6 +32,7 @@ __all__ = [
   'SHOTGUN_API',
   'SHOTGUN_API_LOCK',
   'SgConnection',
+  'SgConnectionMeta',
   'SgEntity',
   'SgEntityClassFactory',
   'SgEntitySchemaInfo',
@@ -98,7 +99,7 @@ from utils import *
 #
 ################################################################################
 
-from SgConnection import SgConnection
+from SgConnection import SgConnection, SgConnectionMeta
 from SgEntityClassFactory import SgEntityClassFactory
 from SgQueryEngine import SgQueryEngine
 from SgSchema import SgSchema
