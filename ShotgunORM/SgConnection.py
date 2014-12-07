@@ -647,7 +647,7 @@ class SgConnection(SgConnectionPriv):
     class which will be used as the base class for that particular Entity
     type.
 
-    Sub-classes can implement this function to allow a connection to specifiy
+    Subclasses can implement this function to allow a connection to specifiy
     custom Entity classes without overriding the global base Entity class.
     '''
 

@@ -734,7 +734,7 @@ class SgField(object):
 
   def _deleteWidget(self):
     '''
-    Sub-class portion of SgField.deleteWidget().
+    Subclass portion of SgField.deleteWidget().
 
     Note:
       This is only called by deleteWidget() if widget() is not None.
@@ -832,10 +832,10 @@ class SgField(object):
 
   def _fromFieldData(self, sgData):
     '''
-    Sub-class portion of SgField.fromFieldData().
+    Subclass portion of SgField.fromFieldData().
 
     Note:
-      Sub-classes only need to convert the incoming data to their internal
+      Subclasses only need to convert the incoming data to their internal
       format and return True.
 
       You should check if the incoming value is the same as the current value
@@ -915,7 +915,7 @@ class SgField(object):
 
   def _invalidate(self):
     '''
-    Sub-class portion of SgField.invalidate().
+    Subclass portion of SgField.invalidate().
     '''
 
     pass
@@ -1125,7 +1125,7 @@ class SgField(object):
 
   def _makeWidget(self):
     '''
-    Sub-class portion of SgField.makeWidget().
+    Subclass portion of SgField.makeWidget().
     '''
 
     return False
@@ -1249,7 +1249,7 @@ class SgField(object):
 
   def _setValue(self, sgData):
     '''
-    Sub-class portion of SgField.setValue().
+    Subclass portion of SgField.setValue().
 
     Default function returns False.
 
@@ -1259,7 +1259,7 @@ class SgField(object):
       assumes this is the location of its value and other functions interact
       with it.
 
-      Sub-classes only need to convert the incoming data to their internal
+      Subclasses only need to convert the incoming data to their internal
       format and return True.
 
       You should check if the incoming value is the same as the current value
@@ -1348,7 +1348,7 @@ class SgField(object):
 
   def _toFieldData(self):
     '''
-    Sub-class portion of SgField.toFieldData().
+    Subclass portion of SgField.toFieldData().
     '''
 
     return self._value
@@ -1383,7 +1383,7 @@ class SgField(object):
 
   def _validate(self, forReal=False):
     '''
-    Sub-class portion of SgField.validate().
+    Subclass portion of SgField.validate().
 
     The return value of _validate() is what isValid() will be set to.  Return
     True if the field was properly validated and its value is True otherwise
@@ -1484,7 +1484,7 @@ class SgField(object):
 
   def _Value(self):
     '''
-    Sub-class portion of SgField.value().
+    Subclass portion of SgField.value().
 
     This allows sub-classes to return a copy of their value so modifications
     can't be done to the internal value.
@@ -1514,9 +1514,9 @@ class SgField(object):
 
   def _valueSg(self):
     '''
-    Sub-class portion of SgField.valueSg().
+    Subclass portion of SgField.valueSg().
 
-    Sub-classes can override this function to define how to retrieve their value
+    Subclasses can override this function to define how to retrieve their value
     from Shotgun.
 
     Default function calls valueSg() on the parent Entity.
@@ -1561,7 +1561,7 @@ class SgField(object):
 
   def widget(self):
     '''
-    Sub-classes can implement makeWidget so this returns some type of GUI widget
+    Subclasses can implement makeWidget so this returns some type of GUI widget
     for the field.
 
     Default returns None.

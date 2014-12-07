@@ -398,7 +398,7 @@ class SgSchema(object):
 
   def _changed(self):
     '''
-    Sub-class portion of changed().
+    Subclass portion of changed().
 
     Default does nothing.
     '''

@@ -504,7 +504,7 @@ class SgEntity(object):
 
   def _afterCommit(self, sgBatchData, sgBatchResult, sgCommitData, dryRun, sgCommitError):
     '''
-    Sub-class portion of SgEntity.afterCommit().
+    Subclass portion of SgEntity.afterCommit().
 
     When sgCommitError is not None perform any cleanup but do not raise the
     exception object as that will happen later by the ShotgunORM.
@@ -703,7 +703,7 @@ class SgEntity(object):
 
   def _buildFields(self):
     '''
-    Sub-class portion of SgEntity.buildFields().
+    Subclass portion of SgEntity.buildFields().
     '''
 
     pass
