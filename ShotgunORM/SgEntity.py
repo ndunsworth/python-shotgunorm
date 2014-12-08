@@ -454,12 +454,12 @@ class SgEntity(object):
       for field, value in sgData.items():
         fieldObj = self.field(field)
 
-        # Skip expression summary fields.
         if fieldObj == None:
           ShotgunORM.LoggerEntity.warn('no field named "%s"' % field)
 
           continue
 
+        # Skip expression summary fields.
         if fieldObj.returnType() == ShotgunORM.SgField.RETURN_TYPE_SUMMARY:
           continue
 
@@ -712,7 +712,7 @@ class SgEntity(object):
     '''
     Creates all the fields for the Entity.
 
-    After _buildFields(...) has been called buildUserFiels() is called.
+    After _buildFields(...) has been called buildUserFields() is called.
 
     Note:
       This is called by the class factory after the Entity has been created and

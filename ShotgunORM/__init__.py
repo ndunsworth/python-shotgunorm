@@ -145,6 +145,28 @@ del SgScriptEngine
 
 ################################################################################
 #
+# Import event monitor
+#
+################################################################################
+
+import SgEventWatcher
+
+__all__.extend(SgEventWatcher.__all__)
+
+del SgEventWatcher
+
+from SgEventWatcher import *
+
+import SgEventWatchers
+
+__all__.extend(SgEventWatchers.__all__)
+
+del SgEventWatchers
+
+from SgEventWatchers import *
+
+################################################################################
+#
 # Import callbacks
 #
 ################################################################################

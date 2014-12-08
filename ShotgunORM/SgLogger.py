@@ -29,6 +29,7 @@ __all__ = [
   'LoggerCallback',
   'LoggerConnection',
   'LoggerEntity',
+  'LoggerEventWatcher',
   'LoggerField',
   'LoggerFactory',
   'LoggerORM',
@@ -44,6 +45,7 @@ import os
 LoggerCallback = None
 LoggerConnection = None
 LoggerEntity = None
+LoggerEventWatcher = None
 LoggerField = None
 LoggerFactory = None
 LoggerORM = None
@@ -64,6 +66,7 @@ class SgLogger(logging.Logger):
   SgConnection           debug: PY_SHOTGUNORM_SGCONNECTION_DEBUG=1
   SgEntity               debug: PY_SHOTGUNORM_SGENTITY_DEBUG=1
   SgEntityClassFactory   debug: PY_SHOTGUNORM_SGENTITYCLASSFACTORY_DEBUG=1
+  SgEventWatcher         debug: PY_SHOTGUNORM_SGEVENTWATCHER_DEBUG=1
   SgField                debug: PY_SHOTGUNORM_SGFIELD_DEBUG=1
   SgQueryEngine          debug: PY_SHOTGUNORM_SGQUERYENGINE_DEBUG=1
   SgSchema               debug: PY_SHOTGUNORM_SGSCHEMA_DEBUG=1
@@ -95,6 +98,7 @@ class SgLogger(logging.Logger):
 LoggerCallback = SgLogger('SgCallback')
 LoggerConnection = SgLogger('SgConnection')
 LoggerEntity = SgLogger('SgEntity')
+LoggerEventWatcher = SgLogger('SgEventWatcher')
 LoggerField = SgLogger('SgField')
 LoggerFactory = SgLogger('SgEntityClassFactory')
 LoggerORM = SgLogger('SgGeneric')
