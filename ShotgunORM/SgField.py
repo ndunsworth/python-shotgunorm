@@ -343,6 +343,13 @@ class SgFieldSchemaInfo(object):
 
     return self._editable
 
+  def isUserField(self):
+    '''
+    Returns True if the field is a custom user field.
+    '''
+
+    return False
+
   def isRequired(self):
     '''
     Returns True if the field is required for the Entity.
@@ -498,6 +505,13 @@ class SgFieldSchemaInfo2(SgFieldSchemaInfo):
 
     return result
 
+  def isUserField(self):
+    '''
+    Returns True if the field is a custom user field.
+    '''
+
+    return True
+
   def setDoc(self, doc):
     '''
     Set the documentation string for the field.
@@ -569,7 +583,8 @@ class SgField(object):
   RETURN_TYPE_SUMMARY = 13
   RETURN_TYPE_TAG_LIST = 14
   RETURN_TYPE_TEXT = 15
-  RETURN_TYPE_URL = 16
+  RETURN_TYPE_TIMECODE = 16
+  RETURN_TYPE_URL = 17
 
   # Custom return types should start at 201.
   RETURN_TYPE_RESERVED = 200
@@ -601,7 +616,7 @@ class SgField(object):
 
     return False
 
-  def __init__(self, name, label=None, sgFieldSchemaInfo=None):
+  def __init__(self, name, label=None, sgFieldSchemaInfo=None, sgEntity=None):
     self.__parent = None
     self.__info = None
 
@@ -632,6 +647,9 @@ class SgField(object):
       )
     else:
       self.__setFieldSchemaInfo(sgFieldSchemaInfo)
+
+    if sgEntity != None:
+      self.__parent = weakref.ref(sgEntity)
 
   @classmethod
   def registerFieldClass(cls, sgFieldReturnType, sgFieldClass):
@@ -712,11 +730,11 @@ class SgField(object):
     Returns the default value for the field.
     '''
 
-    return self.schemaInfo().defaultValue()
+    return self.__info.defaultValue()
 
   def _deleteWidget(self):
     '''
-    Sub-class portion of SgField.deleteWidget().
+    Subclass portion of SgField.deleteWidget().
 
     Note:
       This is only called by deleteWidget() if widget() is not None.
@@ -744,7 +762,7 @@ class SgField(object):
     Returns the fields doc string.
     '''
 
-    return self.schemaInfo().doc()
+    return self.__info.doc()
 
   def eventLogs(self, sgEventType=None, sgFields=None, sgRecordLimit=0):
     '''
@@ -814,10 +832,10 @@ class SgField(object):
 
   def _fromFieldData(self, sgData):
     '''
-    Sub-class portion of SgField.fromFieldData().
+    Subclass portion of SgField.fromFieldData().
 
     Note:
-      Sub-classes only need to convert the incoming data to their internal
+      Subclasses only need to convert the incoming data to their internal
       format and return True.
 
       You should check if the incoming value is the same as the current value
@@ -897,7 +915,7 @@ class SgField(object):
 
   def _invalidate(self):
     '''
-    Sub-class portion of SgField.invalidate().
+    Subclass portion of SgField.invalidate().
     '''
 
     pass
@@ -962,7 +980,7 @@ class SgField(object):
     Returns True if the field is allowed to make commits to Shotgun.
     '''
 
-    return self.schemaInfo().isQueryable()
+    return self.__info.isQueryable()
 
   def isCustom(self):
     '''
@@ -982,16 +1000,16 @@ class SgField(object):
     parent = self.parentEntity()
 
     if parent == None:
-      return self.schemaInfo().isEditable()
+      return self.__info.isEditable()
     else:
-      return self.schemaInfo().isEditable() or not parent.exists()
+      return self.__info.isEditable() or not parent.exists()
 
   def isQueryable(self):
     '''
     Returns True if the field is queryable in Shotgun.
     '''
 
-    return self.schemaInfo().isQueryable()
+    return self.__info.isQueryable()
 
   def isSyncUpdating(self):
     '''
@@ -1007,7 +1025,7 @@ class SgField(object):
     Returns True if the field is a SgUserField.
     '''
 
-    return isinstance(self.__info, SgFieldSchemaInfo2)
+    return self.__info.isUserField()
 
   def isValid(self):
     '''
@@ -1024,7 +1042,7 @@ class SgField(object):
     Returns the user visible string of the field.
     '''
 
-    return self.schemaInfo().label()
+    return self.__info.label()
 
   def lastEventLog(self, sgEventType=None, sgFields=None):
     '''
@@ -1107,7 +1125,7 @@ class SgField(object):
 
   def _makeWidget(self):
     '''
-    Sub-class portion of SgField.makeWidget().
+    Subclass portion of SgField.makeWidget().
     '''
 
     return False
@@ -1130,11 +1148,11 @@ class SgField(object):
     Returns the Shotgun API string used to reference the field on an Entity.
     '''
 
-    return self.schemaInfo().name()
+    return self.__info.name()
 
   def parentChanged(self):
     '''
-
+    Called when the fields parent Entity changes.
     '''
 
     pass
@@ -1231,7 +1249,7 @@ class SgField(object):
 
   def _setValue(self, sgData):
     '''
-    Sub-class portion of SgField.setValue().
+    Subclass portion of SgField.setValue().
 
     Default function returns False.
 
@@ -1241,7 +1259,7 @@ class SgField(object):
       assumes this is the location of its value and other functions interact
       with it.
 
-      Sub-classes only need to convert the incoming data to their internal
+      Subclasses only need to convert the incoming data to their internal
       format and return True.
 
       You should check if the incoming value is the same as the current value
@@ -1330,7 +1348,7 @@ class SgField(object):
 
   def _toFieldData(self):
     '''
-    Sub-class portion of SgField.toFieldData().
+    Subclass portion of SgField.toFieldData().
     '''
 
     return self._value
@@ -1365,7 +1383,7 @@ class SgField(object):
 
   def _validate(self, forReal=False):
     '''
-    Sub-class portion of SgField.validate().
+    Subclass portion of SgField.validate().
 
     The return value of _validate() is what isValid() will be set to.  Return
     True if the field was properly validated and its value is True otherwise
@@ -1466,7 +1484,7 @@ class SgField(object):
 
   def _Value(self):
     '''
-    Sub-class portion of SgField.value().
+    Subclass portion of SgField.value().
 
     This allows sub-classes to return a copy of their value so modifications
     can't be done to the internal value.
@@ -1496,9 +1514,9 @@ class SgField(object):
 
   def _valueSg(self):
     '''
-    Sub-class portion of SgField.valueSg().
+    Subclass portion of SgField.valueSg().
 
-    Sub-classes can override this function to define how to retrieve their value
+    Subclasses can override this function to define how to retrieve their value
     from Shotgun.
 
     Default function calls valueSg() on the parent Entity.
@@ -1532,18 +1550,18 @@ class SgField(object):
     Returns a list of valid values supported by the field.
     '''
 
-    return self.schemaInfo().validValues()
+    return self.__info.validValues()
 
   def valueTypes(self):
     '''
     Returns a list of valid value types supported by the field.
     '''
 
-    return self.schemaInfo().valueTypes()
+    return self.__info.valueTypes()
 
   def widget(self):
     '''
-    Sub-classes can implement makeWidget so this returns some type of GUI widget
+    Subclasses can implement makeWidget so this returns some type of GUI widget
     for the field.
 
     Default returns None.
@@ -1575,6 +1593,7 @@ FIELD_RETURN_TYPES = {
   'summary': SgField.RETURN_TYPE_SUMMARY,
   'tag_list': SgField.RETURN_TYPE_TAG_LIST,
   'text': SgField.RETURN_TYPE_TEXT,
+  'timecode': SgField.RETURN_TYPE_TIMECODE,
   'url': SgField.RETURN_TYPE_URL,
   'url_template': SgField.RETURN_TYPE_TEXT,
   'uuid': SgField.RETURN_TYPE_TEXT
@@ -1598,5 +1617,6 @@ FIELD_RETURN_TYPE_NAMES = {
   SgField.RETURN_TYPE_SUMMARY: 'summary',
   SgField.RETURN_TYPE_TAG_LIST: 'tag_list',
   SgField.RETURN_TYPE_TEXT: 'text',
+  SgField.RETURN_TYPE_TIMECODE: 'timecode',
   SgField.RETURN_TYPE_URL: 'url'
 }

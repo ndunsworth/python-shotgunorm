@@ -32,6 +32,7 @@ __all__ = [
   'SHOTGUN_API',
   'SHOTGUN_API_LOCK',
   'SgConnection',
+  'SgConnectionMeta',
   'SgEntity',
   'SgEntityClassFactory',
   'SgEntitySchemaInfo',
@@ -98,7 +99,7 @@ from utils import *
 #
 ################################################################################
 
-from SgConnection import SgConnection
+from SgConnection import SgConnection, SgConnectionMeta
 from SgEntityClassFactory import SgEntityClassFactory
 from SgQueryEngine import SgQueryEngine
 from SgSchema import SgSchema
@@ -141,6 +142,28 @@ from SgScriptEngine import parseFromLogicalOp, parseToLogicalOp
 
 # Clean SgScriptEngine from the namespace
 del SgScriptEngine
+
+################################################################################
+#
+# Import event monitor
+#
+################################################################################
+
+import SgEventWatcher
+
+__all__.extend(SgEventWatcher.__all__)
+
+del SgEventWatcher
+
+from SgEventWatcher import *
+
+import SgEventWatchers
+
+__all__.extend(SgEventWatchers.__all__)
+
+del SgEventWatchers
+
+from SgEventWatchers import *
 
 ################################################################################
 #

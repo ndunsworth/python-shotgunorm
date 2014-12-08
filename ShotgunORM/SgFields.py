@@ -39,6 +39,7 @@ __all__ = [
   'SgFieldSelectionList',
   'SgFieldTagList',
   'SgFieldText',
+  'SgFieldTimeCode',
   'SgFieldType',
   'SgFieldUrl'
 ]
@@ -185,8 +186,13 @@ class SgFieldColor2(ShotgunORM.SgField):
   REGEXP_TASK_COLOR = re.compile(r'(\d+,\d+,\d+)|(pipeline_step)')
   REGEXP_PHASE_COLOR = re.compile(r'(\d+,\d+,\d+)|(project)')
 
-  def __init__(self, name, label=None, sgFieldSchemaInfo=None):
-    super(SgFieldColor2, self).__init__(name, label=label, sgFieldSchemaInfo=sgFieldSchemaInfo)
+  def __init__(self, name, label=None, sgFieldSchemaInfo=None, sgEntity=None):
+    super(SgFieldColor2, self).__init__(
+      name,
+      label=label,
+      sgFieldSchemaInfo=sgFieldSchemaInfo,
+      sgEntity=sgEntity
+    )
 
     self._regexp = self.REGEXP_COLOR
     self._linkString = None
@@ -1005,8 +1011,13 @@ class SgFieldSummary(ShotgunORM.SgField):
 
   DATE_REGEXP = re.compile(r'(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2}) UTC')
 
-  def __init__(self, name, label=None, sgFieldSchemaInfo=None):
-    super(SgFieldSummary, self).__init__(name, label=label, sgFieldSchemaInfo=sgFieldSchemaInfo)
+  def __init__(self, name, label=None, sgFieldSchemaInfo=None, sgEntity=None):
+    super(SgFieldSummary, self).__init__(
+      name,
+      label=label,
+      sgFieldSchemaInfo=sgFieldSchemaInfo,
+      sgEntity=sgEntity
+    )
 
     self.__buildLock = threading.Lock()
 
@@ -1576,6 +1587,55 @@ class SgFieldText(ShotgunORM.SgField):
 
     return True
 
+class SgFieldTimeCode(ShotgunORM.SgField):
+  '''
+  Entity field that stores timecode.
+  '''
+
+  def _fromFieldData(self, sgData):
+    if sgData != None:
+      try:
+        sgData = int(sgData)
+      except:
+        raise ValueError('%s invalid data from Shotgun "%s", expected a int' % (self, sgData))
+
+      if abs(sgData) > 86400000:
+        ShotgunORM.LoggerField.warn(
+          '%(sgField)s._fromFieldData(sgData) timecode value from shotgun is '
+          'greater than the milliseconds in a day, value=%(value)s',
+          {
+            'sgField': self,
+            'value': sgData
+          }
+        )
+
+    if self._value == sgData:
+      return False
+
+    self._value = sgData
+
+    return True
+
+  def returnType(self):
+    return self.RETURN_TYPE_TIMECODE
+
+  def _setValue(self, sgData):
+    if sgData != None:
+      try:
+        sgData = int(sgData)
+      except:
+        raise TypeError('%s invalid value type "%s", expected a int' % (self, type(sgData).__name__))
+
+      if abs(sgData) > 86400000:
+        raise ValueError('timecode value can not be greater than 86400000')
+
+    if self._value == sgData:
+      return False
+
+    self._value = sgData
+
+    return True
+
 class SgFieldImage(SgFieldText):
   '''
   See SgFieldText.
@@ -1583,8 +1643,13 @@ class SgFieldImage(SgFieldText):
 
   REGEXP_EXPIRETIME = re.compile(r'&Expires=(\d+)&Signature=')
 
-  def __init__(self, name, label=None, sgFieldSchemaInfo=None):
-    super(SgFieldImage, self).__init__(name, label, sgFieldSchemaInfo)
+  def __init__(self, name, label=None, sgFieldSchemaInfo=None, sgEntity=None):
+    super(SgFieldImage, self).__init__(
+      name,
+      label=label,
+      sgFieldSchemaInfo=sgFieldSchemaInfo,
+      sgEntity=sgEntity
+    )
 
     self.__expireTime = None
 
@@ -1641,17 +1706,20 @@ class SgFieldImage(SgFieldText):
 
     return True
 
+  def isLinkExpired(self):
+    '''
+    Returns True if the image fields value has expired and can no longer be
+    downloaded.
+    '''
+
+    return (
+      self.__expireTime != None and
+      time.time() >= self.__expireTime
+    )
+
   def isValid(self):
     if super(SgFieldImage, self).isValid():
-      expires = self.__expireTime
-
-      if expires != None:
-        t = time.time()
-
-        if t >= expires:
-          return False
-
-      return True
+      return not self.isLinkExpired()
 
     return False
 
@@ -1850,6 +1918,7 @@ ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_STATUS_LIST
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_SUMMARY, SgFieldSummary)
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_TAG_LIST, SgFieldTagList)
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_TEXT, SgFieldText)
+ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_TIMECODE, SgFieldTimeCode)
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_URL, SgFieldUrl)
 
 ################################################################################
@@ -1870,12 +1939,10 @@ class SgFieldID(SgFieldInt):
   def __exit__(self, exc_type, exc_value, traceback):
     return False
 
-  def __init__(self, parentEntity, sgFieldSchemaInfo):
-    super(SgFieldID, self).__init__(None, None, sgFieldSchemaInfo)
+  def __init__(self, sgFieldSchemaInfo, sgEntity):
+    super(SgFieldID, self).__init__(None, None, sgFieldSchemaInfo, sgEntity)
 
-    self._SgField__setParentEntity(parentEntity)
-
-    self._SgField__valid = True
+    super(SgFieldID, self).setValid(True)
 
   def invalidate(self, force=True):
     '''
@@ -1947,12 +2014,10 @@ class SgFieldType(SgFieldText):
   def __exit__(self, exc_type, exc_value, traceback):
     return False
 
-  def __init__(self, parentEntity, sgFieldSchemaInfo):
-    super(SgFieldType, self).__init__(None, None, sgFieldSchemaInfo)
+  def __init__(self, sgFieldSchemaInfo, sgEntity):
+    super(SgFieldType, self).__init__(None, None, sgFieldSchemaInfo, sgEntity)
 
-    self._SgField__setParentEntity(parentEntity)
-
-    self._SgField__valid = True
+    super(SgFieldType, self).setValid(True)
 
   def invalidate(self, force=False):
     '''

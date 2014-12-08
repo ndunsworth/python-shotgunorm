@@ -396,7 +396,7 @@ class SgEntity(object):
     return False
 
   def __del__(self):
-    self.connection()._cacheEntity(self)
+    self.connection().cacheEntity(self)
 
   def __int__(self):
     return self.id
@@ -408,13 +408,12 @@ class SgEntity(object):
     self.__lock = threading.RLock()
     self.__connection = sgConnection
 
-    self._fields = {}
-
-    self._markedForDeletion = False
     self.__isCommitting = False
-
     self.__hasBuiltFields = False
+    self.__caching = -1
 
+    self._fields = {}
+    self._markedForDeletion = False
     self._widget = None
 
   def _fromFieldData(self, sgData):
@@ -455,12 +454,12 @@ class SgEntity(object):
       for field, value in sgData.items():
         fieldObj = self.field(field)
 
-        # Skip expression summary fields.
         if fieldObj == None:
           ShotgunORM.LoggerEntity.warn('no field named "%s"' % field)
 
           continue
 
+        # Skip expression summary fields.
         if fieldObj.returnType() == ShotgunORM.SgField.RETURN_TYPE_SUMMARY:
           continue
 
@@ -505,7 +504,7 @@ class SgEntity(object):
 
   def _afterCommit(self, sgBatchData, sgBatchResult, sgCommitData, dryRun, sgCommitError):
     '''
-    Sub-class portion of SgEntity.afterCommit().
+    Subclass portion of SgEntity.afterCommit().
 
     When sgCommitError is not None perform any cleanup but do not raise the
     exception object as that will happen later by the ShotgunORM.
@@ -704,7 +703,7 @@ class SgEntity(object):
 
   def _buildFields(self):
     '''
-    Sub-class portion of SgEntity.buildFields().
+    Subclass portion of SgEntity.buildFields().
     '''
 
     pass
@@ -713,7 +712,7 @@ class SgEntity(object):
     '''
     Creates all the fields for the Entity.
 
-    After _buildFields(...) has been called buildUserFiels() is called.
+    After _buildFields(...) has been called buildUserFields() is called.
 
     Note:
       This is called by the class factory after the Entity has been created and
@@ -727,8 +726,8 @@ class SgEntity(object):
     entityFieldInfos = self.schemaInfo().fieldInfos()
 
     # Add the type field.
-    self._fields['type'] = ShotgunORM.SgFieldType(self, entityFieldInfos['type'])
-    self._fields['id'] = ShotgunORM.SgFieldID(self, entityFieldInfos['id'])
+    self._fields['type'] = ShotgunORM.SgFieldType(entityFieldInfos['type'], self)
+    self._fields['id'] = ShotgunORM.SgFieldID(entityFieldInfos['id'], self)
 
     # Dont pass the "id" field as its manually built as a user field.  Same
     # for the type field.
@@ -742,9 +741,7 @@ class SgEntity(object):
 
       fieldClass = fieldClasses.get(fieldInfo.returnType(), None)
 
-      newField = fieldClass(None, sgFieldSchemaInfo=fieldInfo)
-
-      newField._SgField__setParentEntity(self)
+      newField = fieldClass(None, sgFieldSchemaInfo=fieldInfo, sgEntity=self)
 
       if hasattr(self.__class__, fieldName):
         ShotgunORM.LoggerField.warn(
@@ -759,6 +756,18 @@ class SgEntity(object):
     self._buildFields()
 
     self.__hasBuiltFields = True
+
+  def caching(self):
+    '''
+    Returns the caching state of the Entity.
+
+    Values:
+      -1: Caching is determined by the connections caching state (default)
+      0: Disabled
+      1: Enabled
+    '''
+
+    return self.__caching
 
   def clone(self, inheritFields=[], numberOfEntities=1):
     '''
@@ -878,6 +887,29 @@ class SgEntity(object):
         self.connection().delete(self, sgDryRun)
       else:
         self._markedForDeletion = True
+
+  def disableCaching(self):
+    '''
+    Disables the caching of this Entity and only this Entity.
+
+    To disable all caching for a Shotgun connection call the connections
+    disableCaching() function.
+    '''
+
+    if self.isCaching():
+      self.connection().clearCacheForEntity(self)
+
+    self.__caching = 0
+
+  def enableCaching(self):
+    '''
+    Enables the caching of this Entity and only this Entity.
+
+    To enable all caching for a Shotgun connection call the connections
+    enableCaching() function.
+    '''
+
+    self.__caching = 1
 
   def eventLogs(self, sgEventType=None, sgFields=None, sgRecordLimit=0):
     '''
@@ -1228,6 +1260,20 @@ class SgEntity(object):
 
     return not self.__hasBuiltFields
 
+  def isCaching(self):
+    '''
+    Returns True if the Entity will save its field values in the connections
+    cache.
+
+    Default returns the connections isCaching() state unless the Entity has
+    has caching disabled by calling SgEntity.disableCaching().
+    '''
+
+    if self.__caching < 0:
+      return self.connection().isCaching()
+    else:
+      return bool(self.__caching)
+
   def isCommitting(self):
     '''
     Returns True if the Entity is currently commiting to Shotgun.
@@ -1296,6 +1342,36 @@ class SgEntity(object):
 
       return self._makeWidget()
 
+  def removeField(self, fieldName):
+    '''
+    Removes the specified use field from the Entity'
+    '''
+
+    with self:
+      if not self.hasField(fieldName):
+        raise RuntimeError('invalid field name "%s"' % fieldName)
+
+      if not self.field(fieldName).isUserField():
+        raise RuntimeError('unable to delete a non-user field')
+
+      del self._fields[fieldName]
+
+      # Because the field can still exist in another scope unset its parent!
+      self.field(fieldName)._SgField__setParentEntity(None)
+
+  def resetCaching(self):
+    '''
+    Resets the Entities caching state to that of the connections.
+    '''
+
+    with self:
+      if self.__caching == -1:
+        return
+
+      self.__caching = -1
+
+      self.connection().clearCacheForEntity(self)
+
   def revert(self, sgFields=None, ignoreValid=False, ignoreWithUpdate=False):
     '''
     Reverts all fields to their Shotgun db value.
@@ -1337,23 +1413,6 @@ class SgEntity(object):
         raise RuntimeError('entity does not exist, can not generate request data for type revive')
 
       self.connection().revive(self, sgDryRun)
-
-  def removeField(self, fieldName):
-    '''
-    Removes the specified use field from the Entity'
-    '''
-
-    with self:
-      if not self.hasField(fieldName):
-        raise RuntimeError('invalid field name "%s"' % fieldName)
-
-      if not self.field(fieldName).isUserField():
-        raise RuntimeError('unable to delete a non-user field')
-
-      del self._fields[fieldName]
-
-      # Because the field can still exist in another scope unset its parent!
-      self.field(fieldName)._SgField__setParentEntity(None)
 
   def schemaInfo(self):
     '''

@@ -25,87 +25,66 @@
 #
 
 __all__ = [
-  'SearchExpressionField'
+  'SgSequence'
 ]
-
-# Python imports
-import copy
 
 # This module imports
 import ShotgunORM
 
-class SearchExpressionField(ShotgunORM.SgFieldEntityMulti):
+class SgSequence(ShotgunORM.SgEntity):
   '''
-  An example user field that performs a Shotgun search for its return result.
-
-  Finds all HumanUser Entities that are not named "Bob Smith".
+  Class that represents a Sequence Entity.
   '''
 
-  def __init__(self, name, label=None, sgEntity=None):
-    super(SearchExpressionField, self).__init__(name, label, sgEntity=sgEntity)
+  def shot(self, shot, sgFields=None):
+    '''
+    Returns the Shot Entity of this sequence.
 
-    # Don't allow the field to be modified!
-    self.schemaInfo().setEditable(False)
+    Args:
+      * (str) shot:
+        Name of the shot.
 
-    self._searchEntityType = 'HumanUser'
+      * (list) sgFields:
+        List of fields to populate the result with.
+    '''
 
-    self._searchFilters = [
+    if not self.exists():
+      return None
+
+    return self.connection().findOne(
+      'Shot',
       [
-        'name',
-        'is_not',
-        'Bob Smith'
-      ]
-    ]
-
-    self._searchFields = [
-      'firstname',
-      'name',
-      'lastname',
-      'email'
-    ]
-
-  def searchFields(self):
-    '''
-    Returns the fields that will be filled in for matching Entities.
-    '''
-
-    return self._searchFields
-
-  def searchFilters(self):
-    '''
-    Returns the search filters used for the Shotgun search.
-    '''
-
-    if self._searchFilters == None:
-      return None
-
-    return copy.deepcopy(self._searchFilters)
-
-  def searchEntityType(self):
-    '''
-    Returns the Entity type that this field searches for.
-    '''
-
-    return self._searchEntityType
-
-  def _valueSg(self):
-    '''
-    Performs the Shotgun search for this field and returns the result.
-
-    The return result of this is the value that the field will return.
-    '''
-
-    parent = self.parentEntity()
-
-    print parent
-
-    if parent == None:
-      return None
-
-    sgSearch = parent.connection()._sg_find(
-      self.searchEntityType(),
-      self.searchFilters(),
-      self.searchFields()
+        [
+          'sg_sequence',
+          'is',
+          self
+        ],
+        [
+          'code',
+          'is',
+          shot
+        ]
+      ],
+      sgFields
     )
 
-    return sgSearch
+  def shotNames(self):
+    '''
+    Returns a list containing of all Shot names for this sequence.
+    '''
+
+    result = []
+
+    if not self.exists():
+      return result
+
+    for shot in self['shots']:
+      result.append(shot['code'])
+
+    return result
+
+# Register the custom class.
+ShotgunORM.SgEntity.registerDefaultEntityClass(
+  sgEntityCls=SgSequence,
+  sgEntityTypes=['Sequence']
+)
