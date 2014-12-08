@@ -41,8 +41,8 @@ class SearchExpressionField(ShotgunORM.SgFieldEntityMulti):
   Finds all HumanUser Entities that are not named "Bob Smith".
   '''
 
-  def __init__(self, name, label=None):
-    super(SearchExpressionField, self).__init__(name, label)
+  def __init__(self, name, label=None, sgEntity=None):
+    super(SearchExpressionField, self).__init__(name, label, sgEntity=sgEntity)
 
     # Don't allow the field to be modified!
     self.schemaInfo().setEditable(False)
@@ -56,6 +56,20 @@ class SearchExpressionField(ShotgunORM.SgFieldEntityMulti):
         'Bob Smith'
       ]
     ]
+
+    self._searchFields = [
+      'firstname',
+      'name',
+      'lastname',
+      'email'
+    ]
+
+  def searchFields(self):
+    '''
+    Returns the fields that will be filled in for matching Entities.
+    '''
+
+    return self._searchFields
 
   def searchFilters(self):
     '''
@@ -90,7 +104,8 @@ class SearchExpressionField(ShotgunORM.SgFieldEntityMulti):
 
     sgSearch = parent.connection()._sg_find(
       self.searchEntityType(),
-      self.searchFilters()
+      self.searchFilters(),
+      self.searchFields()
     )
 
     return sgSearch
