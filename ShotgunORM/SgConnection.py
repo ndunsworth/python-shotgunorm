@@ -1111,11 +1111,11 @@ class SgConnection(SgConnectionPriv):
 
       entity_type = schema.entityApiName(entity_type)
 
-      if self.__entityCache.has_key(entity_type):
-        iD = filters
-
-        if self.__entityCache[entity_type].has_key(iD):
-          return self._createEntity(entity_type, {'id': iD, 'type': entity_type}, fields)
+      return self._createEntity(
+        entity_type,
+        {'id': filters, 'type': entity_type},
+        fields
+      )
 
     searchResult = self.find(
       entity_type=entity_type,
