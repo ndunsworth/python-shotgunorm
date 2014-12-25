@@ -352,7 +352,7 @@ def SgQueryEngineWorker(connection, lock, block, event, entityQueue, pendingQuer
       return
 
     with block:
-      q = pendingQueries.pop()
+      q = pendingQueries.pop(0)
 
       qSize = len(pendingQueries) + 1
 
