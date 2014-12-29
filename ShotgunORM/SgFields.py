@@ -1901,6 +1901,32 @@ class SgFieldUrl(ShotgunORM.SgField):
 
     return result
 
+  def urlName(self):
+    '''
+    Returns the url filename.
+    '''
+
+    data = self.value()
+
+    if data == None:
+      return ''
+
+    return data['name']
+
+  def urlType(self):
+    '''
+    Returns the Shotgun url type.
+
+    Valid return value are None, "local", "url", "upload".
+    '''
+
+    data = self.value()
+
+    if data == None:
+      return None
+
+    return data['link_type']
+
 # Register the fields.
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_CHECKBOX, SgFieldCheckbox)
 ShotgunORM.SgField.registerFieldClass(ShotgunORM.SgField.RETURN_TYPE_COLOR, SgFieldColor)
