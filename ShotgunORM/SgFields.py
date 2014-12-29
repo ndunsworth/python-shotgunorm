@@ -1651,10 +1651,10 @@ class SgFieldImage(SgFieldText):
       sgEntity=sgEntity
     )
 
-    self.__expireTime = None
+    self.__expireTime = 0
 
   def _invalidate(self):
-    self.__expireTime = None
+    self.__expireTime = 0
 
   def _validate(self, forReal=False):
     result = super(SgFieldImage, self)._validate(forReal)
@@ -1713,7 +1713,7 @@ class SgFieldImage(SgFieldText):
     '''
 
     return (
-      self.__expireTime != None and
+      self.__expireTime != 0 and
       time.time() >= self.__expireTime
     )
 
@@ -1722,6 +1722,15 @@ class SgFieldImage(SgFieldText):
       return not self.isLinkExpired()
 
     return False
+
+  def linkExpireTime(self):
+    '''
+    Returns the links expire time.
+
+    When the field has not yet validated returns 0.
+    '''
+
+    return self.__expireTime
 
   def openInBrowser(self):
     '''
@@ -1735,6 +1744,16 @@ class SgFieldImage(SgFieldText):
 
   def returnType(self):
     return self.RETURN_TYPE_IMAGE
+
+  def secondsTillExpired(self):
+    '''
+    Returns the number of seconds till the link is expired.
+    '''
+
+    if self.__expireTime == 0:
+      return -1
+    else:
+      return self.__expireTime - time.time()
 
   def uploadThumbnail(self, path):
     '''
@@ -1816,6 +1835,21 @@ class SgFieldUrl(ShotgunORM.SgField):
   }
   '''
 
+  REGEXP_EXPIRETIME = re.compile(r'&Expires=(\d+)&Signature=')
+
+  def __init__(self, name, label=None, sgFieldSchemaInfo=None, sgEntity=None):
+    super(SgFieldUrl, self).__init__(
+      name,
+      label=label,
+      sgFieldSchemaInfo=sgFieldSchemaInfo,
+      sgEntity=sgEntity
+    )
+
+    self.__expireTime = 0
+
+  def _invalidate(self):
+    self.__expireTime = 0
+
   def _fromFieldData(self, sgData):
     result = {}
 
@@ -1861,8 +1895,44 @@ class SgFieldUrl(ShotgunORM.SgField):
 
     return True
 
+  def isLinkExpired(self):
+    '''
+    Returns True if the url fields value has expired and can no longer be
+    downloaded.
+    '''
+
+    return (
+      self.__expireTime != 0 and
+      time.time() >= self.__expireTime
+    )
+
+  def isValid(self):
+    if super(SgFieldUrl, self).isValid():
+      return not self.isLinkExpired()
+
+    return False
+
+  def linkExpireTime(self):
+    '''
+    Returns the links expire time.
+
+    When the field has not yet validated returns 0.
+    '''
+
+    return self.__expireTime
+
   def returnType(self):
     return self.RETURN_TYPE_URL
+
+  def secondsTillExpired(self):
+    '''
+    Returns the number of seconds till the link is expired.
+    '''
+
+    if self.__expireTime == 0:
+      return -1
+    else:
+      return self.__expireTime - time.time()
 
   def setValue(self, sgData):
     return self.fromFieldData(sgData)
@@ -1872,6 +1942,26 @@ class SgFieldUrl(ShotgunORM.SgField):
       return None
 
     return copy.deepcopy(self._value)
+
+  def _validate(self, forReal=False):
+    result = super(SgFieldUrl, self)._validate(forReal)
+
+    if forReal and self._value != None:
+      if self._value['link_type'] in ['url', 'upload']:
+        search = self.REGEXP_EXPIRETIME.search(self._value['url'])
+
+        if search == None:
+          ShotgunORM.LoggerField.warn(
+            '%(sgField)s._validate() unable to find url expire time in %(url)s',
+            {
+              'sgField': self,
+              'url': self._value
+            }
+          )
+        else:
+          self.__expireTime = int(search.group(1))
+
+    return result
 
   def _Value(self):
     return self._toFieldData()
