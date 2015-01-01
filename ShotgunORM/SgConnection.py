@@ -1111,11 +1111,11 @@ class SgConnection(SgConnectionPriv):
 
       entity_type = schema.entityApiName(entity_type)
 
-      if self.__entityCache.has_key(entity_type):
-        iD = filters
-
-        if self.__entityCache[entity_type].has_key(iD):
-          return self._createEntity(entity_type, {'id': iD, 'type': entity_type}, fields)
+      return self._createEntity(
+        entity_type,
+        {'id': filters, 'type': entity_type},
+        fields
+      )
 
     searchResult = self.find(
       entity_type=entity_type,
@@ -1421,6 +1421,28 @@ class SgConnection(SgConnectionPriv):
       raise TypeError('expected a str for sgQueryTemplate, got %s' % type(sgQueryTemplate).__name__)
 
     self._fieldQueryDefaultsFallback = sgQueryTemplate
+
+  def setTimeout(self, secs):
+    '''
+    Set the timeout value which searchs will fail after N seconds have ellapsed.
+
+    Args:
+      * (None or int) secs:
+        Number of seconds.
+    '''
+
+    if secs != None:
+      secs = int(secs)
+
+    self.connection().config.timeout_secs = secs
+
+  def timeout(self):
+    '''
+    Returns the number of seconds that searches will fail after N seconds have
+    ellapsed.
+    '''
+
+    return self.connection().config.timeout_secs
 
   def user(self, sgUser, sgFields=None):
     '''

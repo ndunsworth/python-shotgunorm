@@ -786,7 +786,7 @@ class SgField(object):
 
     # If the parent is none or if the parent does not exist, meaning you can't
     # do any queries for event info, bail.
-    if parent == None or not parent.exists():
+    if not self.isQueryable() or parent == None or not parent.exists():
       return []
 
     connection = parent.connection()
@@ -868,7 +868,7 @@ class SgField(object):
       parent = self.parentEntity()
 
       if not self.isEditable():
-        raise RuntimeError('%s is not editable!' % ShotgunORM.mkEntityFieldString(self))
+        raise RuntimeError('%s is not editable!' % self)
 
       if not ShotgunORM.config.DISABLE_FIELD_VALIDATE_ON_SET_VALUE:
         self.validate(forReal=True)
@@ -1290,7 +1290,7 @@ class SgField(object):
       ShotgunORM.LoggerField.debug('    * sgData: %(sgData)s', {'sgData': sgData})
 
       if not self.isEditable():
-        raise RuntimeError('%s is not editable!' % ShotgunORM.mkEntityFieldString(self))
+        raise RuntimeError('%s is not editable!' % self)
 
       if not ShotgunORM.config.DISABLE_FIELD_VALIDATE_ON_SET_VALUE:
         self.validate(forReal=True)

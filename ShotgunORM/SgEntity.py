@@ -398,6 +398,11 @@ class SgEntity(object):
   def __del__(self):
     self.connection().cacheEntity(self)
 
+  def __dir__(self):
+    return sorted(
+      dir(type(self)) + self.__dict__.keys() + self.fieldNames()
+    )
+
   def __int__(self):
     return self.id
 
