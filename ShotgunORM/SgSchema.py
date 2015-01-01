@@ -569,6 +569,19 @@ class SgSchema(object):
 
     return self.__valid
 
+  def isValidEntityType(self, sgEntityType):
+    '''
+    Returns True if the Entity type is a valid Entity name.
+    '''
+
+    if not self.isInitialized():
+      self.__buildEvent.wait(self.BUILD_EVENT_TIMEOUT)
+
+      if not self.isInitialized():
+        raise RuntimeError('schema has not been initialized')
+
+    return self._schema.get(sgEntityType, None) != None
+
   def toXML(self):
     '''
     Returns an ElementTree representation of the schema.
