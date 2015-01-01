@@ -1422,6 +1422,28 @@ class SgConnection(SgConnectionPriv):
 
     self._fieldQueryDefaultsFallback = sgQueryTemplate
 
+  def setTimeout(self, secs):
+    '''
+    Set the timeout value which searchs will fail after N seconds have ellapsed.
+
+    Args:
+      * (None or int) secs:
+        Number of seconds.
+    '''
+
+    if secs != None:
+      secs = int(secs)
+
+    self.connection().config.timeout_secs = secs
+
+  def timeout(self):
+    '''
+    Returns the number of seconds that searches will fail after N seconds have
+    ellapsed.
+    '''
+
+    return self.connection().config.timeout_secs
+
   def user(self, sgUser, sgFields=None):
     '''
     Returns the HumanUser Entity belonging to the user "sgUser".
