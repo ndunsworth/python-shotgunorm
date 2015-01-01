@@ -434,10 +434,7 @@ class SgFieldEntity(ShotgunORM.SgField):
       return result
 
     try:
-      newValue = {
-        'type': sgData['type'],
-        'id': sgData['id']
-      }
+      newValue = copy.deepcopy(sgData)
 
       # This fixes the two Entities as their name field is only available when
       # returned as another Entities field value.
@@ -507,7 +504,10 @@ class SgFieldEntity(ShotgunORM.SgField):
     if self._value == None:
       return None
 
-    return dict(self._value)
+    return {
+      'id': self._value['id'],
+      'type': self._value['type']
+    }
 
   def value(self, sgSyncFields=None):
     '''
@@ -528,7 +528,7 @@ class SgFieldEntity(ShotgunORM.SgField):
     connection = parent.connection()
 
     if isinstance(sgSyncFields, dict):
-      sgSyncFields = sgSyncFields.get(parent.type, None)
+      sgSyncFields = sgSyncFields.get(value['type'], None)
     elif isinstance(sgSyncFields, str):
       sgSyncFields = [sgSyncFields]
 
