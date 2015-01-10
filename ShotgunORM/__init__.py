@@ -108,6 +108,7 @@ from SgAsyncSearchEngine import SgAsyncSearchEngine, SgAsyncSearchResult
 from SgQueryEngine import SgQueryEngine
 from SgSchema import SgSchema
 from SgSearchIterator import SgSearchIterator
+from SgBufferedSearchIterator import SgBufferedSearchIterator
 
 ################################################################################
 #

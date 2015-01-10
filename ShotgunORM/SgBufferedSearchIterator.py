@@ -25,21 +25,23 @@
 #
 
 __all__ = [
-  'SgSearchIterator'
+  'SgBufferedSearchIterator'
 ]
 
 # Python imports
 import copy
 
-class SgSearchIterator(object):
+class SgBufferedSearchIterator(object):
   '''
   Class used to iteratively retrieve a Shotgun search by page.
+
+  Buffers the search so that it is always one batch ahead.
   '''
 
   def __iter__(self):
-    class SgSearchIteratorIter(object):
-      def __init__(self, sgSearchIterator):
-        self.iter = sgSearchIterator
+    class SgBufferedSearchIteratorIter(object):
+      def __init__(self, sgBufferedSearchIterator):
+        self.iter = sgBufferedSearchIterator
         self.results = []
 
       def next(self):
@@ -54,10 +56,10 @@ class SgSearchIterator(object):
 
         raise StopIteration
 
-    return SgSearchIteratorIter(self)
+    return SgBufferedSearchIteratorIter(self)
 
   def __repr__(self):
-    return '<SgSearchIterator limit=%d, page=%d>' % (
+    return '<SgBufferedSearchIterator limit=%d, page=%d>' % (
       self.__limit,
       self.__page
     )
@@ -85,8 +87,17 @@ class SgSearchIterator(object):
     self.__page = max(1, int(page))
     self.__pageOrig = self.__page
 
-    self.__results = []
-    self.__hasMore = True
+    self.__currentResult = None
+    self.__nextResult = self.__connection.findAsync(
+      self.__entity,
+      self.__filter,
+      self.__fields,
+      self.__order,
+      self.__filterOp,
+      self.__limit,
+      self.__retired,
+      self.__page
+    )
 
     self.advance()
 
@@ -98,30 +109,25 @@ class SgSearchIterator(object):
     '''
 
     if not self.hasMore():
-      if len(self.__results) > 0:
-        self.__results = []
-
       return False
 
-    results = self.__connection.find(
-      self.__entity,
-      self.__filter,
-      self.__fields,
-      self.__order,
-      self.__filterOp,
-      self.__limit,
-      self.__retired,
-      self.__page
-    )
+    self.__currentResult = self.__nextResult
 
-    self.__hasMore = (
-      self.__limit != 0 and len(results) == self.__limit
-    )
-
-    if self.__hasMore:
+    if len(self.__currentResult.value()) == self.__limit:
       self.__page += 1
 
-    self.__results = results
+      self.__nextResult = self.__connection.findAsync(
+        self.__entity,
+        self.__filter,
+        self.__fields,
+        self.__order,
+        self.__filterOp,
+        self.__limit,
+        self.__retired,
+        self.__page
+      )
+    else:
+      self.__nextResult = None
 
     return True
 
@@ -138,17 +144,16 @@ class SgSearchIterator(object):
     Shotgun.
     '''
 
-    return self.__hasMore
+    return self.__nextResult != None
 
   def next(self):
     '''
     Advances and returns the result of the next search batch.
     '''
 
-    if self.advance():
-      return list(self.__results)
-    else:
-      return []
+    self.advance()
+
+    return self.results()
 
   def limit(self):
     '''
@@ -178,15 +183,24 @@ class SgSearchIterator(object):
     '''
 
     self.__page = self.__pageOrig
-    self.__results = []
-    self.__hasMore = True
+    self.__currentResult = None
+    self.__nextResult = self.__connection.findAsync(
+      self.__entity,
+      self.__filter,
+      self.__fields,
+      self.__order,
+      self.__filterOp,
+      self.__limit,
+      self.__retired,
+      self.__page
+    )
 
   def results(self):
     '''
     Returns the results produced by advance().
     '''
 
-    return list(self.__results)
+    return self.__currentResult.value()
 
   def retiredOnly(self):
     '''
