@@ -104,6 +104,7 @@ from utils import *
 from SgApiInfo import SgApiInfo
 from SgConnection import SgConnection, SgConnectionMeta
 from SgEntityClassFactory import SgEntityClassFactory
+from SgAsyncSearchEngine import SgAsyncSearchEngine, SgAsyncSearchResult
 from SgQueryEngine import SgQueryEngine
 from SgSchema import SgSchema
 from SgSearchIterator import SgSearchIterator

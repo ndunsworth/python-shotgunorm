@@ -109,6 +109,7 @@ class SgConnectionMeta(type):
         factory.initialize()
 
       result.queryEngine().start()
+      result.asyncEngine().start()
 
       return result
 
@@ -334,7 +335,11 @@ class SgConnection(SgConnectionPriv):
   '''
 
   def __repr__(self):
-    return '<%s(url:"%s", login:"%s")>' % (self.__class__.__name__, self.url(), self.login())
+    return '<%s(url:"%s", login:"%s")>' % (
+      self.__class__.__name__,
+      self.url(),
+      self.login()
+    )
 
   #def __eq__(self, item):
   #  if not isinstance(item, SgConnection):
@@ -370,6 +375,7 @@ class SgConnection(SgConnectionPriv):
     baseClasses.update(baseEntityClasses)
 
     self.__qEngine = ShotgunORM.SgQueryEngine(self)
+    self.__asyncEngine = ShotgunORM.SgAsyncSearchEngine(self)
     self.__schema = ShotgunORM.SgSchema.createSchema(self._url)
     self._factory = ShotgunORM.SgEntityClassFactory(
       self,
@@ -385,7 +391,8 @@ class SgConnection(SgConnectionPriv):
     '''
     Internal function!
 
-    Used by SgEntities and SgConnections when they commit a new Entity to Shotgun.
+    Used by SgEntities and SgConnections when they commit a new Entity to
+    Shotgun.
     '''
 
     with self:
@@ -399,12 +406,21 @@ class SgConnection(SgConnectionPriv):
     Internal function!
 
     Locks the connection and if the Entity has an ID the cache is checked to see
-    if it already has an SgEntity and if so it returns it otherwise it creates one.
+    if it already has an SgEntity and if so it returns it otherwise it creates
+    one.
     '''
 
-    ShotgunORM.LoggerConnection.debug('%(connection)s._createEntity(...)', {'connection': self})
-    ShotgunORM.LoggerConnection.debug('    * sgEntityType: %(entityName)s', {'entityName': sgEntityType})
-    ShotgunORM.LoggerConnection.debug('    * sgData: %(sgData)s', {'sgData': sgData})
+    ShotgunORM.LoggerConnection.debug(
+      '%(connection)s._createEntity(...)', {'connection': self}
+    )
+
+    ShotgunORM.LoggerConnection.debug(
+      '    * sgEntityType: %(entityName)s', {'entityName': sgEntityType}
+    )
+
+    ShotgunORM.LoggerConnection.debug(
+      '    * sgData: %(sgData)s', {'sgData': sgData}
+    )
 
     with self:
       sgData = dict(sgData)
@@ -491,7 +507,12 @@ class SgConnection(SgConnectionPriv):
         onCreate = True
 
       if sgSyncFields != None:
-        result.sync(sgSyncFields, ignoreValid=True, ignoreWithUpdate=True, backgroundPull=True)
+        result.sync(
+          sgSyncFields,
+          ignoreValid=True,
+          ignoreWithUpdate=True,
+          backgroundPull=True
+        )
 
       if onCreate:
         ShotgunORM.onEntityCreate(result)
@@ -660,7 +681,13 @@ class SgConnection(SgConnectionPriv):
         entityResult.append(sgResult.pop(0))
 
       try:
-        entity.afterCommit(entityBatchData, entityResult, entityCommitData, sgDryRun, None)
+        entity.afterCommit(
+          entityBatchData,
+          entityResult,
+          entityCommitData,
+          sgDryRun,
+          None
+        )
       except Exception, e:
         if exception == None:
           exception = e
@@ -669,6 +696,13 @@ class SgConnection(SgConnectionPriv):
       raise exception
 
     return result
+
+  def asyncEngine(self):
+    '''
+    Async search engine that performs background searches.
+    '''
+
+    return self.__asyncEngine
 
   def baseEntityClasses(self):
     '''
@@ -711,7 +745,9 @@ class SgConnection(SgConnectionPriv):
     try:
       for entity in requests:
         if entity.connection() != self:
-          raise ValueError('entity %s does not belong to this connection %s' % (entity, self))
+          raise ValueError(
+            'entity %s does not belong to this connection %s' % (entity, self)
+          )
 
         commitData = entity.toBatchData()
 
@@ -752,7 +788,10 @@ class SgConnection(SgConnectionPriv):
 
       with self:
         # Bail if the cache has been cleared.  The Entity is dirty!
-        if not self.__entityCache.has_key(sgEntity.type) or not self.__entityCache[sgEntity.type].has_key(sgEntity['id']):
+        if (
+          not self.__entityCache.has_key(sgEntity.type) or
+          not self.__entityCache[sgEntity.type].has_key(sgEntity['id'])
+        ):
           return
 
         cache = self.__entityCache[sgEntity.type][sgEntity['id']]
@@ -935,10 +974,21 @@ class SgConnection(SgConnectionPriv):
         Number of Entities to create.
     '''
 
-    ShotgunORM.LoggerConnection.debug('%(connection)s.create(...)', {'connection': self})
-    ShotgunORM.LoggerConnection.debug('    * sgEntityType: %(entityName)s', {'entityName': sgEntityType})
-    ShotgunORM.LoggerConnection.debug('    * sgData: %(sgData)s', {'sgData': sgData})
-    ShotgunORM.LoggerConnection.debug('    * sgCommit: %(sgCommit)s', {'sgCommit': sgCommit})
+    ShotgunORM.LoggerConnection.debug(
+      '%(connection)s.create(...)', {'connection': self}
+    )
+
+    ShotgunORM.LoggerConnection.debug(
+      '    * sgEntityType: %(entityName)s', {'entityName': sgEntityType}
+    )
+
+    ShotgunORM.LoggerConnection.debug(
+      '    * sgData: %(sgData)s', {'sgData': sgData}
+    )
+
+    ShotgunORM.LoggerConnection.debug(
+      '    * sgCommit: %(sgCommit)s', {'sgCommit': sgCommit}
+    )
 
     factory = self.classFactory()
 
@@ -977,7 +1027,9 @@ class SgConnection(SgConnectionPriv):
 
     with sgEntity:
       if sgEntity.connection() != self:
-        raise ValueError('entity %s does not belong to this connection %s' % (sgEntity, self))
+        raise ValueError(
+          'entity %s does not belong to this connection %s' % (sgEntity, self)
+        )
 
       batchData = [
         {
@@ -1090,8 +1142,8 @@ class SgConnection(SgConnectionPriv):
 
       * (str) filter_operator:
         Controls how the filters are matched. There are only two valid
-        options: all and any. You cannot currently combine the two options in the
-        same query.
+        options: all and any. You cannot currently combine the two options in
+        the same query.
 
       * (int) limit:
         Limits the amount of Entities can be returned.
@@ -1127,10 +1179,21 @@ class SgConnection(SgConnectionPriv):
 
         fields.update(schema.entityInfo(entity_type).fieldNames())
 
-    ShotgunORM.LoggerConnection.debug('%(sgConnection)s.find(...)', {'sgConnection': self})
-    ShotgunORM.LoggerConnection.debug('    * entity_type: %(entityType)s', {'entityType': entity_type})
-    ShotgunORM.LoggerConnection.debug('    * filters: %(sgFilters)s', {'sgFilters': filters})
-    ShotgunORM.LoggerConnection.debug('    * fields: %(sgFields)s', {'sgFields': fields})
+    ShotgunORM.LoggerConnection.debug(
+      '%(sgConnection)s.find(...)', {'sgConnection': self}
+    )
+
+    ShotgunORM.LoggerConnection.debug(
+      '    * entity_type: %(entityType)s', {'entityType': entity_type}
+    )
+
+    ShotgunORM.LoggerConnection.debug(
+      '    * filters: %(sgFilters)s', {'sgFilters': filters}
+    )
+
+    ShotgunORM.LoggerConnection.debug(
+      '    * fields: %(sgFields)s', {'sgFields': fields}
+    )
 
     searchResult = self._sg_find(
       entity_type=entity_type,
@@ -1154,6 +1217,34 @@ class SgConnection(SgConnectionPriv):
       searchResult = newResult
 
     return searchResult
+
+  def findAsync(
+    self,
+    entity_type,
+    filters,
+    fields=None,
+    order=None,
+    filter_operator=None,
+    limit=0,
+    retired_only=False,
+    page=0
+  ):
+    '''
+    Performs an async find() search.
+
+    See find() for a more detailed description.
+    '''
+
+    return self.__asyncEngine.addToQueue(
+      entity_type,
+      filters,
+      fields,
+      order,
+      filter_operator,
+      limit,
+      retired_only,
+      page
+    )
 
   def findIterator(
     self,
@@ -1209,8 +1300,8 @@ class SgConnection(SgConnectionPriv):
 
       * (str) filter_operator:
         Controls how the filters are matched. There are only two valid
-        options: all and any. You cannot currently combine the two options in the
-        same query.
+        options: all and any. You cannot currently combine the two options in
+        the same query.
 
       * (bool) retired_only:
         Return only retired entities.
@@ -1241,6 +1332,33 @@ class SgConnection(SgConnectionPriv):
       return searchResult[0]
     else:
       return None
+
+  def findOneAsync(
+    self,
+    entity_type,
+    filters=[],
+    fields=None,
+    order=None,
+    filter_operator=None,
+    retired_only=False,
+  ):
+    '''
+    Performs an async findOne() search.
+
+    See findOne() for a more detailed description.
+    '''
+
+    return self.__asyncEngine.addToQueue(
+      entity_type,
+      filters,
+      fields,
+      order,
+      filter_operator,
+      0,
+      retired_only,
+      0,
+      isSingle=True
+    )
 
   def info(self):
     '''
@@ -1339,7 +1457,9 @@ class SgConnection(SgConnectionPriv):
 
     with sgEntity:
       if sgEntity.connection() != self:
-        raise ValueError('entity %s does not belong to this connection %s' % (sgEntity, self))
+        raise ValueError(
+          'entity %s does not belong to this connection %s' % (sgEntity, self)
+        )
 
       batchData = [
         {
@@ -1402,7 +1522,17 @@ class SgConnection(SgConnectionPriv):
 
     # In the future this could support live updating of SgEntitySchemaInfo objects.
 
-  def search(self, sgEntityType, sgSearchExp, sgFields=None, sgSearchArgs=[], order=None, limit=0, retired_only=False, page=0):
+  def search(
+    self,
+    sgEntityType,
+    sgSearchExp,
+    sgFields=None,
+    sgSearchArgs=[],
+    order=None,
+    limit=0,
+    retired_only=False,
+    page=0
+  ):
     '''
     Uses a search string to find entities in Shotgun instead of a list.
 
@@ -1441,10 +1571,21 @@ class SgConnection(SgConnectionPriv):
 
     entity_type = schema.entityApiName(sgEntityType)
 
-    ShotgunORM.LoggerConnection.debug('%(sgConnection)s.search(...)', {'sgConnection': self})
-    ShotgunORM.LoggerConnection.debug('    * entity_type: %(entityType)s', {'entityType': entity_type})
-    ShotgunORM.LoggerConnection.debug('    * search_exp: "%(sgSearchExp)s"', {'sgSearchExp': sgSearchExp})
-    ShotgunORM.LoggerConnection.debug('    * fields: %(sgFields)s', {'sgFields': sgFields})
+    ShotgunORM.LoggerConnection.debug(
+      '%(sgConnection)s.search(...)', {'sgConnection': self}
+    )
+
+    ShotgunORM.LoggerConnection.debug(
+      '    * entity_type: %(entityType)s', {'entityType': entity_type}
+    )
+
+    ShotgunORM.LoggerConnection.debug(
+      '    * search_exp: "%(sgSearchExp)s"', {'sgSearchExp': sgSearchExp}
+    )
+
+    ShotgunORM.LoggerConnection.debug(
+      '    * fields: %(sgFields)s', {'sgFields': sgFields}
+    )
 
     filters = ShotgunORM.parseToLogicalOp(
       schema.entityInfo(entity_type),
@@ -1477,6 +1618,47 @@ class SgConnection(SgConnectionPriv):
       page=page
     )
 
+  def searchAsync(
+    self,
+    sgEntityType,
+    sgSearchExp,
+    sgFields=None,
+    sgSearchArgs=[],
+    order=None,
+    filter_operator=None,
+    limit=100,
+    retired_only=False,
+    page=1
+  ):
+    '''
+    Performs an async search().
+
+    See search() for a more detailed description.
+    '''
+
+    schema = self.schema()
+
+    sgEntityType = schema.entityApiName(sgEntityType)
+
+    sgFilters = ShotgunORM.parseToLogicalOp(
+      schema.entityInfo(sgEntityType),
+      sgSearchExp,
+      sgSearchArgs
+    )
+
+    sgFilters = self._flattenFilters(sgFilters)
+
+    return self.__asyncEngine.addToQueue(
+      sgEntityType,
+      sgFilters,
+      sgFields,
+      order,
+      filter_operator,
+      limit,
+      retired_only,
+      page
+    )
+
   def searchIterator(
     self,
     sgEntityType,
@@ -1496,14 +1678,7 @@ class SgConnection(SgConnectionPriv):
 
     schema = self.schema()
 
-    sgconnection = self.connection()
-
     sgEntityType = schema.entityApiName(sgEntityType)
-
-    ShotgunORM.LoggerConnection.debug('%(sgConnection)s.searchIterator(...)', {'sgConnection': self})
-    ShotgunORM.LoggerConnection.debug('    * entity_type: %(entityType)s', {'entityType': sgEntityType})
-    ShotgunORM.LoggerConnection.debug('    * search_exp: "%(sgSearchExp)s"', {'sgSearchExp': sgSearchExp})
-    ShotgunORM.LoggerConnection.debug('    * fields: %(sgFields)s', {'sgFields': sgFields})
 
     sgFilters = ShotgunORM.parseToLogicalOp(
       schema.entityInfo(sgEntityType),
@@ -1521,10 +1696,19 @@ class SgConnection(SgConnectionPriv):
       order,
       filter_operator,
       limit,
-      retired_only
+      retired_only,
+      page
     )
 
-  def searchOne(self, sgEntityType, sgSearchExp, sgFields=None, sgSearchArgs=[], order=None, retired_only=False):
+  def searchOne(
+    self,
+    sgEntityType,
+    sgSearchExp,
+    sgFields=None,
+    sgSearchArgs=[],
+    order=None,
+    retired_only=False
+  ):
     '''
     Same as search(...) but only returns a single Entity.
 
@@ -1551,12 +1735,60 @@ class SgConnection(SgConnectionPriv):
         Return only retired entities.
     '''
 
-    result = self.search(sgEntityType, sgSearchExp, sgFields, sgSearchArgs, order=order, limit=1, retired_only=retired_only)
+    result = self.search(
+      sgEntityType,
+      sgSearchExp,
+      sgFields,
+      sgSearchArgs,
+      order=order,
+      limit=1,
+      retired_only=retired_only
+    )
 
     if len(result) >= 1:
       return result[0]
 
     return None
+
+  def searchOneAsync(
+    self,
+    sgEntityType,
+    sgSearchExp,
+    sgFields=None,
+    sgSearchArgs=[],
+    order=None,
+    filter_operator=None,
+    retired_only=False
+  ):
+    '''
+    Performs an async searchOne().
+
+    See searchOne() for a more detailed description.
+    '''
+
+    schema = self.schema()
+
+    sgEntityType = schema.entityApiName(sgEntityType)
+
+    sgFilters = ShotgunORM.parseToLogicalOp(
+      schema.entityInfo(sgEntityType),
+      sgSearchExp,
+      sgSearchArgs
+    )
+
+    sgFilters = self._flattenFilters(sgFilters)
+
+    return self.__asyncEngine.addToQueue(
+      sgEntityType,
+      sgFilters,
+      sgFields,
+      order,
+      filter_operator,
+      0,
+      retired_only,
+      0,
+      isSingle=True
+    )
 
   def setFieldQueryTemplate(self, sgQueryTemplate):
     '''
@@ -1568,7 +1800,10 @@ class SgConnection(SgConnectionPriv):
     '''
 
     if not isinstance(sgQueryTemplate, (str, types.NoneType)):
-      raise TypeError('expected a str for sgQueryTemplate, got %s' % type(sgQueryTemplate).__name__)
+      raise TypeError(
+        'expected a str for sgQueryTemplate, got %s' %
+        type(sgQueryTemplate).__name__
+      )
 
     self._fieldQueryDefaults = sgQueryTemplate
 
@@ -1582,7 +1817,10 @@ class SgConnection(SgConnectionPriv):
     '''
 
     if not isinstance(sgQueryTemplate, (str, types.NoneType)):
-      raise TypeError('expected a str for sgQueryTemplate, got %s' % type(sgQueryTemplate).__name__)
+      raise TypeError(
+        'expected a str for sgQueryTemplate, got %s' %
+        type(sgQueryTemplate).__name__
+      )
 
     self._fieldQueryDefaultsFallback = sgQueryTemplate
 
