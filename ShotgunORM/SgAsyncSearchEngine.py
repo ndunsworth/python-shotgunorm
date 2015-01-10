@@ -268,7 +268,7 @@ class SgAsyncSearchResult(object):
       else:
         return self.__result
     else:
-      return None
+      return False
 
   def value(self):
     '''
