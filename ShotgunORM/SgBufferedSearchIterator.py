@@ -113,7 +113,14 @@ class SgBufferedSearchIterator(object):
 
     self.__currentResult = self.__nextResult
 
-    if len(self.__currentResult.value()) == self.__limit:
+    results = self.__currentResult.value()
+
+    if results == None:
+      self.__nextResult = None
+
+      return False
+
+    if len(results) == self.__limit:
       self.__page += 1
 
       self.__nextResult = self.__connection.findAsync(
@@ -200,7 +207,10 @@ class SgBufferedSearchIterator(object):
     Returns the results produced by advance().
     '''
 
-    return self.__currentResult.value()
+    if self.__currentResult.hasError():
+      return []
+    else:
+      return self.__currentResult.value()
 
   def retiredOnly(self):
     '''
