@@ -628,7 +628,7 @@ def SgEventWatcherWorker(monitor, threadData):
     e.wait(monitor.updateInterval())
 
     events = []
-    page = 0
+    page = 1
 
     while True:
       if monitor.aborted():

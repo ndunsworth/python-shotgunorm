@@ -86,6 +86,17 @@ class SgQueryEngine(object):
   Class that represents an asynchronous Entity field value pulling engine.
   '''
 
+  def __del__(self):
+    self.shutdown()
+
+  def __enter__(self):
+    self.__lock.acquire()
+
+  def __exit__(self, exc_type, exc_value, traceback):
+    self.__lock.release()
+
+    return False
+
   def __repr__(self):
     connection = self.connection()
 
@@ -97,22 +108,11 @@ class SgQueryEngine(object):
       'login': connection.login()
     }
 
-  def __enter__(self):
-    self.__lock.acquire()
-
-  def __exit__(self, exc_type, exc_value, traceback):
-    self.__lock.release()
-
-    return False
-
-  def __del__(self):
-    #print '<SgQueryEngine> __del__'
-    self._qEvent.set()
-
   def __init__(self, sgConnection):
     self.__lock = threading.Lock()
     self.__block = threading.RLock()
-    self._qEvent = threading.Event(verbose=True)
+    self._qEvent = threading.Event()
+    self._qShutdownEvent = threading.Event()
 
     self._qEvent.clear()
 
@@ -129,6 +129,7 @@ class SgQueryEngine(object):
         self.__lock,
         self.__block,
         self._qEvent,
+        self._qShutdownEvent,
         self._entityQueue,
         self._pendingQueries
       ]
@@ -311,6 +312,15 @@ class SgQueryEngine(object):
 
     return self.__block._is_owned()
 
+  def shutdown(self):
+    '''
+    Shutdown the engine.
+    '''
+
+    if self.__engineThread.isAlive():
+      self._qEvent.set()
+      self._qShutdownEvent.wait()
+
   def start(self):
     '''
     Starts the engines background thread.
@@ -328,7 +338,15 @@ class SgQueryEngine(object):
 
     self.__block.release()
 
-def SgQueryEngineWorker(connection, lock, block, event, entityQueue, pendingQueries):
+def SgQueryEngineWorker(
+  connection,
+  lock,
+  block,
+  event,
+  eventShutdown,
+  entityQueue,
+  pendingQueries
+):
   ##############################################################################
   #
   # IMPORTANT!!!!!
@@ -347,7 +365,14 @@ def SgQueryEngineWorker(connection, lock, block, event, entityQueue, pendingQuer
     event.wait()
 
     if len(pendingQueries) <= 0:
-      ShotgunORM.LoggerQueryEngine.debug('Stopping because engine set event and pendingQueries size is zero')
+      try:
+        ShotgunORM.LoggerQueryEngine.debug(
+          'Stopping because engine set event and pendingQueries size is zero'
+        )
+      except:
+        pass
+
+      eventShutdown.set()
 
       return
 
@@ -398,7 +423,12 @@ def SgQueryEngineWorker(connection, lock, block, event, entityQueue, pendingQuer
     con = connection()
 
     if con == None:
-      ShotgunORM.LoggerQueryEngine.debug('    * Stopping because connection not found')
+      try:
+        ShotgunORM.LoggerQueryEngine.debug(
+          '    * Stopping because connection not found'
+        )
+      except:
+        pass
 
       return
 
@@ -445,4 +475,9 @@ def SgQueryEngineWorker(connection, lock, block, event, entityQueue, pendingQuer
 
     del entityList
 
-    ShotgunORM.LoggerQueryEngine.debug('    * Processing complete!')
+    eventShutdown.set()
+
+    try:
+      ShotgunORM.LoggerQueryEngine.debug('    * Processing complete!')
+    except:
+      pass

@@ -1228,6 +1228,61 @@ class SgEntity(object):
 
       return result
 
+  def follow(self, sgUser):
+    '''
+    Configure the Shotgun HumanUser to follow this Entity.
+
+    Returns True if successful.
+
+    Args:
+      * (SgEntity) sgUser:
+        User which will follow the Entity.
+    '''
+
+    if (
+      not self.exists() or
+      not isinstance(sgUser, SgEntity) or
+      sgUser['type'] != 'HumanUser' or
+      not sgUser.exists()
+    ):
+      return False
+
+    return self.connection().connection().follow(
+      sgUser.toEntityFieldData(),
+      self.toEntityFieldData()
+    )['followed']
+
+  def followers(self):
+    '''
+    Returns a list of user Entities that are following this Entity.
+    '''
+
+    if not self.exists():
+      return []
+
+    connection = self.connection()
+
+    search = connection.connection().followers(self.toEntityFieldData())
+
+    result = []
+
+    if len(search) == 0:
+      return result
+
+    for i in search:
+      result.append(
+        connection._createEntity(
+          i['type'],
+          {
+            'id': i['id'],
+            'type': i['type']
+          }
+
+        )
+      )
+
+    return result
+
   def hasField(self, sgField):
     '''
     Returns True if the Entity contains the field specified.
@@ -1631,6 +1686,30 @@ class SgEntity(object):
         result[fieldName] = field.toFieldData()
 
     return result
+
+  def unfollow(self, sgUser):
+    '''
+    Configure the HumanUser to stop following this Entity.
+    
+    Returns True if successful.
+
+    Args:
+      * (SgEntity) sgUser:
+        User that will will stop following the Entity.
+    '''
+
+    if (
+      not self.exists() or
+      not isinstance(sgUser, SgEntity) or
+      sgUser['type'] != 'HumanUser' or
+      not sgUser.exists()
+    ):
+      return False
+
+    return self.connection().connection().unfollow(
+      sgUser.toEntityFieldData(),
+      self.toEntityFieldData()
+    )['unfollowed']
 
   def valuesSg(self, sgFields=None, sgReturnTypes=None):
     '''
