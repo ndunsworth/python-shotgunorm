@@ -51,7 +51,7 @@ class SgSearchIterator(object):
 
           if len(self.results) > 0:
             return self.results.pop(0)
-          
+
         raise StopIteration
 
     return SgSearchIteratorIter(self)
@@ -188,3 +188,19 @@ class SgSearchIterator(object):
     '''
 
     return copy.deepcopy(self.__filter)
+
+  def summarySize(self):
+    '''
+
+    '''
+
+    return self.__connection.summarize(
+      self.__entity,
+      self.__filter,
+      [
+        {
+          'field': 'id',
+          'type': 'count'
+        }
+      ]
+    )['summaries']['id']

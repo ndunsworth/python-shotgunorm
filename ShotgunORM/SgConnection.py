@@ -242,6 +242,31 @@ class SgConnectionPriv(object):
     with ShotgunORM.SHOTGUN_API_LOCK:
       return self.connection().revive(entityType, entityId)
 
+  def _sg_summarize(
+    self,
+    entity_type,
+    filters,
+    summary_fields,
+    filter_operator=None,
+    grouping=None,
+    include_archived_projects=True
+  ):
+    '''
+    Calls the Shotgun Python API summarize function.
+
+    This will lock the global Shotgun Python API lock.
+    '''
+
+    with ShotgunORM.SHOTGUN_API_LOCK:
+      return self.connection().summarize(
+        entity_type,
+        filters,
+        summary_fields,
+        filter_operator,
+        grouping,
+        include_archived_projects
+      )
+
   def connect(self):
     '''
     Connects to the Shotgun db.
@@ -1574,6 +1599,28 @@ class SgConnection(SgConnectionPriv):
       secs = int(secs)
 
     self.connection().config.timeout_secs = secs
+
+  def summarize(
+    self,
+    entity_type,
+    filters,
+    summary_fields,
+    filter_operator=None,
+    grouping=None,
+    include_archived_projects=True
+  ):
+    '''
+
+    '''
+
+    return self._sg_summarize(
+      entity_type,
+      filters,
+      summary_fields,
+      filter_operator,
+      grouping,
+      include_archived_projects
+    )
 
   def timeout(self):
     '''
