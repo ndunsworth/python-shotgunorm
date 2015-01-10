@@ -83,6 +83,7 @@ class SgSearchIterator(object):
     self.__limit = min(500, int(limit))
     self.__retired = bool(retired_only)
     self.__page = max(1, int(page))
+    self.__pageOrig = self.__page
 
     self.__results = []
     self.__hasMore = True
@@ -168,6 +169,16 @@ class SgSearchIterator(object):
 
     return self.__page
 
+  def reset(self):
+    '''
+    Rewinds the iterator so that the next call to advance will start from the
+    begining.
+    '''
+
+    self.__page = self.__pageOrig
+    self.__results = []
+    self.__hasMore = True
+
   def results(self):
     '''
     Returns the results produced by advance().
@@ -191,7 +202,15 @@ class SgSearchIterator(object):
 
   def summarySize(self):
     '''
+    Returns the current number of Entities the search would produce.
 
+    Note:
+      This value can not be assumed to be absolute as during the search
+      iteration new Entities can be added which would be returned by the search
+      results as well as Entities can be deleted during the process.
+
+      This value should only be used as a guesstimate for the number of entries
+      that will be produced.
     '''
 
     return self.__connection.summarize(
