@@ -372,4 +372,5 @@ def SgAsyncSearchEngineWorker(
 
       continue
     finally:
+      del sgAsyncSearch
       del con
