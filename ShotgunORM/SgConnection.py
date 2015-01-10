@@ -354,6 +354,8 @@ class SgConnection(SgConnectionPriv):
     self.__entityCache = {}
     self.__entityCaching = ShotgunORM.config.DEFAULT_CONNECTION_CACHING
 
+    self.__currentUser = None
+
   def _addEntity(self, sgEntity):
     '''
     Internal function!
@@ -439,7 +441,12 @@ class SgConnection(SgConnectionPriv):
           for field, value in sgData.items():
             fieldObj = result.field(field)
 
-            if fieldObj.isValid() or fieldObj.hasCommit() or fieldObj.hasSyncUpdate():
+            if (
+              fieldObj == None or
+              fieldObj.isValid() or
+              fieldObj.hasCommit() or
+              fieldObj.hasSyncUpdate()
+            ):
               continue
 
             fieldObj.invalidate()
@@ -832,6 +839,58 @@ class SgConnection(SgConnectionPriv):
         except KeyError:
           pass
 
+  def currentUser(self, sgFields=None):
+    '''
+    Searches Shotgun for a HumanUser with a login of the current system user
+    and returns the Entity if found.
+
+    Args:
+      * (list) sgFields:
+        Fields that Entity will have filled in with data from Shotgun.
+    '''
+
+    if self.__currentUser == None:
+      user = os.getenv('USER', None)
+
+      if user == None:
+        user = os.getenv('USERNAME')
+
+        if user == None:
+          self.__currentUser = -1
+
+          return None
+
+      user = self.findOne(
+        'HumanUser',
+        [
+          [
+            'login',
+            'is',
+            user
+          ]
+        ],
+        sgFields
+      )
+
+      if user == None:
+        return None
+
+      self.__currentUser = user['id']
+
+      return user
+
+    elif self.__currentUser == -1:
+      return None
+    else:
+      return self._createEntity(
+        'HumanUser',
+        {
+          'id': self.__currentUser,
+          'type': 'HumanUser'
+        },
+        sgFields
+      )
+
   def create(self, sgEntityType, sgData={}, sgCommit=False, numberOfEntities=1):
     '''
     Creates a new Entity and returns it.  The returned Entity does not exist in
@@ -1071,6 +1130,32 @@ class SgConnection(SgConnectionPriv):
 
     return searchResult
 
+  def findIterator(
+    self,
+    entity_type,
+    filters,
+    fields=None,
+    order=None,
+    filter_operator=None,
+    limit=100,
+    retired_only=False,
+    page=1
+  ):
+    '''
+    Returns a SgSearchIterator which is used to iterate over the search filter
+    by page.
+    '''
+
+    return ShotgunORM.SgSearchIterator(
+      self,
+      entity_type,
+      filters,
+      fields,
+      order,
+      filter_operator,
+      retired_only
+    )
+
   def findOne(
     self,
     entity_type,
@@ -1131,6 +1216,13 @@ class SgConnection(SgConnectionPriv):
       return searchResult[0]
     else:
       return None
+
+  def info(self):
+    '''
+
+    '''
+
+    return ShotgunORM.SgApiInfo(self)
 
   def isCaching(self):
     '''
@@ -1358,6 +1450,53 @@ class SgConnection(SgConnectionPriv):
       limit=limit,
       retired_only=retired_only,
       page=page
+    )
+
+  def searchIterator(
+    self,
+    sgEntityType,
+    sgSearchExp,
+    sgFields=None,
+    sgSearchArgs=[],
+    order=None,
+    filter_operator=None,
+    limit=100,
+    retired_only=False,
+    page=1
+  ):
+    '''
+    Returns a SgSearchIterator which is used to iterate over the search filter
+    by page.
+    '''
+
+    schema = self.schema()
+
+    sgconnection = self.connection()
+
+    sgEntityType = schema.entityApiName(sgEntityType)
+
+    ShotgunORM.LoggerConnection.debug('%(sgConnection)s.searchIterator(...)', {'sgConnection': self})
+    ShotgunORM.LoggerConnection.debug('    * entity_type: %(entityType)s', {'entityType': sgEntityType})
+    ShotgunORM.LoggerConnection.debug('    * search_exp: "%(sgSearchExp)s"', {'sgSearchExp': sgSearchExp})
+    ShotgunORM.LoggerConnection.debug('    * fields: %(sgFields)s', {'sgFields': sgFields})
+
+    sgFilters = ShotgunORM.parseToLogicalOp(
+      schema.entityInfo(sgEntityType),
+      sgSearchExp,
+      sgSearchArgs
+    )
+
+    sgFilters = self._flattenFilters(sgFilters)
+
+    return ShotgunORM.SgSearchIterator(
+      self,
+      sgEntityType,
+      sgFilters,
+      sgFields,
+      order,
+      filter_operator,
+      limit,
+      retired_only
     )
 
   def searchOne(self, sgEntityType, sgSearchExp, sgFields=None, sgSearchArgs=[], order=None, retired_only=False):

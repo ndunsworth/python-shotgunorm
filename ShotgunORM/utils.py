@@ -90,6 +90,58 @@ def formatList(obj, indent=0, indentSize=2, indentChar=' '):
 
   return result
 
+def formatSet(obj, indent=0, indentSize=2, indentChar=' '):
+  if len(obj) <= 0:
+    return '%s{}' % mkIndent(indent, indentSize, indentChar)
+
+  result = '%s{\n' % mkIndent(indent, indentSize, indentChar)
+
+  items = []
+
+  for i in obj:
+    s = formatSerializable(i, indent + 1, indentSize, indentChar)
+
+    indentSpan = (indentChar * indentSize)
+
+    while s.startswith(indentSpan):
+      s = s[len(indentSpan):]
+
+    s = '%s%s' % (mkIndent(indent + 1, indentSize, indentChar), s)
+
+    items.append(s)
+
+  result += ',\n'.join(items)
+
+  result += '\n%s}' % mkIndent(indent, indentSize, indentChar)
+
+  return result
+
+def formatTuple(obj, indent=0, indentSize=2, indentChar=' '):
+  if len(obj) <= 0:
+    return '%s()' % mkIndent(indent, indentSize, indentChar)
+
+  result = '%s(\n' % mkIndent(indent, indentSize, indentChar)
+
+  items = []
+
+  for i in obj:
+    s = formatSerializable(i, indent + 1, indentSize, indentChar)
+
+    indentSpan = (indentChar * indentSize)
+
+    while s.startswith(indentSpan):
+      s = s[len(indentSpan):]
+
+    s = '%s%s' % (mkIndent(indent + 1, indentSize, indentChar), s)
+
+    items.append(s)
+
+  result += ',\n'.join(items)
+
+  result += '\n%s)' % mkIndent(indent, indentSize, indentChar)
+
+  return result
+
 def formatSerializable(obj, indent=0, indentSize=2, indentChar=' '):
   '''
   Converts the serializeble list/dict into a user friendly string better than
@@ -114,8 +166,12 @@ def formatSerializable(obj, indent=0, indentSize=2, indentChar=' '):
 
   if isinstance(obj, dict):
     result = formatDict(obj, indent, indentSize, indentChar)
-  elif isinstance(obj, (list, set, tuple)):
+  elif isinstance(obj, list):
     result = formatList(obj, indent, indentSize, indentChar)
+  elif isinstance(obj, set):
+    result = formatSet(obj, indent, indentSize, indentChar)
+  elif isinstance(obj, tuple):
+    result = formatTuple(obj, indent, indentSize, indentChar)
   else:
     result = repr(obj)
 

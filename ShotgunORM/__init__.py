@@ -31,6 +31,7 @@ __all__ = [
   'VERSION',
   'SHOTGUN_API',
   'SHOTGUN_API_LOCK',
+  'SgApiInfo',
   'SgConnection',
   'SgConnectionMeta',
   'SgEntity',
@@ -41,6 +42,7 @@ __all__ = [
   'SgQueryEngine',
   'SgSchema',
   'SgScriptField',
+  'SgSearchIterator',
   'SgUserField',
   'parseFromLogicalOp',
   'parseToLogicalOp',
@@ -99,10 +101,12 @@ from utils import *
 #
 ################################################################################
 
+from SgApiInfo import SgApiInfo
 from SgConnection import SgConnection, SgConnectionMeta
 from SgEntityClassFactory import SgEntityClassFactory
 from SgQueryEngine import SgQueryEngine
 from SgSchema import SgSchema
+from SgSearchIterator import SgSearchIterator
 
 ################################################################################
 #
