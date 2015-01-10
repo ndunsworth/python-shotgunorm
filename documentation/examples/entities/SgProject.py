@@ -230,7 +230,7 @@ class SgProject(ShotgunORM.SgEntity):
             seqNames
           ]
         ],
-        ['shots']
+        ['code', 'shots']
       )
 
       for seq in sequences:
