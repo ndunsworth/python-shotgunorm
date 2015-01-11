@@ -184,6 +184,9 @@ class SgAsyncSearchResult(object):
   Class that represents an async Shotgun query.
   '''
 
+  def __call__(self, timeout=None):
+    return self.tryValue(timeout)
+
   def __init__(self, searchParameters):
     self.__event = threading.Event()
     self.__result = None
@@ -262,7 +265,7 @@ class SgAsyncSearchResult(object):
         Time in seconds to wait should the results have not yet been retrieved.
     '''
 
-    if threading.Event().wait(timout):
+    if self.__event.wait(timeout):
       if isinstance(self.__result, list):
         return list(self.__result)
       else:
