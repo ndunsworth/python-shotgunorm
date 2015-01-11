@@ -163,6 +163,13 @@ class SgAsyncSearchEngine(object):
         isSingle
       )
 
+  def pending(self):
+    '''
+    Returns the number of pending queries.
+    '''
+
+    return len(self.__pendingQueries)
+
   def shutdown(self):
     '''
     Shutdown the engine.

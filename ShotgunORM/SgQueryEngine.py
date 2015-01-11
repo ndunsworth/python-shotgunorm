@@ -312,6 +312,13 @@ class SgQueryEngine(object):
 
     return self.__block._is_owned()
 
+  def pending(self):
+    '''
+    Returns the number of pending queries.
+    '''
+
+    return len(self._pendingQueries)
+
   def shutdown(self):
     '''
     Shutdown the engine.
