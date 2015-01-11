@@ -460,7 +460,7 @@ class SgEntity(object):
         fieldObj = self.field(field)
 
         if fieldObj == None:
-          ShotgunORM.LoggerEntity.warn('no field named "%s"' % field)
+          ShotgunORM.LoggerEntity.warn('%s no field named "%s"' % (self, field))
 
           continue
 
@@ -1690,7 +1690,7 @@ class SgEntity(object):
   def unfollow(self, sgUser):
     '''
     Configure the HumanUser to stop following this Entity.
-    
+
     Returns True if successful.
 
     Args:
