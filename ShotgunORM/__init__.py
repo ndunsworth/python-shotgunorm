@@ -107,8 +107,7 @@ from SgEntityClassFactory import SgEntityClassFactory
 from SgAsyncSearchEngine import SgAsyncSearchEngine, SgAsyncSearchResult
 from SgQueryEngine import SgQueryEngine
 from SgSchema import SgSchema
-from SgSearchIterator import SgSearchIterator
-from SgBufferedSearchIterator import SgBufferedSearchIterator
+from SgSearchIterator import SgAbstractSearchIterator, SgBufferedSearchIterator, SgSearchIterator
 
 ################################################################################
 #

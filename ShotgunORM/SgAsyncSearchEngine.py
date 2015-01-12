@@ -37,6 +37,9 @@ import weakref
 # This module imports
 import ShotgunORM
 
+ADD_SEARCH = 0
+APPEND_SEARCH = 1
+
 class SgAsyncSearchEngine(object):
   '''
   Class that represents an asynchronous Shotgun search engine.
@@ -59,7 +62,7 @@ class SgAsyncSearchEngine(object):
     if connection == None:
       return '<SgAsyncSearchEngine>'
 
-    return '<SgAsyncSearchEngine(url:"%(url)s", login:"%(login)s">' % {
+    return '<SgAsyncSearchEngine url:"%(url)s", login:"%(login)s">' % {
       'url': connection.url(),
       'login': connection.login()
     }
@@ -92,7 +95,7 @@ class SgAsyncSearchEngine(object):
 
     return self.__connection()
 
-  def __addToQueue(
+  def __addSearch(
     self,
     sgEntityType,
     sgFilters,
@@ -102,7 +105,8 @@ class SgAsyncSearchEngine(object):
     limit,
     retired_only,
     page,
-    isSingle
+    isSingle,
+    searchPosition
   ):
     '''
     Internal function for adding a search to the pending queue.
@@ -124,15 +128,28 @@ class SgAsyncSearchEngine(object):
 
     searchResult = SgAsyncSearchResult(searchParameters)
 
-    self.__pendingQueries.append(
-      weakref.ref(searchResult)
-    )
-
-    self.__qEvent.set()
+    self.__addSearchResult(searchResult, searchPosition)
 
     return searchResult
 
-  def addToQueue(
+  def __addSearchResult(self, searchResult, searchPosition):
+    '''
+
+    '''
+
+    if searchPosition == ADD_SEARCH:
+      self.__pendingQueries.insert(
+        0,
+        weakref.ref(searchResult)
+      )
+    else:
+      self.__pendingQueries.append(
+        weakref.ref(searchResult)
+      )
+
+    self.__qEvent.set()
+
+  def addSearchToQueue(
     self,
     sgEntityType,
     sgFilters=[],
@@ -141,17 +158,17 @@ class SgAsyncSearchEngine(object):
     filterOperator=None,
     limit=0,
     retired_only=False,
-    page=1,
+    page=0,
     isSingle=False
   ):
     '''
-    Add the Shotgun search to the async search queue.
+    Add the Shotgun search to the front of the async search queue.
 
     Returns a SgAsyncSearchResult.
     '''
 
     with self:
-      return self.__addToQueue(
+      return self.__addSearch(
         sgEntityType,
         sgFilters,
         sgFields,
@@ -160,8 +177,69 @@ class SgAsyncSearchEngine(object):
         limit,
         retired_only,
         page,
-        isSingle
+        isSingle,
+        ADD_SEARCH
       )
+
+  def addToQueue(self, sgAsyncSearchResult):
+    '''
+    Add the SgAsyncSearchResult to the front of the async search queue.
+    '''
+
+    with self:
+      self.__addResult(
+        sgAsyncSearchResult
+      )
+
+  def appendSearchToQueue(
+    self,
+    sgEntityType,
+    sgFilters=[],
+    sgFields=None,
+    order=None,
+    filterOperator=None,
+    limit=0,
+    retired_only=False,
+    page=0,
+    isSingle=False
+  ):
+    '''
+    Add the Shotgun search to the back of the async search queue.
+
+    Returns a SgAsyncSearchResult.
+    '''
+
+    with self:
+      return self.__addSearch(
+        sgEntityType,
+        sgFilters,
+        sgFields,
+        order,
+        filterOperator,
+        limit,
+        retired_only,
+        page,
+        isSingle,
+        APPEND_SEARCH
+      )
+
+  def appendToQueue(self, sgAsyncSearchResult):
+    '''
+    Add the SgAsyncSearchResult to the back of the async search queue.
+    '''
+
+    with self:
+      self.__addResult(
+        sgAsyncSearchResult,
+        APPEND_SEARCH
+      )
+
+  def pending(self):
+    '''
+    Returns the number of pending queries.
+    '''
+
+    return len(self.__pendingQueries)
 
   def shutdown(self):
     '''
@@ -216,6 +294,8 @@ class SgAsyncSearchResult(object):
 
     self.__event.set()
 
+    self.onResultSet()
+
   def errorException(self):
     '''
     Returns the Exception object that was raised when the async search engine
@@ -245,6 +325,17 @@ class SgAsyncSearchResult(object):
     '''
 
     return self.__event.isSet()
+
+  def onResultSet(self):
+    '''
+    Called when the async search engine has returned the search result and
+    value() will not block.
+
+    Subclasses can implement this function to perform actions when the search
+    result is ready.
+    '''
+
+    pass
 
   def searchParameters(self):
     '''

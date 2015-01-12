@@ -35,7 +35,7 @@ import weakref
 # This module imports
 import ShotgunORM
 
-class SgJob(object):
+class SgQueryJob(object):
   '''
 
   '''
@@ -214,7 +214,7 @@ class SgQueryEngine(object):
           # around.
           entities = [weakref.ref(sgEntity)]
 
-          q = SgJob(t, entities, pullFields)
+          q = SgQueryJob(t, entities, pullFields)
 
           eq.append(q)
 
@@ -263,7 +263,7 @@ class SgQueryEngine(object):
           if len(pullFields) >= 1:
             entities = [weakref.ref(sgEntity)]
 
-            q = SgJob(t, entities, pullFields)
+            q = SgQueryJob(t, entities, pullFields)
 
             eq.append(q)
 
@@ -311,6 +311,13 @@ class SgQueryEngine(object):
     '''
 
     return self.__block._is_owned()
+
+  def pending(self):
+    '''
+    Returns the number of pending queries.
+    '''
+
+    return len(self._pendingQueries)
 
   def shutdown(self):
     '''
