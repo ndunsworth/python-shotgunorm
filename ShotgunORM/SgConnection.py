@@ -1235,7 +1235,7 @@ class SgConnection(SgConnectionPriv):
     See find() for a more detailed description.
     '''
 
-    return self.__asyncEngine.addToQueue(
+    return self.__asyncEngine.appendSearchToQueue(
       entity_type,
       filters,
       fields,
@@ -1255,21 +1255,32 @@ class SgConnection(SgConnectionPriv):
     filter_operator=None,
     limit=100,
     retired_only=False,
-    page=1
+    page=1,
+    buffered=False
   ):
     '''
     Returns a SgSearchIterator which is used to iterate over the search filter
     by page.
     '''
 
-    return ShotgunORM.SgSearchIterator(
+    iterClass = None
+
+    if buffered:
+      iterClass = ShotgunORM.SgBufferedSearchIterator
+    else:
+      iterClass = ShotgunORM.SgSearchIterator
+    self,
+
+    return iterClass(
       self,
       entity_type,
       filters,
       fields,
       order,
       filter_operator,
-      retired_only
+      limit,
+      retired_only,
+      page
     )
 
   def findOne(
@@ -1348,7 +1359,7 @@ class SgConnection(SgConnectionPriv):
     See findOne() for a more detailed description.
     '''
 
-    return self.__asyncEngine.addToQueue(
+    return self.__asyncEngine.appendSearchToQueue(
       entity_type,
       filters,
       fields,
@@ -1648,7 +1659,7 @@ class SgConnection(SgConnectionPriv):
 
     sgFilters = self._flattenFilters(sgFilters)
 
-    return self.__asyncEngine.addToQueue(
+    return self.__asyncEngine.appendSearchToQueue(
       sgEntityType,
       sgFilters,
       sgFields,
@@ -1669,7 +1680,8 @@ class SgConnection(SgConnectionPriv):
     filter_operator=None,
     limit=100,
     retired_only=False,
-    page=1
+    page=1,
+    buffered=False
   ):
     '''
     Returns a SgSearchIterator which is used to iterate over the search filter
@@ -1688,7 +1700,14 @@ class SgConnection(SgConnectionPriv):
 
     sgFilters = self._flattenFilters(sgFilters)
 
-    return ShotgunORM.SgSearchIterator(
+    iterClass = None
+
+    if buffered:
+      iterClass = ShotgunORM.SgBufferedSearchIterator
+    else:
+      iterClass = ShotgunORM.SgSearchIterator
+
+    return iterClass(
       self,
       sgEntityType,
       sgFilters,
@@ -1778,7 +1797,7 @@ class SgConnection(SgConnectionPriv):
 
     sgFilters = self._flattenFilters(sgFilters)
 
-    return self.__asyncEngine.addToQueue(
+    return self.__asyncEngine.appendSearchToQueue(
       sgEntityType,
       sgFilters,
       sgFields,
