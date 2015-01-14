@@ -32,6 +32,7 @@ __all__ = [
 # Python imports
 import copy
 import os
+import re
 import threading
 import types
 import weakref
@@ -153,6 +154,8 @@ class SgConnectionPriv(object):
       connect=False
     )
 
+    self._facility = None
+
   def _sg_batch(self, requests):
     '''
     Calls the Shotgun Python API batch function.
@@ -194,7 +197,7 @@ class SgConnectionPriv(object):
       fields = list(fields)
 
     with ShotgunORM.SHOTGUN_API_LOCK:
-      return self.connection().find(
+      result = self.connection().find(
         entity_type,
         filters,
         fields,
@@ -203,6 +206,12 @@ class SgConnectionPriv(object):
         limit,
         retired_only,
         page
+      )
+
+      return ShotgunORM.onSearchResult(
+        self,
+        entity_type,
+        result
       )
 
   def _sg_find_one(
@@ -224,7 +233,7 @@ class SgConnectionPriv(object):
       fields = list(fields)
 
     with ShotgunORM.SHOTGUN_API_LOCK:
-      return self.connection().find_one(
+      result = self.connection().find_one(
         entity_type,
         filters,
         fields,
@@ -232,6 +241,12 @@ class SgConnectionPriv(object):
         filter_operator,
         retired_only,
       )
+
+      return ShotgunORM.onSearchResult(
+        self,
+        entity_type,
+        [result]
+      )[0]
 
   def _sg_revive(self, entityType, entityId):
     '''
@@ -290,6 +305,16 @@ class SgConnectionPriv(object):
 
     with ShotgunORM.SHOTGUN_API_LOCK:
       self.connection().close()
+
+  def facility(self):
+    '''
+    Returns the facility name from the Shotgun url.
+    '''
+
+    if self._facility == None:
+      self._facility = ShotgunORM.facilityNameFromUrl(self._url)
+
+    return self._facility
 
   def isConnected(self):
     '''
@@ -924,17 +949,7 @@ class SgConnection(SgConnectionPriv):
 
           return None
 
-      user = self.findOne(
-        'HumanUser',
-        [
-          [
-            'login',
-            'is',
-            user
-          ]
-        ],
-        sgFields
-      )
+      user = self.user(user, sgFields)
 
       if user == None:
         return None
@@ -1373,7 +1388,7 @@ class SgConnection(SgConnectionPriv):
 
   def info(self):
     '''
-
+    Returns the Shotgun server api info.
     '''
 
     return ShotgunORM.SgApiInfo(self)

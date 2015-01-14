@@ -162,6 +162,8 @@ class SgEntityClassFactory(object):
     if entityClass == None:
       raise RuntimeError('unknown Entity type "%s"' % sgEntityType)
 
+    sgData = ShotgunORM.beforeEntityCreate(sgConnection, sgEntityType, sgData)
+
     result = entityClass(sgConnection)
 
     result.buildFields()

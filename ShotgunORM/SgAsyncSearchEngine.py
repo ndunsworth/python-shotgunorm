@@ -187,8 +187,9 @@ class SgAsyncSearchEngine(object):
     '''
 
     with self:
-      self.__addResult(
-        sgAsyncSearchResult
+      self.__addSearchResult(
+        sgAsyncSearchResult,
+        ADD_SEARCH
       )
 
   def appendSearchToQueue(
@@ -229,7 +230,7 @@ class SgAsyncSearchEngine(object):
     '''
 
     with self:
-      self.__addResult(
+      self.__addSearchResult(
         sgAsyncSearchResult,
         APPEND_SEARCH
       )
@@ -267,7 +268,7 @@ class SgAsyncSearchResult(object):
 
   def __init__(self, searchParameters):
     self.__event = threading.Event()
-    self.__result = None
+    self._result = None
     self.__errorException = None
     self.__errorMessage = None
     self.__searchParameters = searchParameters
@@ -285,16 +286,16 @@ class SgAsyncSearchResult(object):
     '''
 
     if isinstance(result, list):
-      self.__result = list(result)
+      self._result = list(result)
     else:
-      self.__result = result
+      self._result = result
 
     self.__errorException = errorException
     self.__errorMessage = errorMessage
 
-    self.__event.set()
-
     self.onResultSet()
+
+    self.__event.set()
 
   def errorException(self):
     '''
@@ -357,10 +358,10 @@ class SgAsyncSearchResult(object):
     '''
 
     if self.__event.wait(timeout):
-      if isinstance(self.__result, list):
-        return list(self.__result)
+      if isinstance(self._result, list):
+        return list(self._result)
       else:
-        return self.__result
+        return self._result
     else:
       return False
 
@@ -372,11 +373,10 @@ class SgAsyncSearchResult(object):
 
     self.__event.wait()
 
-    if isinstance(self.__result, list):
-      return list(self.__result)
+    if isinstance(self._result, list):
+      return list(self._result)
     else:
-      return self.__result
-
+      return self._result
 
 def SgAsyncSearchEngineWorker(
   connection,

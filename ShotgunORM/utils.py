@@ -25,11 +25,36 @@
 #
 
 __all__ = [
+  'facilityNameFromUrl',
   'formatSerializable',
   'mkEntityString',
   'mkEntityFieldString',
   'printSerializable'
 ]
+
+# Python imports
+import re
+
+REGEXP_PARSE_FACILITY = re.compile(
+  r'(http(?:s?)://)([a-zA-Z\d]+)\.(shotgunstudio\.com.*)'
+)
+
+def facilityNameFromUrl(url):
+  '''
+  Returns the facility name from a Shotgun url.
+
+  Example:
+    print facilityNameFromUrl("https://leetstudios.shotgunstudio.com")
+
+    result: "leetstudios"
+  '''
+
+  match = REGEXP_PARSE_FACILITY.search(url)
+
+  if match == None:
+    return 'unknown'
+  else:
+    return match.group(2)
 
 def formatDict(obj, indent=0, indentSize=2, indentChar=' '):
   if len(obj) <= 0:
