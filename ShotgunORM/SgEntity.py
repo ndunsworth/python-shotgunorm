@@ -730,14 +730,15 @@ class SgEntity(object):
 
     entityFieldInfos = self.schemaInfo().fieldInfos()
 
-    # Add the type field.
-    self._fields['type'] = ShotgunORM.SgFieldType(entityFieldInfos['type'], self)
-    self._fields['id'] = ShotgunORM.SgFieldID(entityFieldInfos['id'], self)
+    self._fields['id'] = ShotgunORM.SgFieldID(
+      entityFieldInfos.pop('id'),
+      self
+    )
 
-    # Dont pass the "id" field as its manually built as a user field.  Same
-    # for the type field.
-    del entityFieldInfos['id']
-    del entityFieldInfos['type']
+    self._fields['type'] = ShotgunORM.SgFieldType(
+      entityFieldInfos.pop('type'),
+      self
+    )
 
     fieldClasses = ShotgunORM.SgField.__fieldclasses__
 

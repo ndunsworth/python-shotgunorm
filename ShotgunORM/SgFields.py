@@ -187,16 +187,17 @@ class SgFieldColor2(ShotgunORM.SgField):
   REGEXP_PHASE_COLOR = re.compile(r'(\d+,\d+,\d+)|(project)')
 
   def __init__(self, name, label=None, sgFieldSchemaInfo=None, sgEntity=None):
+    self._regexp = self.REGEXP_COLOR
+    self._linkString = None
+    self._linkField = None
+    self._linkEntity = None
+
     super(SgFieldColor2, self).__init__(
       name,
       label=label,
       sgFieldSchemaInfo=sgFieldSchemaInfo,
       sgEntity=sgEntity
     )
-
-    self._regexp = self.REGEXP_COLOR
-    self._linkString = None
-    self._linkField = None
 
   def _fromFieldData(self, sgData):
     if sgData == None:
@@ -216,6 +217,11 @@ class SgFieldColor2(ShotgunORM.SgField):
     self._value = sgData
 
     return True
+
+  def _invalidate(self):
+    super(SgFieldColor2, self)._invalidate()
+
+    self._linkEntity = None
 
   def returnType(self):
     return self.RETURN_TYPE_COLOR2
@@ -271,6 +277,8 @@ class SgFieldColor2(ShotgunORM.SgField):
 
     pType = parent.schemaInfo().name()
 
+    self._linkEntity = None
+
     if pType == 'Task':
       self._regexp = self.REGEXP_TASK_COLOR
       self._linkString = 'pipeline_step'
@@ -312,17 +320,24 @@ class SgFieldColor2(ShotgunORM.SgField):
         newResult.append(int(i))
 
     if result == self._linkString:
-      linkObj = self.parentEntity()[self._linkField]
+      if self._linkEntity != None:
+        return self._linkEntity['color']
 
-      if linkObj == None:
+      self._linkEntity = self.parentEntity().field(
+        self._linkField
+      ).value(['color'])
+
+      if self._linkEntity == None:
         return None
 
-      return linkObj['color']
+      return self._linkEntity['color']
     else:
       newResult = []
 
       for i in result.split(','):
         newResult.append(int(i))
+
+      return newResult
 
 class SgFieldDate(ShotgunORM.SgField):
   '''

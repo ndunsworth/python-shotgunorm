@@ -651,6 +651,8 @@ class SgField(object):
     if sgEntity != None:
       self.__parent = weakref.ref(sgEntity)
 
+    self.parentChanged()
+
   @classmethod
   def registerFieldClass(cls, sgFieldReturnType, sgFieldClass):
     '''

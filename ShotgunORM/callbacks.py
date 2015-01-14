@@ -120,7 +120,7 @@ def _defaultOnSchemaChanged(sgSchema):
   for connection in connections:
     connection.schemaChanged()
 
-def _defaultOnSearchResult(sgConnection, sgEntityType, sgResults):
+def _defaultOnSearchResult(sgConnection, sgEntityType, sgFields, sgResults):
   pass
 
 #def _defaultOnFieldChangedCb(sgEntityField):
@@ -879,7 +879,7 @@ def onSchemaChanged(sgSchema):
     except Exception, e:
       print e
 
-def onSearchResult(sgConnection, sgEntityType, sgResults):
+def onSearchResult(sgConnection, sgEntityType, sgFields, sgResults):
   '''
   Called whenever a Shotgun search is performed.
   '''
@@ -888,7 +888,7 @@ def onSearchResult(sgConnection, sgEntityType, sgResults):
 
   for i in cbs:
     try:
-      updated = i['cb'](sgConnection, sgEntityType, sgResults)
+      updated = i['cb'](sgConnection, sgEntityType, sgFields, sgResults)
 
       if isinstance(updated, list):
         sgResults = updated
@@ -899,7 +899,7 @@ def onSearchResult(sgConnection, sgEntityType, sgResults):
 
   for i in cbs:
     try:
-      updated = i['cb'](sgConnection, sgEntityType, sgResults)
+      updated = i['cb'](sgConnection, sgEntityType, sgFields, sgResults)
 
       if isinstance(updated, list):
         sgResults = updated

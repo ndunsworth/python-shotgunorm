@@ -211,6 +211,7 @@ class SgConnectionPriv(object):
       return ShotgunORM.onSearchResult(
         self,
         entity_type,
+        fields,
         result
       )
 
@@ -245,6 +246,7 @@ class SgConnectionPriv(object):
       return ShotgunORM.onSearchResult(
         self,
         entity_type,
+        fields,
         [result]
       )[0]
 
@@ -843,6 +845,11 @@ class SgConnection(SgConnectionPriv):
 
           #data['id'] = sgEntity['id']
           #data['type'] = sgEntity['type']
+
+        if len(data) == 0:
+          del self.__entityCache[sgEntity.type][sgEntity['id']]
+
+          return
 
         cache['cache'] = data
         cache['cache_state'] = sgEntity.caching()
@@ -1446,7 +1453,7 @@ class SgConnection(SgConnectionPriv):
         [
           'sg_status',
           'in',
-          sgStatus
+          list(sgStatus)
         ]
       )
 
@@ -1455,14 +1462,15 @@ class SgConnection(SgConnectionPriv):
         [
           'sg_type',
           'in',
-          sgProjectTypes
+          list(sgProjectTypes)
         ]
       )
 
     return self.find(
       'Project',
       filters,
-      sgFields
+      sgFields,
+      order=[{'direction': 'asc', 'field_name': 'name'}]
     )
 
   def queryEngine(self):
@@ -1963,5 +1971,6 @@ class SgConnection(SgConnectionPriv):
     return self.find(
       'HumanUser',
       filters,
-      sgFields
+      sgFields,
+      order=[{'direction': 'asc', 'field_name': 'name'}]
     )
