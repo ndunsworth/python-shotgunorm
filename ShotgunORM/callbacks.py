@@ -27,10 +27,12 @@
 __all__ = [
   'AFTER_ENTITY_COMMIT_CBS',
   'BEFORE_ENTITY_COMMIT_CBS',
+  'BEFORE_ENTITY_CREATE_CBS',
   'ON_ENTITY_CREATE_CBS',
   'ON_ENTITY_SCHEMA_INFO_CREATE_CBS',
   'ON_FIELD_CHANGED_CBS',
   'ON_SCHEMA_CHANGED_CBS',
+  'ON_SEARCH_RESULT_CBS',
   'addAfterEntityCommit',
   'addBeforeEntityCommit',
   'addOnEntityCreate',
@@ -45,10 +47,12 @@ __all__ = [
   'appendOnSchemaChanged',
   'afterEntityCommit',
   'beforeEntityCommit',
+  'beforeEntityCreate',
   'onEntityCreate',
   'onEntitySchemaInfoCreate',
   'onFieldChanged',
-  'onSchemaChanged'
+  'onSchemaChanged',
+  'onSearchResult'
 ]
 
 # Python imports
@@ -63,6 +67,21 @@ def _defaultAfterEntityCommit(sgEntity, sgBatchData, sgBatchResult, sgCommitData
 
 def _defaultBeforeEntityCommit(sgEntity, sgBatchData, sgCommitData, sgDryRun):
   ShotgunORM.LoggerCallback.debug('beforeEntityCommit: %s' % sgEntity)
+
+def _defaultBeforeEntityCreate(sgConnection, sgEntityType, sgData):
+  if sgEntityType == 'ApiUser' or sgEntityType == 'PermissionRuleSet':
+    try:
+      del sgData['name']
+
+      ShotgunORM.LoggerCallback.debug(
+        'beforeEntityCreate: %(entityType)s removing "name" field data' % {
+          'entityType': sgEntityType
+        }
+      )
+    except:
+      pass
+
+  return sgData
 
 def _defaultOnEntityCreate(sgEntity):
   ShotgunORM.LoggerCallback.debug('onEntityCreate: %s' % sgEntity)
@@ -101,6 +120,9 @@ def _defaultOnSchemaChanged(sgSchema):
   for connection in connections:
     connection.schemaChanged()
 
+def _defaultOnSearchResult(sgConnection, sgEntityType, sgResults):
+  pass
+
 #def _defaultOnFieldChangedCb(sgEntityField):
 #  soc = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 #
@@ -136,6 +158,15 @@ BEFORE_ENTITY_COMMIT_CBS = {
   '*': [
     {
       'cb': _defaultBeforeEntityCommit,
+      'description': 'default_cb'
+    }
+  ]
+}
+
+BEFORE_ENTITY_CREATE_CBS = {
+  '*': [
+    {
+      'cb': _defaultBeforeEntityCreate,
       'description': 'default_cb'
     }
   ]
@@ -182,6 +213,15 @@ ON_FIELD_CHANGED_CBS = {
 
 ON_SCHEMA_CHANGED_CBS = {
   '*': []
+}
+
+ON_SEARCH_RESULT_CBS = {
+  '*': [
+    {
+      'cb': _defaultOnSearchResult,
+      'description': 'default_cb'
+    }
+  ]
 }
 
 def addAfterEntityCommit(cb, filterName='*', description=''):
@@ -295,6 +335,48 @@ def appendBeforeEntityCommit(cb, filterName='*', description=''):
     BEFORE_ENTITY_COMMIT_CBS[filterName].append(data)
   except:
     BEFORE_ENTITY_COMMIT_CBS[filterName] = [data]
+
+def addBeforeEntityCreate(cb, filterName='*', description=''):
+  '''
+  Adds the callback and places it at the front of the beforeEntityCreate
+  callback list.
+
+  This callback will be executed before an Entity object is created.
+  '''
+
+  if filterName in [None, '']:
+    filterName = '*'
+
+  data = {
+    'cb': cb,
+    'description': description
+  }
+
+  try:
+    BEFORE_ENTITY_CREATE_CBS[filterName].insert(0, data)
+  except:
+    BEFORE_ENTITY_CREATE_CBS[filterName] = [data]
+
+def appendBeforeEntityCreate(cb, filterName='*', description=''):
+  '''
+  Adds the callback and places it at the end of the beforeEntityCreate
+  callback list.
+
+  This callback will be executed before an Entity object is created.
+  '''
+
+  if filterName in [None, '']:
+    filterName = '*'
+
+  data = {
+    'cb': cb,
+    'description': description
+  }
+
+  try:
+    BEFORE_ENTITY_CREATE_CBS[filterName].append(data)
+  except:
+    BEFORE_ENTITY_CREATE_CBS[filterName] = [data]
 
 def addOnEntityCreate(cb, filterName='*', description=''):
   '''
@@ -520,6 +602,42 @@ def appendOnSchemaChanged(cb, filterName='*', description=''):
   except:
     ON_SCHEMA_CHANGED_CBS[filterName] = [data]
 
+def addOnSearchResult(cb, filterName='*', description=''):
+  '''
+
+  '''
+
+  if filterName in [None, '']:
+    filterName = '*'
+
+  data = {
+    'cb': cb,
+    'description': description
+  }
+
+  try:
+    ON_SEARCH_RESULT_CBS[filterName].insert(0, data)
+  except:
+    ON_SEARCH_RESULT_CBS[filterName] = [data]
+
+def appendOnSearchResult(cb, filterName='*', description=''):
+  '''
+
+  '''
+
+  if filterName in [None, '']:
+    filterName = '*'
+
+  data = {
+    'cb': cb,
+    'description': description
+  }
+
+  try:
+    ON_SEARCH_RESULT_CBS[filterName].append(data)
+  except:
+    ON_SEARCH_RESULT_CBS[filterName] = [data]
+
 def afterEntityCommit(sgEntity, sgBatchData, sgBatchResult, sgCommitData, sgDryRun, sgCommitError):
   '''
   This function is called after an Entity has been committed to Shotgun.
@@ -593,6 +711,38 @@ def beforeEntityCommit(sgEntity, sgBatchData, sgCommitData, sgDryRun):
   for i in cbs:
     i['cb'](sgEntity, sgBatchData, sgCommitData, sgDryRun)
 
+def beforeEntityCreate(sgConnection, sgEntityType, sgData):
+  '''
+  This function called before an SgEntity object is created.
+
+  The Shotgun connection, entity type, and Shotgun data that will be used to
+  initialize the SgEntity are passed to each callback.
+  '''
+
+  cbs = BEFORE_ENTITY_CREATE_CBS.get(sgEntityType, [])
+
+  for i in cbs:
+    try:
+      updated = i['cb'](sgConnection, sgEntityType, sgData)
+
+      if isinstance(updated, list):
+        sgData = updated
+    except Exception, e:
+      print e
+
+  cbs = BEFORE_ENTITY_CREATE_CBS['*']
+
+  for i in cbs:
+    try:
+      updated = i['cb'](sgConnection, sgEntityType, sgData)
+
+      if isinstance(updated, list):
+        sgData = updated
+    except Exception, e:
+      print e
+
+  return sgData
+
 def onEntityCreate(sgEntity):
   '''
   This function is called anytime an Entity object is created.  Not to be
@@ -605,19 +755,28 @@ def onEntityCreate(sgEntity):
     cbs = ON_ENTITY_CREATE_CBS[entityType]
 
     for i in cbs:
-      i['cb'](sgEntity)
+      try:
+        i['cb'](sgEntity)
+      except Exception, e:
+        print e
 
   if sgEntity.isCustom():
     if ON_ENTITY_CREATE_CBS.has_key(sgEntity.label()):
       cbs = ON_ENTITY_CREATE_CBS[sgEntity.label()]
 
       for i in cbs:
-        i['cb'](sgEntity)
+        try:
+          i['cb'](sgEntity)
+        except Exception, e:
+          print e
 
   cbs = ON_ENTITY_CREATE_CBS['*']
 
   for i in cbs:
-    i['cb'](sgEntity)
+    try:
+      i['cb'](sgEntity)
+    except Exception, e:
+      print e
 
 def onEntitySchemaInfoCreate(sgEntityInfo):
   '''
@@ -630,19 +789,28 @@ def onEntitySchemaInfoCreate(sgEntityInfo):
     cbs = ON_ENTITY_SCHEMA_INFO_CREATE_CBS[entityType]
 
     for i in cbs:
-      i['cb'](sgEntityInfo)
+      try:
+        i['cb'](sgEntityInfo)
+      except Exception, e:
+        print e
 
   if sgEntityInfo.isCustom():
     if ON_ENTITY_SCHEMA_INFO_CREATE_CBS.has_key(sgEntityInfo.label()):
       cbs = ON_ENTITY_SCHEMA_INFO_CREATE_CBS[sgEntityInfo.label()]
 
       for i in cbs:
-        i['cb'](sgEntityInfo)
+        try:
+          i['cb'](sgEntityInfo)
+        except Exception, e:
+          print e
 
   cbs = ON_ENTITY_SCHEMA_INFO_CREATE_CBS['*']
 
   for i in cbs:
-    i['cb'](sgEntityInfo)
+    try:
+      i['cb'](sgEntityInfo)
+    except Exception, e:
+      print e
 
 def onFieldChanged(sgField):
   '''
@@ -661,7 +829,10 @@ def onFieldChanged(sgField):
     cbs = ON_FIELD_CHANGED_CBS[entityFieldName]
 
     for i in cbs:
-      i['cb'](sgField)
+      try:
+        i['cb'](sgField)
+      except Exception, e:
+        print e
 
   entityFieldName = sgField.name()
 
@@ -669,12 +840,18 @@ def onFieldChanged(sgField):
     cbs = ON_FIELD_CHANGED_CBS[entityFieldName]
 
     for i in cbs:
-      i['cb'](sgField)
+      try:
+        i['cb'](sgField)
+      except Exception, e:
+        print e
 
   cbs = ON_FIELD_CHANGED_CBS['*']
 
   for i in cbs:
-    i['cb'](sgField)
+    try:
+      i['cb'](sgField)
+    except Exception, e:
+      print e
 
 def onSchemaChanged(sgSchema):
   '''
@@ -689,9 +866,44 @@ def onSchemaChanged(sgSchema):
     cbs = ON_SCHEMA_CHANGED_CBS[url]
 
     for i in cbs:
-      i['cb'](sgSchema)
+      try:
+        i['cb'](sgSchema)
+      except Exception, e:
+        print e
 
   cbs = ON_SCHEMA_CHANGED_CBS['*']
 
   for i in cbs:
-    i['cb'](sgSchema)
+    try:
+      i['cb'](sgSchema)
+    except Exception, e:
+      print e
+
+def onSearchResult(sgConnection, sgEntityType, sgResults):
+  '''
+  Called whenever a Shotgun search is performed.
+  '''
+
+  cbs = ON_SEARCH_RESULT_CBS.get(sgEntityType, [])
+
+  for i in cbs:
+    try:
+      updated = i['cb'](sgConnection, sgEntityType, sgResults)
+
+      if isinstance(updated, list):
+        sgResults = updated
+    except Exception, e:
+      print e
+
+  cbs = ON_SEARCH_RESULT_CBS['*']
+
+  for i in cbs:
+    try:
+      updated = i['cb'](sgConnection, sgEntityType, sgResults)
+
+      if isinstance(updated, list):
+        sgResults = updated
+    except Exception, e:
+      print e
+
+  return sgResults
