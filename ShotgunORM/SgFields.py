@@ -1656,7 +1656,7 @@ class SgFieldImage(SgFieldText):
   See SgFieldText.
   '''
 
-  REGEXP_EXPIRETIME = re.compile(r'&Expires=(\d+)&Signature=')
+  REGEXP_EXPIRETIME = re.compile(r'\?(?:AWS)?AccessKeyId=.*&Expires=(\d+)&Signature=')
 
   def __init__(self, name, label=None, sgFieldSchemaInfo=None, sgEntity=None):
     super(SgFieldImage, self).__init__(
@@ -1717,9 +1717,34 @@ class SgFieldImage(SgFieldText):
         'error': e
       })
 
-      raise RuntimeError('%s an error occured while downloading the file' % self)
+      raise RuntimeError(
+        '%s an error occured while downloading the file, %s' % (
+          self,
+          e
+
+        )
+      )
 
     return True
+
+  def filename(self):
+    '''
+    Returns the filename of the image url.
+
+    Returns an empty string if the field is not set.
+    '''
+
+    img = self.value()
+
+    if img == None:
+      return ''
+
+    search = self.REGEXP_EXPIRETIME.search(img)
+
+    if search != None:
+      return img[:search.span(0)[0]].rsplit('/', 1)[-1]
+
+    return img.replace('\\', '/').rsplit('/', 1)[-1]
 
   def isLinkExpired(self):
     '''
@@ -1850,7 +1875,7 @@ class SgFieldUrl(ShotgunORM.SgField):
   }
   '''
 
-  REGEXP_EXPIRETIME = re.compile(r'&Expires=(\d+)&Signature=')
+  REGEXP_EXPIRETIME = re.compile(r'\?(?:AWS)?AccessKeyId=.*&Expires=(\d+)&Signature=')
 
   def __init__(self, name, label=None, sgFieldSchemaInfo=None, sgEntity=None):
     super(SgFieldUrl, self).__init__(
