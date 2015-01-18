@@ -888,7 +888,7 @@ def onSearchResult(sgConnection, sgEntityType, sgFields, sgResults):
 
   for i in cbs:
     try:
-      updated = i['cb'](sgConnection, sgEntityType, sgFields, sgResults)
+      updated = i['cb'](sgConnection, sgEntityType, list(sgFields), sgResults)
 
       if isinstance(updated, list):
         sgResults = updated
@@ -899,7 +899,7 @@ def onSearchResult(sgConnection, sgEntityType, sgFields, sgResults):
 
   for i in cbs:
     try:
-      updated = i['cb'](sgConnection, sgEntityType, sgFields, sgResults)
+      updated = i['cb'](sgConnection, sgEntityType, list(sgFields), sgResults)
 
       if isinstance(updated, list):
         sgResults = updated
