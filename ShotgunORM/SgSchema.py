@@ -118,6 +118,7 @@ def _entityFix(schema, schemaData):
   schemaData['Banner'] = BannerEntity
 
 SCHEMA_CACHE_DIR = os.path.dirname(__file__).replace('\\', '/') + '/config/schema_caches'
+SCHEMA_CACHE_DIR_ENV_VAR = 'PY_SHOTGUNORM_CACHE_DIR'
 
 class SgSchema(object):
   '''
@@ -322,6 +323,14 @@ class SgSchema(object):
       loadedCache = False
 
       schemaCachePath = SCHEMA_CACHE_DIR
+      schemaCachePathEnv = os.getenv(SCHEMA_CACHE_DIR_ENV_VAR, None)
+
+      if schemaCachePathEnv != None:
+        try:
+          if os.path.exists(schemaCachePathEnv):
+            schemaCachePath = schemaCachePathEnv
+        except:
+          pass
 
       newSchema = {}
 
