@@ -121,6 +121,7 @@ class SgFieldSchemaInfo(object):
     self._summaryInfo = sgFieldAttribs['summary_info']
     self._valueTypes = sgFieldAttribs['value_types']
     self._validValues = sgFieldAttribs['valid_values']
+    self._visible = sgFieldAttribs['visible']
 
   @classmethod
   def createSchemaData(
@@ -137,7 +138,8 @@ class SgFieldSchemaInfo(object):
     summaryInfo=None,
     displayValues=None,
     validTypes=None,
-    validValues=None
+    validValues=None,
+    visible=True
   ):
     '''
     Returns a dict that is formatted correctly and can be used to create a new
@@ -193,7 +195,8 @@ class SgFieldSchemaInfo(object):
       'return_type_name': returnTypeName,
       'summary_info': summaryInfo,
       'value_types': validTypes,
-      'valid_values': validValues
+      'valid_values': validValues,
+      'visible': visible
     }
 
   @classmethod
@@ -220,7 +223,8 @@ class SgFieldSchemaInfo(object):
       'return_type_name': sgSchema['data_type']['value'],
       'summary_info': {},
       'value_types': [],
-      'valid_values': []
+      'valid_values': [],
+      'visible': sgSchema['visible']['value']
     }
 
     try:
@@ -283,7 +287,8 @@ class SgFieldSchemaInfo(object):
       'return_type_name': sgXmlElement.attrib.get('return_type_name'),
       'summary_info': eval(sgXmlElement.attrib.get('summary_info', '{}')),
       'value_types': sgXmlElement.attrib.get('value_types', []),
-      'valid_values': sgXmlElement.attrib.get('valid_values', [])
+      'valid_values': sgXmlElement.attrib.get('valid_values', []),
+      'visible': bool(sgXmlElement.attrib.get('visible', True))
     }
 
     if data['value_types'] != []:
@@ -357,6 +362,13 @@ class SgFieldSchemaInfo(object):
 
     return self._required
 
+  def isVisible(self):
+    '''
+    Returns True if the field is visible to users.
+    '''
+
+    return self._visible == True
+
   def name(self):
     '''
     Returns the name of the field used by Shotguns api.  This is NOT the user
@@ -417,6 +429,7 @@ class SgFieldSchemaInfo(object):
       'required': str(self.isRequired()),
       'return_type': str(self.returnType()),
       'return_type_name': self.returnTypeName(),
+      'visible': str(self.visible())
     }
 
     displayValues = self.displayValues()
@@ -461,6 +474,13 @@ class SgFieldSchemaInfo(object):
     '''
 
     return self._valueTypes
+
+  def visible(self):
+    '''
+    Returns True/False if the field is visible to users.
+    '''
+
+    return self._visible
 
 class SgFieldSchemaInfo2(SgFieldSchemaInfo):
   '''
