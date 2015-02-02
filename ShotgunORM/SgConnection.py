@@ -1232,9 +1232,7 @@ class SgConnection(SgConnectionPriv):
       newResult = []
 
       for i in searchResult:
-        entity = self._createEntity(entity_type, i)
-
-        newResult.append(entity)
+        newResult.append(self._createEntity(entity_type, i))
 
       searchResult = newResult
 

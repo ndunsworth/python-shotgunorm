@@ -571,6 +571,13 @@ class SgSchema(object):
 
     return self.__isBuilding
 
+  def isBuiltFromCache(self):
+    '''
+    Returns True if the schema was built from a ShotgunORM xml cache.
+    '''
+
+    return self.__builtFromCache
+
   def isInitialized(self):
     '''
     Returns True if the schema is initialized.
