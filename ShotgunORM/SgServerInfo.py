@@ -25,79 +25,112 @@
 #
 
 __all__ = [
-  'SgApiInfo'
+  'SgServerInfo'
 ]
 
 # Python imports
-import os
+import weakref
 
-# This module imports
-import ShotgunORM
-
-class SgApiInfo(object):
+class SgServerInfo(object):
   '''
   Class that represents the API information of a Shotgun connection.
   '''
 
   def __repr__(self):
-    return '<SgApiInfo: %s>' % self.version()
+    return '<SgServerInfo: %d.%dv%d>' % tuple(self.version())
 
   def __str__(self):
-    return 'Shotgun API %s' % self.version()
+    return 'Shotgun %d.%dv%d' % tuple(self.version())
 
-  def __init__(self):
-    self.__majVersion = 0
-    self.__minVersion = 0
-    self.__relVersion = 0
-    self.__phase = 'release'
-    self.__path = ''
+  def __init__(self, sgConnection):
+    self.__connection = weakref.ref(sgConnection)
 
-    if ShotgunORM.SHOTGUN_API != None:
-      info = ShotgunORM.SHOTGUN_API.__version__.split('.')
+    self.__majVersion = None
+    self.__minVersion = None
+    self.__relVersion = None
+    self.__totangoId = None
+    self.__totangoName = None
+    self.__s3Enabled = False
 
-      self.__majVersion = int(info[0])
-      self.__minVersion = int(info[1])
-      self.__relVersion = int(info[2])
+    self.refresh()
 
-      if len(info) > 3:
-        self.__phase = info[3]
-
-      self.__path = os.path.dirname(ShotgunORM.SHOTGUN_API.__file__)
-
-  def isDev(self):
+  def connection(self):
     '''
-    Returns True if the Shotgun API is a dev release.
+    Returns the Shotgun connection the info belongs to.
     '''
 
-    return self.__phase.lower() in ['dev', 'devel']
+    return self.__connection()
+
+  def hasS3(self):
+    '''
+    Returns True if the Shotgun instance has Amazon s3 uploads enabled.
+    '''
+
+    return self.__s3Enabled
+
+  def isValid(self):
+    '''
+    Returns True if the info is valid.
+    '''
+
+    return self.__majVersion != None
 
   def majorVersion(self):
     '''
-    Returns the major version number of the Shotgun API.
+    Returns the major version number of the Shotgun instance.
     '''
 
     return self.__majVersion
 
   def minorVersion(self):
     '''
-    Returns the minor version number of the Shotgun API.
+    Returns the minor version number of the Shotgun instance.
     '''
 
     return self.__minVersion
 
-  def phase(self):
+  def refresh(self):
     '''
-    Returns the phase of the Shotgun API.
+    Refreshes the api info from Shotgun.
     '''
 
-    return self.__phase
+    connection = self.connection()
+
+    if connection == None:
+      return False
+
+    try:
+      info = connection.connection().info()
+    except:
+      return False
+
+    self.__majVersion, self.__minVersion, self.__relVersion = info['version']
+    self.__totangoId = info['totango_site_id']
+    self.__totangoName = info['totango_site_name']
+    self.__s3Enabled = info['s3_uploads_enabled']
+
+    return True
 
   def releaseVersion(self):
     '''
-    Returns the release version number of the Shotgun API.
+    Returns the release version number of the Shotgun instance.
     '''
 
     return self.__relVersion
+
+  def totangoId(self):
+    '''
+    Returns the Totango site id.
+    '''
+
+    return self.__totangoId
+
+  def totangoName(self):
+    '''
+    Returns the Totango site name.
+    '''
+
+    return self.__totangoName
 
   def version(self):
     '''
@@ -105,16 +138,8 @@ class SgApiInfo(object):
     instance.
     '''
 
-    if self.isDev():
-      return '%d.%d.%d.%s' % (
-        self.__majVersion,
-        self.__minVersion,
-        self.__relVersion,
-        self.__phase
-      )
-    else:
-      return '%d.%d.%d' % (
-        self.__majVersion,
-        self.__minVersion,
-        self.__relVersion
-      )
+    return [
+      self.__majVersion,
+      self.__minVersion,
+      self.__relVersion
+    ]

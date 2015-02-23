@@ -46,6 +46,9 @@ __all__ = [
   'SHOTGUNAPI_NAME'
 ]
 
+# Python imports
+import os
+
 # This module imports
 import ShotgunORM
 
@@ -58,7 +61,7 @@ import ShotgunORM
 #
 ################################################################################
 
-SHOTGUNAPI_NAME = 'shotgun_api3'
+SHOTGUNAPI_NAME = os.getenv('PY_SHOTGUNAPI_NAME', 'shotgun_api3')
 
 ################################################################################
 #
@@ -71,7 +74,9 @@ SHOTGUNAPI_NAME = 'shotgun_api3'
 #
 ################################################################################
 
-DEFAULT_CONNECTION_CACHING = True
+DEFAULT_CONNECTION_CACHING = bool(
+  os.getenv('PY_SGORM_DEFAULT_CONNECTION_CACHING', True)
+)
 
 ################################################################################
 #
@@ -87,7 +92,9 @@ DEFAULT_CONNECTION_CACHING = True
 #
 ################################################################################
 
-DISABLE_FIELD_VALIDATE_ON_SET_VALUE = False
+DISABLE_FIELD_VALIDATE_ON_SET_VALUE = bool(
+  os.getenv('PY_SGORM_DISABLE_FIELD_VALIDATE_ON_SET_VALUE', False)
+)
 
 ################################################################################
 #
@@ -99,7 +106,9 @@ DISABLE_FIELD_VALIDATE_ON_SET_VALUE = False
 #
 ################################################################################
 
-ENABLE_FIELD_QUERY_PROFILING = False
+ENABLE_FIELD_QUERY_PROFILING = bool(
+  os.getenv('PY_SGORM_ENABLE_FIELD_QUERY_PROFILING', False)
+)
 
 ################################################################################
 #
@@ -107,7 +116,9 @@ ENABLE_FIELD_QUERY_PROFILING = False
 #
 ################################################################################
 
-ENTITY_DIR_INCLUDE_FIELDS = False
+ENTITY_DIR_INCLUDE_FIELDS = bool(
+  os.getenv('PY_SGORM_ENTITY_DIR_INCLUDE_FIELDS', True)
+)
 
 ################################################################################
 #
@@ -473,17 +484,30 @@ ShotgunORM.SgSchema.registerDefaultQueryFields(
 
 #import logging
 #
+#ShotgunORM.LoggerAsyncSearchEngine.setLevel(logging.DEBUG)
 #ShotgunORM.LoggerCallback.setLevel(logging.DEBUG)
+#ShotgunORM.LoggerConnection.setLevel(logging.DEBUG)
 #ShotgunORM.LoggerEntity.setLevel(logging.DEBUG)
+#ShotgunORM.LoggerEventWatcher.setLevel(logging.DEBUG)
 #ShotgunORM.LoggerField.setLevel(logging.DEBUG)
 #ShotgunORM.LoggerFactory.setLevel(logging.DEBUG)
 #ShotgunORM.LoggerORM.setLevel(logging.DEBUG)
 #ShotgunORM.LoggerQueryEngine.setLevel(logging.DEBUG)
 #ShotgunORM.LoggerSchema.setLevel(logging.DEBUG)
 #ShotgunORM.LoggerScriptEngine.setLevel(logging.DEBUG)
+#
+#del logging
 
 ################################################################################
 #
 # USER CUSTOMIZATIONS START HERE!
 #
 ################################################################################
+
+################################################################################
+#
+# CLEANUP
+#
+################################################################################
+
+del os

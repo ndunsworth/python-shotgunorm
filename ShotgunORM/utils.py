@@ -29,11 +29,18 @@ __all__ = [
   'formatSerializable',
   'mkEntityString',
   'mkEntityFieldString',
-  'printSerializable'
+  'printSerializable',
+  'sgApiInfo',
+  'webUrlSgApi',
+  'webUrlSgORM'
 ]
 
 # Python imports
 import re
+import webbrowser
+
+# This module imports
+import ShotgunORM
 
 REGEXP_PARSE_FACILITY = re.compile(
   r'(http(?:s?)://)([a-zA-Z\d]+)\.(shotgunstudio\.com.*)'
@@ -304,3 +311,44 @@ def printSerializable(obj, indent=0, indentSize=2, indentChar=' '):
   '''
 
   print formatSerializable(obj, indent, indentSize, indentChar)
+
+def sgApiInfo():
+  '''
+  Returns a SgApiInfo object.
+  '''
+
+  return ShotgunORM.SgApiInfo()
+
+def webUrlSgApi(openInBrowser=False):
+  '''
+    Returns the Shotgun API URL.
+
+    Args:
+      * (bool) openInBrowser:
+        When True the URL will be opened in the operating systems default
+        web-browser.
+  '''
+
+  url = 'https://github.com/shotgunsoftware/python-api'
+
+  if openInBrowser:
+    webbrowser.open(url)
+
+  return url
+
+def webUrlSgORM(openInBrowser=False):
+  '''
+    Returns the ShotgunORM API URL.
+
+    Args:
+      * (bool) openInBrowser:
+        When True the URL will be opened in the operating systems default
+        web-browser.
+  '''
+
+  url = 'https://github.com/shotgunsoftware/python-shotgunorm'
+
+  if openInBrowser:
+    webbrowser.open(url)
+
+  return url

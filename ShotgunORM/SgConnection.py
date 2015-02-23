@@ -1396,7 +1396,7 @@ class SgConnection(SgConnectionPriv):
     Returns the Shotgun server api info.
     '''
 
-    return ShotgunORM.SgApiInfo(self)
+    return ShotgunORM.SgServerInfo(self)
 
   def isCaching(self):
     '''

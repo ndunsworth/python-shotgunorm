@@ -105,6 +105,7 @@ from utils import *
 ################################################################################
 
 from SgApiInfo import SgApiInfo
+from SgServerInfo import SgServerInfo
 from SgConnection import SgConnection, SgConnectionMeta
 from SgEntityClassFactory import SgEntityClassFactory
 from SgAsyncSearchEngine import SgAsyncSearchEngine, SgAsyncSearchResult
@@ -194,6 +195,8 @@ from callbacks import *
 ################################################################################
 
 import config
+
+SHOTGUN_API = None
 
 try:
   SHOTGUN_API = __import__(config.SHOTGUNAPI_NAME)
