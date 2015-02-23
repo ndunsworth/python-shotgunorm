@@ -399,9 +399,14 @@ class SgEntity(object):
     self.connection().cacheEntity(self)
 
   def __dir__(self):
-    return sorted(
-      dir(type(self)) + self.__dict__.keys() + self.fieldNames()
-    )
+    if ShotgunORM.config.ENTITY_DIR_INCLUDE_FIELDS:
+      return sorted(
+        dir(type(self)) + self.__dict__.keys() + self.fieldNames()
+      )
+    else:
+      return sorted(
+        dir(type(self)) + self.__dict__.keys()
+      )
 
   def __int__(self):
     return self.id

@@ -42,6 +42,7 @@ __all__ = [
   'DEFAULT_CONNECTION_CACHING',
   'DISABLE_FIELD_VALIDATE_ON_SET_VALUE',
   'ENABLE_FIELD_QUERY_PROFILING',
+  'ENTITY_DIR_INCLUDE_FIELDS',
   'SHOTGUNAPI_NAME'
 ]
 
@@ -99,6 +100,14 @@ DISABLE_FIELD_VALIDATE_ON_SET_VALUE = False
 ################################################################################
 
 ENABLE_FIELD_QUERY_PROFILING = False
+
+################################################################################
+#
+# Enables field names to be included in the results of dir(SgEntity).
+#
+################################################################################
+
+ENTITY_DIR_INCLUDE_FIELDS = False
 
 ################################################################################
 #
