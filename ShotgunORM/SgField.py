@@ -1059,6 +1059,13 @@ class SgField(object):
 
     return self.__valid
 
+  def isVisible(self):
+    '''
+    Returns True if the field is visible to users.
+    '''
+
+    return self.__info.isVisible()
+
   def label(self):
     '''
     Returns the user visible string of the field.

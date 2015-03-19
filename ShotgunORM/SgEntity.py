@@ -1247,7 +1247,6 @@ class SgEntity(object):
 
     if (
       not self.exists() or
-      not isinstance(sgUser, SgEntity) or
       sgUser['type'] != 'HumanUser' or
       not sgUser.exists()
     ):
