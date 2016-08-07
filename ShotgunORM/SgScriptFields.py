@@ -113,7 +113,7 @@ class SgScriptFieldColor(ShotgunORM.SgScriptField):
 
     return {
       'value': value,
-      'op': 'is',
+      'op': 'is_not',
       'neop': None
     }
 
@@ -305,8 +305,6 @@ class SgScriptFieldEntity(ShotgunORM.SgScriptField):
       value = [value]
     else:
       raise TypeError('expected (ShotgunORM.SgEntity, dict, list), got %s' % type(value).__name__)
-
-    value = tmp
 
     return {
       'value': value,

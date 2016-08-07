@@ -172,5 +172,5 @@ class SgTicket(ShotgunORM.SgEntity):
 # Register the custom class.
 ShotgunORM.SgEntity.registerDefaultEntityClass(
   sgEntityCls=SgTicket,
-  sgEntityTypes=['SgTicket']
+  sgEntityTypes=['Ticket']
 )

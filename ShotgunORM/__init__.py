@@ -113,6 +113,14 @@ from SgQueryEngine import SgQueryEngine
 from SgSchema import SgSchema
 from SgSearchIterator import SgAbstractSearchIterator, SgBufferedSearchIterator, SgSearchIterator
 
+import SgUndo
+
+__all__.extend(SgUndo.__all__)
+
+del SgUndo
+
+from .SgUndo import *
+
 ################################################################################
 #
 # Import Entities and fields
@@ -147,10 +155,7 @@ del SgScriptFields
 
 from SgScriptFields import *
 
-from SgScriptEngine import parseFromLogicalOp, parseToLogicalOp
-
-# Clean SgScriptEngine from the namespace
-del SgScriptEngine
+from SgScriptEngine import convertToLogicalOp, parseFromLogicalOp, parseToLogicalOp
 
 ################################################################################
 #

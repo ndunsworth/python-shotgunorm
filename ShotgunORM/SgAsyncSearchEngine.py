@@ -37,8 +37,8 @@ import weakref
 # This module imports
 import ShotgunORM
 
-ADD_SEARCH = 0
-APPEND_SEARCH = 1
+SG_ASYNC_ADD_SEARCH = 0
+SG_ASYNC_APPEND_SEARCH = 1
 
 class SgAsyncSearchEngine(object):
   '''
@@ -46,7 +46,10 @@ class SgAsyncSearchEngine(object):
   '''
 
   def __del__(self):
-    self.shutdown()
+    try:
+      self.shutdown()
+    except:
+      pass
 
   def __enter__(self):
     self.__lock.acquire()
@@ -62,9 +65,9 @@ class SgAsyncSearchEngine(object):
     if connection == None:
       return '<SgAsyncSearchEngine>'
 
-    return '<SgAsyncSearchEngine url:"%(url)s", login:"%(login)s">' % {
+    return '<SgAsyncSearchEngine url:"%(url)s", script:"%(script)s">' % {
       'url': connection.url(),
-      'login': connection.login()
+      'script': connection.scriptName()
     }
 
   def __init__(self, sgConnection):
@@ -105,6 +108,8 @@ class SgAsyncSearchEngine(object):
     limit,
     retired_only,
     page,
+    include_archived_projects,
+    additional_filter_presets,
     isSingle,
     searchPosition
   ):
@@ -123,6 +128,8 @@ class SgAsyncSearchEngine(object):
       'limit': limit,
       'retired_only': retired_only,
       'page': page,
+      'include_archived_projects': include_archived_projects,
+      'additional_filter_presets': additional_filter_presets,
       'single': isSingle
     }
 
@@ -137,7 +144,7 @@ class SgAsyncSearchEngine(object):
 
     '''
 
-    if searchPosition == ADD_SEARCH:
+    if searchPosition == SG_ASYNC_ADD_SEARCH:
       self.__pendingQueries.insert(
         0,
         weakref.ref(searchResult)
@@ -159,6 +166,8 @@ class SgAsyncSearchEngine(object):
     limit=0,
     retired_only=False,
     page=0,
+    include_archived_projects=True,
+    additional_filter_presets=None,
     isSingle=False
   ):
     '''
@@ -177,8 +186,10 @@ class SgAsyncSearchEngine(object):
         limit,
         retired_only,
         page,
+        include_archived_projects,
+        additional_filter_presets,
         isSingle,
-        ADD_SEARCH
+        SG_ASYNC_ADD_SEARCH
       )
 
   def addToQueue(self, sgAsyncSearchResult):
@@ -189,7 +200,7 @@ class SgAsyncSearchEngine(object):
     with self:
       self.__addSearchResult(
         sgAsyncSearchResult,
-        ADD_SEARCH
+        SG_ASYNC_ADD_SEARCH
       )
 
   def appendSearchToQueue(
@@ -202,6 +213,8 @@ class SgAsyncSearchEngine(object):
     limit=0,
     retired_only=False,
     page=0,
+    include_archived_projects=True,
+    additional_filter_presets=None,
     isSingle=False
   ):
     '''
@@ -220,8 +233,10 @@ class SgAsyncSearchEngine(object):
         limit,
         retired_only,
         page,
+        include_archived_projects,
+        additional_filter_presets,
         isSingle,
-        APPEND_SEARCH
+        SG_ASYNC_APPEND_SEARCH
       )
 
   def appendToQueue(self, sgAsyncSearchResult):
@@ -232,7 +247,7 @@ class SgAsyncSearchEngine(object):
     with self:
       self.__addSearchResult(
         sgAsyncSearchResult,
-        APPEND_SEARCH
+        SG_ASYNC_APPEND_SEARCH
       )
 
   def pending(self):
@@ -463,8 +478,6 @@ def SgAsyncSearchEngineWorker(
         e,
         str(e)
       )
-
-      continue
     finally:
       del sgAsyncSearch
       del con

@@ -309,7 +309,7 @@ def printSerializable(obj, indent=0, indentSize=2, indentChar=' '):
     * (str) indentChar:
       Char used to represent an indent.
   '''
-
+  
   print formatSerializable(obj, indent, indentSize, indentChar)
 
 def sgApiInfo():

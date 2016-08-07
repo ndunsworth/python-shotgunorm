@@ -67,7 +67,9 @@ class SgEntityClassFactory(object):
     with self:
       ShotgunORM.LoggerFactory.debug('# BUILDING CLASS FACTORY')
 
-      sgSchema = self.connection().schema()
+      connection = self.connection()
+
+      sgSchema = connection.schema()
 
       sgEntityInfos = sgSchema.entityInfos()
 
@@ -83,7 +85,7 @@ class SgEntityClassFactory(object):
 
         entityBaseClass = None
 
-        for level in [self._localEntityClasses, ShotgunORM.SgEntity.__defaultentityclasses__]:
+        for level in [self._localEntityClasses, ShotgunORM.SgEntity.defaultEntityClasses()]:
           try:
             entityBaseClass = level[entityTypeName]
 
@@ -100,7 +102,7 @@ class SgEntityClassFactory(object):
 
         if entityBaseClass == None:
           try:
-            entityBaseClass = ShotgunORM.SgEntity.__defaultentityclasses__['Entity']
+            entityBaseClass = ShotgunORM.SgEntity.defaultEntityClass('Entity')
           except:
             ShotgunORM.LoggerFactory.debug('        - Unable to find base class')
 
@@ -109,6 +111,8 @@ class SgEntityClassFactory(object):
 
         fieldProps = {
           '__classinfo__': entityInfo,
+          '__sg_connection__': self.__connection,
+          '__sg_entity_name__': entityTypeName,
           '__sg_base_class__': entityBaseClass
         }
 
@@ -134,6 +138,25 @@ class SgEntityClassFactory(object):
 
     return self.__connection()
 
+  def createEntity(self, sgEntityType, sgData):
+    '''
+    Creates a new Entity object of type sgEntityType.
+    '''
+
+    entityClass = self._classCache.get(sgEntityType, None)
+
+    if entityClass == None:
+      raise RuntimeError('unknown Entity type "%s"' % sgEntityType)
+
+    sgData = ShotgunORM.beforeEntityCreate(self.connection(), sgEntityType, sgData)
+
+    result = entityClass()
+
+    result.buildFields()
+    result._fromFieldData(sgData)
+
+    return result
+
   def initialize(self):
     '''
     Builds the factory.
@@ -151,25 +174,6 @@ class SgEntityClassFactory(object):
     '''
 
     return self._valid
-
-  def createEntity(self, sgConnection, sgEntityType, sgData):
-    '''
-    Creates a new Entity object of type sgEntityType.
-    '''
-
-    entityClass = self._classCache.get(sgEntityType, None)
-
-    if entityClass == None:
-      raise RuntimeError('unknown Entity type "%s"' % sgEntityType)
-
-    sgData = ShotgunORM.beforeEntityCreate(sgConnection, sgEntityType, sgData)
-
-    result = entityClass(sgConnection)
-
-    result.buildFields()
-    result._fromFieldData(sgData)
-
-    return result
 
   def entityClass(self, sgEntityType):
     '''

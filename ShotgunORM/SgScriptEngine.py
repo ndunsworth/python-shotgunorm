@@ -25,12 +25,15 @@
 #
 
 __all__ = [
+  'convertToLogicalOp',
   'parseLogicalOp',
   'parseSearchExp'
 ]
 
 # Python imports
+import copy
 import exceptions
+import re
 
 # This module imports
 import ShotgunORM
@@ -232,7 +235,6 @@ SCRIPT_FIELDS = {
   ShotgunORM.SgField.RETURN_TYPE_TEXT: ShotgunORM.SgScriptFieldText(),
 }
 
-
 def buildSearchExpFilter(sgEntityFieldInfos, sgArgs, sgSearchExpSpan):
   '''
   Builds a logical operator from a search expression span.
@@ -295,7 +297,7 @@ def buildSearchExpFilter(sgEntityFieldInfos, sgArgs, sgSearchExpSpan):
 
   try:
     expResult = eval(sgSearchExpSpan, globalEnv, localEnv)
-  except Exception, e:
+  except Exception as e:
     raise SgScriptError('"%s" %s' % (sgSearchExpSpan, e))
 
   if inverse and expResult['neop'] == None:
@@ -403,6 +405,79 @@ def buildSearchExpFilters(sgEntityFieldInfos, sgArgs, sgSearchExpSpans):
 
   return logicalOp
 
+def convertToLogicalOp(sgEntityInfo, sgSearchFilters, operator='and'):
+  '''
+
+  '''
+
+  if sgSearchFilters == None or len(sgSearchFilters) <= 0:
+    return []
+
+  conditions = []
+
+  for i in sgSearchFilters:
+    field = i[0]
+    info = sgEntityInfo.fieldInfo(field)
+
+    if info == None:
+      raise SgScriptError('invalid field name %s' % field)
+
+    return_type = info.returnType()
+
+    relation = i[1]
+
+    try:
+      script_field = SCRIPT_FIELDS[return_type]
+    except KeyError:
+      raise SgScriptError(
+        'field "%s" contains no scriptfield operator' % field
+      )
+
+    script_func_info = LOG_TO_ORM_LOOKUP2.get(relation, None)
+
+    if script_func_info == None:
+      raise SgScriptError('invalid relation %s' % relation)
+
+    script_func = getattr(script_field, script_func_info[0])
+
+    values = i[2]
+
+    try:
+      expr_result = None
+
+      if script_func_info[2] == True:
+        if not isinstance(values, (list, tuple)) or len(values) != 2:
+          raise SgScriptError(
+            'invalid args for multi-arg operator, %s' % values
+          )
+
+        expr_result = script_func(*values)
+      else:
+        expr_result = script_func(values)
+    except Exception as e:
+      raise SgScriptError('%s %s' % (i, e))
+
+    log_cond = {
+      'path' : field,
+      'relation' : None,
+      'values' : expr_result['value']
+    }
+
+    if not isinstance(log_cond['values'], (list, tuple)):
+      log_cond['values'] = [log_cond['values']]
+
+    if script_func_info[1] == 'neop':
+      log_cond['relation'] = expr_result['neop']
+    else:
+      log_cond['relation'] = expr_result['op']
+
+    conditions.append(log_cond)
+
+  return {
+    'conditions': conditions,
+    'logical_operator': operator
+  }
+
 def parseToLogicalOp(sgEntityInfo, sgSearchExp, sgArgs=[]):
   '''
   Parses a search expression and returns the Shotgun formated search filter.
@@ -471,7 +546,36 @@ LOG_TO_ORM_LOOKUP = {
   'in_calendar_month': '%(path)s.in_month(%(values)s)',
   'in_calendar_year': '%(path)s.in_year(%(values)s)',
   'name_contains': '%(path)s.name_contains(%(values)s)',
-  'name_not_contains': '!%(path)s.name_contains(%(values)s)'
+  'name_not_contains': '!%(path)s.name_contains(%(values)s)',
+  'name_is': '%(path)s.name_is(%(values)s)',
+}
+
+LOG_TO_ORM_LOOKUP2 = {
+  'is': ['__eq__', 'op', False],
+  'is_not': ['__ne__', 'op', False],
+  'less_than': ['__lt__', 'op', False],
+  'greater_than': ['__gt__', 'op', False],
+  'contains': ['contains', 'op', False],
+  'not_contains': ['contains', 'neop', False],
+  'starts_with': ['startswith', 'op', False],
+  'ends_with': ['endswith', 'op', False],
+  'between': ['between', 'op', True],
+  'not_between': ['between', 'neop', True],
+  'in_last': ['in_lastbetween', 'op', True],
+  'not_in_last': ['in_lastbetween', 'neop', True],
+  'in_next': ['in_next', 'op', True],
+  'not_in_next': ['in_next', 'neop', True],
+  'in': ['_in', 'op', False],
+  'not_in': ['_in', 'neop', False],
+  'type_is': ['type', 'op', False],
+  'type_is_not': ['type', 'neop', False],
+  'in_calendar_day': ['in_day', 'op', False],
+  'in_calendar_week': ['in_week', 'op', False],
+  'in_calendar_month': ['in_month', 'op', False],
+  'in_calendar_year': ['in_year', 'op', False],
+  'name_contains': ['name_contains', 'op', False],
+  'name_not_contains': ['name_contains' 'neop', False],
+  'name_is': ['name_is' 'op', False],
 }
 
 LOG_SINGLES = [
@@ -485,6 +589,7 @@ LOG_SINGLES = [
   'type_is',
   'type_is_not',
   'name_contains',
+  'name_is',
   'name_not_contains'
 ]
 
@@ -543,4 +648,4 @@ def parseFromLogicalOp(sgLogicalOp):
 
     return op.join(comps)
   except Exception, e:
-    SgScriptError('error parsing logical operator: %s' % e)
+    raise SgScriptError('error parsing logical operator: %s' % e)

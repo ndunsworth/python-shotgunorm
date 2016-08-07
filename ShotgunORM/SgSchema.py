@@ -29,6 +29,7 @@ __all__ = [
 ]
 
 # Python imports
+import datetime
 import hashlib
 import os
 import threading
@@ -118,7 +119,7 @@ def _entityFix(schema, schemaData):
   schemaData['Banner'] = BannerEntity
 
 SCHEMA_CACHE_DIR = os.path.dirname(__file__).replace('\\', '/') + '/config/schema_caches'
-SCHEMA_CACHE_DIR_ENV_VAR = 'PY_SHOTGUNORM_CACHE_DIR'
+SCHEMA_CACHE_DIR_ENV_VAR = 'PY_SHOTGUNORM_CACHE_PATH'
 
 class SgSchema(object):
   '''
@@ -129,7 +130,12 @@ class SgSchema(object):
   __cache__ = {}
 
   __querytemplates__ = {
-    'default': {}
+    'default': {},
+    'empty': {}
+  }
+
+  __ignore_fields__ = {
+    'global': {}
   }
 
   # This is the time that all functions which call wait on the buildEvent use
@@ -156,8 +162,9 @@ class SgSchema(object):
 
     self.__valid = False
     self.__buildId = 0
+    self.__timestamp = None
     self.__isBuilding = False
-    self.__builtFromCache = False
+    self.__cachePath = None
 
   @classmethod
   def createSchema(cls, url):
@@ -180,6 +187,58 @@ class SgSchema(object):
       cls.__cache__[result.url().lower()] = result
 
       return result
+
+  @classmethod
+  def defaultEntityQueryFields(cls, sgQueryFieldTemplate, sgEntityType, fallBackTo='default'):
+    '''
+    Returns the list of default query fields for the specified Entity type and
+    query template.
+    '''
+
+    try:
+      return cls.__querytemplates__[sgQueryFieldTemplate][sgEntityType]
+    except KeyError:
+      if sgQueryFieldTemplate != 'empty' and fallBackTo != None and fallBackTo != sgQueryFieldTemplate:
+        try:
+          return cls.__querytemplates__[fallBackTo][sgEntityType]
+        except KeyError:
+          return []
+      else:
+        return []
+
+  @classmethod
+  def ignoreEntityField(cls, sgEntityType, sgField, sgConnection='global'):
+    '''
+    Registers a entity field so that it is ignored and not available to
+    Entity objects.
+    '''
+
+    if cls.isFieldIgnored(sgEntityType, sgField, sgConnection):
+      return
+
+    connectionEntityFields = {}
+
+    if cls.__ignore_fields__.has_key(sgConnection):
+      connectionEntityFields = cls.__ignore_fields__[sgConnection]
+    else:
+      cls.__ignore_fields__[sgConnection] = connectionEntityFields
+
+    if connectionEntityFields.has_key(sgEntityType):
+      connectionEntityFields[sgEntityType].append(sgField)
+    else:
+      connectionEntityFields[sgEntityType] = [sgField]
+
+  @classmethod
+  def isFieldIgnored(cls, sgEntityType, sgField, sgConnection='global'):
+
+    if sgConnection != 'global':
+      if cls.isFieldIgnored(sgEntityType, sgField, 'global') == True:
+        return True
+
+    try:
+      return sgField in cls.__ignore_fields__[sgConnection][sgEntityType]
+    except:
+      return False
 
   @classmethod
   def findSchema(cls, url):
@@ -214,23 +273,42 @@ class SgSchema(object):
 
         cls.__querytemplates__[t][sgEntityType] = set(sgFields)
 
-  @classmethod
-  def defaultEntityQueryFields(cls, sgQueryFieldTemplate, sgEntityType, fallBackTo='default'):
+  def _fromSG(self, sgConnection):
     '''
-    Returns the list of default query fields for the specified Entity type and
-    query template.
+    Connects to Shotgun and prases the schema information.
     '''
 
-    try:
-      return cls.__querytemplates__[sgQueryFieldTemplate][sgEntityType]
-    except KeyError:
-      if fallBackTo != None:
-        try:
-          return cls.__querytemplates__[fallBackTo][sgEntityType]
-        except KeyError:
-          return []
-      else:
-        return []
+    ShotgunORM.LoggerSchema.debug('    * Pulling schema from Shotgun')
+
+    with ShotgunORM.SHOTGUN_API_LOCK:
+      sgEntitySchemas = sgConnection._sg_schema_entity_read()
+      sgEntityFieldSchemas = sgConnection._sg_schema_read()
+
+    data = {}
+
+    entityTypes = sorted(sgEntitySchemas.keys())
+
+    for entityType in entityTypes:
+      ShotgunORM.LoggerSchema.debug('        + Building Entity "%(entityName)s"', {'entityName': entityType})
+
+      entitySchema = sgEntitySchemas[entityType]
+
+      entityTypeLabel = entitySchema['name']['value']
+      entityFieldSchemas = sgEntityFieldSchemas[entityType]
+
+      entityInfo = ShotgunORM.SgEntitySchemaInfo.fromSg(self, entityType, entityTypeLabel, entityFieldSchemas)
+
+      data[entityType] = entityInfo
+
+      if entityInfo.isCustom():
+        data[entityTypeLabel] = entityInfo
+
+    ShotgunORM.LoggerSchema.debug('    * Building schema from Shotgun completed!')
+
+    return {
+      'data': data,
+      'timestamp': str(datetime.datetime.now())
+    }
 
   def _fromXML(self, path):
     '''
@@ -248,7 +326,11 @@ class SgSchema(object):
     if xmlRoot.tag != 'SgSchema':
       raise RuntimeError('could not find SgSchema element in XML')
 
-    result = {}
+    ShotgunORM.LoggerSchema.debug('        schema version: %(schema_version)s', {'schema_version': xmlRoot.get('schema_version', 0)})
+    ShotgunORM.LoggerSchema.debug('        timestamp: %(timestamp)s', {'timestamp': xmlRoot.get('timestamp', 0)})
+    ShotgunORM.LoggerSchema.debug('        orm version: %(orm_version)s', {'orm_version': xmlRoot.get('orm_version', 0)})
+
+    data = {}
 
     xmlEntities = xmlRoot.find('entities')
 
@@ -265,134 +347,92 @@ class SgSchema(object):
 
       entityInfo = ShotgunORM.SgEntitySchemaInfo.fromXML(self, entity)
 
-      result[entityInfo.name()] = entityInfo
+      data[entityInfo.name()] = entityInfo
 
       if entityInfo.isCustom():
-        result[entityInfo.label()] = entityInfo
+        data[entityInfo.label()] = entityInfo
 
     ShotgunORM.LoggerSchema.debug('    * Parsing schema cache complete!')
 
-    return result
+    return {
+      'data': data,
+      'timestamp': xmlRoot.get('timestamp')
+    }
 
-  def _fromSG(self, sgConnection):
+  def build(self, sgConnection, useCache=True):
     '''
-    Connects to Shotgun and prases the schema information.
-    '''
+    Builds the schema from shotgun.
 
-    ShotgunORM.LoggerSchema.debug('    * Pulling schema from Shotgun')
-
-    with ShotgunORM.SHOTGUN_API_LOCK:
-      sgEntitySchemas = sgConnection.connection().schema_entity_read()
-      sgEntityFieldSchemas = sgConnection.connection().schema_read()
-
-    entityInfos = {}
-
-    entityTypes = sorted(sgEntitySchemas.keys())
-
-    for entityType in entityTypes:
-      ShotgunORM.LoggerSchema.debug('        + Building Entity "%(entityName)s"', {'entityName': entityType})
-
-      entitySchema = sgEntitySchemas[entityType]
-
-      entityTypeLabel = entitySchema['name']['value']
-      entityFieldSchemas = sgEntityFieldSchemas[entityType]
-
-      entityInfo = ShotgunORM.SgEntitySchemaInfo.fromSg(self, entityType, entityTypeLabel, entityFieldSchemas)
-
-      entityInfos[entityType] = entityInfo
-
-      if entityInfo.isCustom():
-        entityInfos[entityTypeLabel] = entityInfo
-
-    ShotgunORM.LoggerSchema.debug('    * Building schema from Shotgun completed!')
-
-    return entityInfos
-
-  def _build(self, sgConnection):
-    '''
-    Builds the schema, not thread safe!
+    Returns a dictionary containing the schema info, cache id, and cache
+    path if built from a cache xml file.
     '''
 
-    self.__buildEvent.clear()
+    schema = None
+    cachePath = None
 
-    self.__isBuilding = True
+    url = self.url()
+    urlLower = url.lower()
 
-    ShotgunORM.LoggerSchema.debug('# BUILDING SCHEMA "%(url)s"', {'url': self._url})
+    if sgConnection.url().lower() != url:
+      raise RuntimeError('connections url does not match schemas')
 
-    try:
-      loadedCache = False
-
+    if useCache == True:
       schemaCachePath = SCHEMA_CACHE_DIR
       schemaCachePathEnv = os.getenv(SCHEMA_CACHE_DIR_ENV_VAR, None)
 
-      if schemaCachePathEnv != None:
-        try:
-          if os.path.exists(schemaCachePathEnv):
-            schemaCachePath = schemaCachePathEnv
-        except:
-          pass
-
-      newSchema = {}
-
-      url = self.url()
-      urlLower = url.lower()
-
-      if sgConnection.url().lower() != url:
-        raise RuntimeError('connections url does not match schemas')
+      cacheFilename = None
 
       if url.startswith('https://'):
-        schemaCachePath += '/' + url[8:] + '.xml'
+        cacheFilename = url[8:].lower() + '.xml'
       else:
-        schemaCachePath += '/' + url.lower() + '.xml'
+        cacheFilename = url.lower() + '.xml'
 
-      if os.path.exists(schemaCachePath):
-        ShotgunORM.LoggerSchema.debug('    * Schema cache path found: "%(cachePath)s"', {'cachePath': schemaCachePath})
+      if schemaCachePathEnv != None:
+        for i in schemaCachePathEnv.split(':'):
+          if not os.path.exists(i):
+            continue
 
-        try:
-          newSchema = self._fromXML(schemaCachePath)
+          schemaCachePath = i + '/' + cacheFilename
 
-          loadedCache = True
-        except Exception, e:
-          ShotgunORM.LoggerSchema.error('        - Error loading XML, falling back to Shotgun database')
-          ShotgunORM.LoggerSchema.error(e)
+          if os.path.exists(schemaCachePath):
+            ShotgunORM.LoggerSchema.debug('    * Schema cache path found: "%(cachePath)s"', {'cachePath': schemaCachePath})
 
-      if loadedCache == False:
-        newSchema = self._fromSG(sgConnection)
-      else:
-        self.__builtFromCache = True
+            try:
+              schema = self._fromXML(schemaCachePath)
 
-      _entityFix(self, newSchema)
+              cachePath = schemaCachePath
 
-      self._schema = newSchema
+              break
+            except Exception, e:
+              ShotgunORM.LoggerSchema.error('        - Error loading XML')
+              ShotgunORM.LoggerSchema.error(e)
 
-      self.__valid = True
+    if schema == None:
+      schema = self._fromSG(sgConnection)
 
-      t = time.time()
+    _entityFix(self, schema['data'])
 
-      buildHash = hashlib.sha1()
+    t = time.time()
 
-      buildHash.update(str(t))
+    buildHash = hashlib.sha1()
 
-      self.__buildId = buildHash.hexdigest()
-    finally:
-      self.__isBuilding = False
+    buildHash.update(str(t))
 
-      self.__buildEvent.set()
+    return {
+      'id': buildHash.hexdigest(),
+      'cache_path': cachePath,
+      'schema': schema['data'],
+      'timestamp': schema['timestamp']
+    }
 
-    self.changed()
-
-  def build(self, sgConnection):
+  def buildCachePath(self):
     '''
-    Builds the schema.
+    Returns the file path of the cache file used to generate the schema.
 
-    If the schema has previously been built this will cause the schema to
-    rebuild itself.
-
-    See SgSchema.initialize() if you only want to make sure the schema is built.
+    Returns None if the schema was not built from a xml cache file.
     '''
 
-    with self:
-      self._build(sgConnection)
+    return self.__cachePath
 
   def buildId(self):
     '''
@@ -506,7 +546,7 @@ class SgSchema(object):
     '''
 
     with self:
-      if self.__builtFromCache:
+      if self.__cachePath != None:
         ShotgunORM.LoggerSchema.warn(
           'exporting schema when current schema was built from a cache file'
         )
@@ -521,34 +561,92 @@ class SgSchema(object):
 
       tree = ET.ElementTree(xmlData)
 
-      tree.write(path)
+      tree.write(path, 'utf-8')
 
       return True
-
-  def _initialize(self, sgConnection, event):
-    '''
-    Function that initialize threads call which calls build() if the schema is
-    not initialized.
-    '''
-
-    event.set()
-
-    with self:
-      if self.isInitialized():
-        return
-
-      self.build(sgConnection)
 
   def initialize(self, sgConnection, thread=True):
     '''
     Builds the schema if it has not previously been built.
     '''
 
+    if self.isInitialized():
+      return
+
+    self.refresh(sgConnection, thread)
+
+  def isBuilding(self):
+    '''
+    Returns True if the schema is building.
+    '''
+
+    return self.__isBuilding
+
+  def isBuiltFromCache(self):
+    '''
+    Returns True if the schema was built from a ShotgunORM xml cache.
+    '''
+
+    return self.__cachePath != None
+
+  def isInitialized(self):
+    '''
+    Returns True if the schema is initialized.
+    '''
+
+    return self.__valid
+
+  def isValidEntityType(self, sgEntityType):
+    '''
+    Returns True if the Entity type is a valid Entity name.
+    '''
+
+    return self.entityInfo(sgEntityType) != None
+
+  def _refresh(self, sgConnection, event, refresh=False):
+    '''
+
+    '''
+
+    with self:
+      self.__buildEvent.clear()
+
+      self.__isBuilding = True
+
+      event.set()
+
+      ignoreCache = self.isBuiltFromCache()
+
+      try:
+        data = self.build(
+          sgConnection,
+          not ignoreCache
+        )
+      finally:
+        self.__isBuilding = False
+
+        self.__buildEvent.set()
+
+      self._schema = data['schema']
+      self.__buildId = data['id']
+      self.__cachePath = data['cache_path']
+      self.__timestamp = data['timestamp']
+      self.__valid = True
+
+      self.changed()
+
+  def refresh(self, sgConnection, thread=True):
+    '''
+    Refresh the schema from shotgun.
+
+    ShotgunORM.onSchemaChanged() will be emitted afterwards.
+    '''
+
     e = threading.Event()
 
     t = threading.Thread(
-      target=self._initialize,
-      name='%s.initialize()' % self,
+      target=self._refresh,
+      name='%s.refresh()' % self,
       args=[
         sgConnection,
         e
@@ -564,39 +662,12 @@ class SgSchema(object):
     else:
       t.join()
 
-  def isBuilding(self):
+  def timestamp(self):
     '''
-    Returns True if the schema is building.
-    '''
-
-    return self.__isBuilding
-
-  def isBuiltFromCache(self):
-    '''
-    Returns True if the schema was built from a ShotgunORM xml cache.
+    Returns the datetime that the schema was read from shotgun.
     '''
 
-    return self.__builtFromCache
-
-  def isInitialized(self):
-    '''
-    Returns True if the schema is initialized.
-    '''
-
-    return self.__valid
-
-  def isValidEntityType(self, sgEntityType):
-    '''
-    Returns True if the Entity type is a valid Entity name.
-    '''
-
-    if not self.isInitialized():
-      self.__buildEvent.wait(self.BUILD_EVENT_TIMEOUT)
-
-      if not self.isInitialized():
-        raise RuntimeError('schema has not been initialized')
-
-    return self._schema.get(sgEntityType, None) != None
+    return self.__timestamp
 
   def toXML(self):
     '''
@@ -612,8 +683,9 @@ class SgSchema(object):
     xmlRoot = ET.Element(
       'SgSchema',
       orm_version=ShotgunORM.__version__,
-      schema_version='1',
-      url=self.url()
+      url=self.url(),
+      timestamp=self.timestamp(),
+      schema_version='1'
     )
 
     xmlEntities = ET.SubElement(xmlRoot, 'entities')

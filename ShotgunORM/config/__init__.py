@@ -474,6 +474,18 @@ ShotgunORM.SgSchema.registerDefaultQueryFields(
 
 ################################################################################
 #
+# Config for the default schema fields to ignore for Entities.
+#
+################################################################################
+
+ShotgunORM.SgSchema.ignoreEntityField(
+  'HumanUser',
+  'email_all_security',
+  'global'
+)
+
+################################################################################
+#
 # Overriding the level of Loggers.
 #
 # Note:
@@ -504,10 +516,16 @@ ShotgunORM.SgSchema.registerDefaultQueryFields(
 #
 ################################################################################
 
+user_cfg = os.path.sep.join([os.path.dirname(__file__), 'user.py'])
+
+if os.path.exists(user_cfg):
+  import user
+
 ################################################################################
 #
 # CLEANUP
 #
 ################################################################################
 
+del user_cfg
 del os

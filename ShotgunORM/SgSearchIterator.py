@@ -79,8 +79,12 @@ class SgAbstractSearchIterator(object):
     filterOperator=None,
     limit=100,
     retired_only=False,
-    page=1
+    page=1,
+    include_archived_projects=True,
+    additional_filter_presets=None
   ):
+    self._additional_filter_presets = copy.deepcopy(additional_filter_presets)
+    self._archived_projects = bool(include_archived_projects)
     self._connection = sgConnection
     self._entityType = sgEntityType
     self._filter = copy.deepcopy(sgFilters)
@@ -91,6 +95,8 @@ class SgAbstractSearchIterator(object):
     self._retiredOnly = bool(retired_only)
     self._page = max(1, int(page))
     self._pageOrig = self._page
+
+    self._page -= 1
 
   @abc.abstractmethod
   def _advance(self):
@@ -167,6 +173,13 @@ class SgAbstractSearchIterator(object):
 
     return copy.deepcopy(self._filterOp)
 
+  def hasLess(self):
+    '''
+
+    '''
+
+    return self._page > self._pageOrig
+
   @abc.abstractmethod
   def hasMore(self):
     '''
@@ -206,10 +219,14 @@ class SgAbstractSearchIterator(object):
 
     return self._page
 
-  def _reset(self):
+  def previous(self):
     '''
-    Subclass portion of reset().
+
     '''
+
+    self.rewind()
+
+    return self.results()
 
   def reset(self):
     '''
@@ -221,7 +238,7 @@ class SgAbstractSearchIterator(object):
 
     self._clear()
 
-    self._page = self._pageOrig
+    self._page = self._pageOrig - 1
 
     self._reset()
 
@@ -239,6 +256,31 @@ class SgAbstractSearchIterator(object):
     '''
 
     return self._retiredOnly
+
+  @abc.abstractmethod
+  def _rewind(self):
+    '''
+
+    '''
+
+    return False
+
+  def rewind(self):
+    '''
+    Advances the search to the next batch of results.
+    '''
+
+    if self.hasLess():
+      if self._rewind():
+        self._page -= 1
+
+        return True
+      else:
+        return False
+    else:
+      self.reset()
+
+      return False
 
   def summarySize(self):
     '''
@@ -279,7 +321,9 @@ class SgSearchIterator(SgAbstractSearchIterator):
     filterOperator=None,
     limit=100,
     retired_only=False,
-    page=1
+    page=1,
+    include_archived_projects=True,
+    additional_filter_presets=None
   ):
     super(SgSearchIterator, self).__init__(
       sgConnection,
@@ -290,7 +334,9 @@ class SgSearchIterator(SgAbstractSearchIterator):
       filterOperator,
       limit,
       retired_only,
-      page
+      page,
+      include_archived_projects,
+      additional_filter_presets
     )
 
     self.__results = []
@@ -305,7 +351,9 @@ class SgSearchIterator(SgAbstractSearchIterator):
       self._filterOp,
       self._limit,
       self._retiredOnly,
-      self._page
+      self._page + 1,
+      self._archived_projects,
+      self._additional_filter_presets
     )
 
     self.__hasMore = (
@@ -338,6 +386,32 @@ class SgSearchIterator(SgAbstractSearchIterator):
 
     return list(self.__results)
 
+  def _rewind(self):
+    '''
+
+    '''
+
+    results = self._connection.find(
+      self._entityType,
+      self._filter,
+      self._fields,
+      self._order,
+      self._filterOp,
+      self._limit,
+      self._retiredOnly,
+      self._page - 1,
+      self._archived_projects,
+      self._additional_filter_presets
+    )
+
+    self.__hasMore = (
+      self._limit != 0 and len(results) == self._limit
+    )
+
+    self.__results = results
+
+    return True
+
 class SgBufferedSearchIterator(SgAbstractSearchIterator):
   '''
   Class used to iteratively retrieve a Shotgun search by page.
@@ -355,7 +429,9 @@ class SgBufferedSearchIterator(SgAbstractSearchIterator):
     filterOperator=None,
     limit=100,
     retired_only=False,
-    page=1
+    page=1,
+    include_archived_projects=True,
+    additional_filter_presets=None
   ):
     super(SgBufferedSearchIterator, self).__init__(
       sgConnection,
@@ -366,9 +442,12 @@ class SgBufferedSearchIterator(SgAbstractSearchIterator):
       filterOperator,
       limit,
       retired_only,
-      page
+      page,
+      include_archived_projects,
+      additional_filter_presets
     )
 
+    self.__prevResult = None
     self.__currentResult = None
     self.__nextResult = self.createAsyncResult(
       self._entityType,
@@ -378,10 +457,13 @@ class SgBufferedSearchIterator(SgAbstractSearchIterator):
       self.filterOperator(),
       self._limit,
       self._retiredOnly,
-      self._page
+      self._page + 1,
+      self._archived_projects,
+      self._additional_filter_presets
     )
 
   def _advance(self):
+    self.__prevResult = self.__currentResult
     self.__currentResult = self.__nextResult
 
     results = self.__currentResult.value()
@@ -400,7 +482,9 @@ class SgBufferedSearchIterator(SgAbstractSearchIterator):
         self.filterOperator(),
         self._limit,
         self._retiredOnly,
-        self._page + 1
+        self._page + 2,
+        self._archived_projects,
+        self._additional_filter_presets
       )
     else:
       self.__nextResult = None
@@ -416,7 +500,9 @@ class SgBufferedSearchIterator(SgAbstractSearchIterator):
     filterOperator=None,
     limit=0,
     retired_only=False,
-    page=1
+    page=1,
+    include_archived_projects=True,
+    additional_filter_presets=None
   ):
     '''
     Returns a new SgAsyncSearchResult used by advance.
@@ -433,7 +519,9 @@ class SgBufferedSearchIterator(SgAbstractSearchIterator):
       filterOperator,
       limit,
       retired_only,
-      page
+      page,
+      include_archived_projects,
+      additional_filter_presets
     )
 
   def hasMore(self):
@@ -444,7 +532,18 @@ class SgBufferedSearchIterator(SgAbstractSearchIterator):
 
     return self.__nextResult != None
 
+  def previous(self):
+    '''
+
+    '''
+
+    if self.rewind() == True:
+      return self.results()
+    else:
+      return []
+
   def _reset(self):
+    self.__prevResult = None
     self.__currentResult = None
     self.__nextResult = self.createAsyncResult(
       self._entityType,
@@ -454,7 +553,9 @@ class SgBufferedSearchIterator(SgAbstractSearchIterator):
       self.filterOperator(),
       self._limit,
       self._retiredOnly,
-      self._page
+      self._page + 1,
+      self._archived_projects,
+      self._additional_filter_presets
     )
 
   def results(self):
@@ -466,3 +567,29 @@ class SgBufferedSearchIterator(SgAbstractSearchIterator):
       return []
     else:
       return self.__currentResult.value()
+
+  def _rewind(self):
+    '''
+
+    '''
+
+    self.__nextResult = self.__currentResult
+    self.__currentResult = self.__prevResult
+
+    if self._page != self._pageOrig:
+      self.__prevResult = self.createAsyncResult(
+        self._entityType,
+        self.filter(),
+        self.fields(),
+        self.order(),
+        self.filterOperator(),
+        self._limit,
+        self._retiredOnly,
+        self._page - 2,
+        self._archived_projects,
+        self._additional_filter_presets
+      )
+    else:
+      self.__prevResult = None
+
+    return True

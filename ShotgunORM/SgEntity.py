@@ -32,6 +32,7 @@ __all__ = [
 # Python imports
 from exceptions import AttributeError, KeyError
 
+import atexit
 import copy
 import threading
 import weakref
@@ -41,6 +42,15 @@ from xml.etree import ElementTree as ET
 
 # This module imports
 import ShotgunORM
+
+SHUTTING_DOWN = False
+
+def sgorm_connection_atexit():
+  global SHUTTING_DOWN
+
+  SHUTTING_DOWN = True
+
+atexit.register(sgorm_connection_atexit)
 
 class SgEntitySchemaInfo(object):
   '''
@@ -72,6 +82,14 @@ class SgEntitySchemaInfo(object):
 
     for fieldName, schemaData in sgFieldSchemas.items():
       if fieldName.startswith('step_'):
+        continue
+
+      if sgSchema.isFieldIgnored(sgEntityName, fieldName, sgSchema.url()):
+        ShotgunORM.LoggerSchema.debug(
+          '            * field %s is set to be ignored, ignoring',
+          fieldName
+        )
+
         continue
 
       fieldInfo = ShotgunORM.SgFieldSchemaInfo.fromSg(sgEntityName, sgEntityLabel, fieldName, schemaData)
@@ -281,6 +299,67 @@ class SgEntity(object):
   __defaultentityclasses__ = {}
 
   @classmethod
+  def defaultEntityClass(cls, sgEntityType):
+    '''
+    Returns the class registered with registerDefaultEntityClass for
+    the specified Entity type
+    '''
+
+    return cls.__defaultentityclasses__.get(
+      sgEntityType,
+      cls.__defaultentityclasses__['Entity']
+    )
+
+  @classmethod
+  def defaultEntityClasses(cls):
+    '''
+    Returns a dict of all the Entity classes registered with
+    registerDefaultEntityClass(...).
+    '''
+
+    return dict(cls.__defaultentityclasses__)
+
+  @classmethod
+  def find(self, *args, **kwargs):
+    '''
+
+    '''
+
+    return self.__sg_connection__().find(self.__sg_entity_name__, *args, **kwargs)
+
+  @classmethod
+  def findAsync(self, *args, **kwargs):
+    '''
+
+    '''
+
+    return self.__sg_connection__().findAsync(self.__sg_entity_name__, *args, **kwargs)
+
+  @classmethod
+  def findIterator(self, *args, **kwargs):
+    '''
+
+    '''
+
+    return self.__sg_connection__().findIterator(self.__sg_entity_name__, *args, **kwargs)
+
+  @classmethod
+  def findOne(self, *args, **kwargs):
+    '''
+
+    '''
+
+    return self.__sg_connection__().findOne(self.__sg_entity_name__, *args, **kwargs)
+
+  @classmethod
+  def findOneAsync(self, *args, **kwargs):
+    '''
+
+    '''
+
+    return self.__sg_connection__().findOneAsync(self.__sg_entity_name__, *args, **kwargs)
+
+  @classmethod
   def registerDefaultEntityClass(cls, sgEntityCls, sgEntityTypes):
     '''
     Registers a default class for an Entity type.
@@ -304,6 +383,46 @@ class SgEntity(object):
         raise TypeError('expected a str in entity type list, got %s' % e)
 
       cls.__defaultentityclasses__[e] = sgEntityCls
+
+  @classmethod
+  def search(self, *args, **kwargs):
+    '''
+
+    '''
+
+    return self.__sg_connection__().search(self.__sg_entity_name__, *args, **kwargs)
+
+  @classmethod
+  def searchAsync(self, *args, **kwargs):
+    '''
+
+    '''
+
+    return self.__sg_connection__().searchAsync(self.__sg_entity_name__, *args, **kwargs)
+
+  @classmethod
+  def searchIterator(self, *args, **kwargs):
+    '''
+
+    '''
+
+    return self.__sg_connection__().searchIterator(self.__sg_entity_name__, *args, **kwargs)
+
+  @classmethod
+  def searchOne(self, *args, **kwargs):
+    '''
+
+    '''
+
+    return self.__sg_connection__().searchOne(self.__sg_entity_name__, *args, **kwargs)
+
+  @classmethod
+  def searchOneAsync(self, *args, **kwargs):
+    '''
+
+    '''
+
+    return self.__sg_connection__().searchOneAsync(self.__sg_entity_name__, *args, **kwargs)
 
   def __getattribute__(self, item):
     try:
@@ -396,7 +515,10 @@ class SgEntity(object):
     return False
 
   def __del__(self):
-    self.connection().cacheEntity(self)
+    global SHUTTING_DOWN
+
+    if SHUTTING_DOWN == False:
+      self.connection().cacheEntity(self)
 
   def __dir__(self):
     if ShotgunORM.config.ENTITY_DIR_INCLUDE_FIELDS:
@@ -414,9 +536,8 @@ class SgEntity(object):
   def __repr__(self):
     return '<%s>' % ShotgunORM.mkEntityString(self)
 
-  def __init__(self, sgConnection):
+  def __init__(self):
     self.__lock = threading.RLock()
-    self.__connection = sgConnection
 
     self.__isCommitting = False
     self.__hasBuiltFields = False
@@ -465,7 +586,7 @@ class SgEntity(object):
         fieldObj = self.field(field)
 
         if fieldObj == None:
-          ShotgunORM.LoggerEntity.warn('%s no field named "%s"' % (self, field))
+          ShotgunORM.LoggerEntity.debug('%s no field named "%s"' % (self, field))
 
           continue
 
@@ -780,6 +901,14 @@ class SgEntity(object):
 
     return self.__caching
 
+  def clearCache(self):
+    '''
+
+    '''
+
+    if self.isCaching():
+      self.connection().clearCacheForEntity(self)
+
   def clone(self, inheritFields=[], numberOfEntities=1):
     '''
     Creates a new Entity of this Entities type and returns it.  This returned
@@ -876,7 +1005,7 @@ class SgEntity(object):
     Returns the SgConnection the Entity belongs to.
     '''
 
-    return self.__connection
+    return self.__sg_connection__()
 
   def delete(self, sgCommit=False, sgDryRun=False):
     '''
@@ -922,6 +1051,24 @@ class SgEntity(object):
 
     self.__caching = 1
 
+  def eventLogFilter(self):
+    '''
+
+    '''
+
+    if not self.exists():
+      return None
+
+    return [
+      [
+        'entity',
+        'is',
+        self.toEntityFieldData()
+      ]
+    ]
+
+    return
+
   def eventLogs(self, sgEventType=None, sgFields=None, sgRecordLimit=0):
     '''
     Returns the event log Entities for this Entity
@@ -937,16 +1084,14 @@ class SgEntity(object):
         Limits the amount of returned events.
     '''
 
-    if not self.exists():
+    filters = self.eventLogFilter()
+
+    if filters == None:
       return []
 
     connection = self.connection()
 
-    filters = [
-      ['entity', 'is', self.toEntityFieldData()],
-    ]
-
-    order = [{'field_name':'created_at','direction':'desc'}]
+    order = [{'field_name':'created_at', 'direction':'desc'}]
 
     if sgEventType != None:
       filters.append(
@@ -1099,7 +1244,7 @@ class SgEntity(object):
       for field in sgFields:
         fieldObj = self.field(field)
 
-        if fieldObj == None or not fieldObj.returnType() in sgReturnTypes:
+        if fieldObj == None or fieldObj.returnType() not in sgReturnTypes:
           continue
 
         result[field] = fieldObj
@@ -1143,6 +1288,59 @@ class SgEntity(object):
     for field in fields.values():
       if field.setValue(sgData[field.name()]):
         result = True
+
+    return result
+
+  def fieldsInvalid(self, sgFields=None, sgReturnTypes=None, excludeWithSyncUpdate=True):
+    '''
+    Returns a list of field names that are not valid.
+
+    Args:
+      * (list) sgFields:
+        List of specific fields to return.
+
+      * (list) sgReturnTypes:
+        List of specific field return types to filter by.
+
+      * (bool) excludeWithSyncUpdate:
+        When True fields that are not yet valid but have a pending sync update
+        are considered valid.
+    '''
+
+    result = []
+
+    with self:
+      for name, field in self.fields(sgFields, sgReturnTypes).items():
+        if field.isValid() or (excludeWithSyncUpdate and field.hasSyncUpdate()):
+          continue
+
+        result.append(name)
+
+    result.sort()
+
+    return result
+
+  def fieldsWithCommit(self, sgFields=None, sgReturnTypes=None):
+    '''
+    Returns a list of field names that have pending commits.
+
+    Args:
+      * (list) sgFields:
+        List of specific fields to return.
+
+      * (list) sgReturnTypes:
+        List of specific field return types to filter by.
+    '''
+
+    result = []
+
+    # Bail early if the Entity does not have an ID or it is marked for deletion.
+    if not self.exists():
+      return result
+
+    for field in self.fields(sgFields, sgReturnTypes).values():
+      if field.hasCommit():
+        result.append(field.name())
 
     return result
 
@@ -1547,8 +1745,7 @@ class SgEntity(object):
           for field, value in values.items():
             fieldObj = self.field(field)
 
-            fieldObj._updateValue = value
-            fieldObj.setHasSyncUpdate(True)
+            fieldObj.setSyncUpdate(value)
 
             # Don't slow down the sync process by calling validate!
             #fieldObj.validate(forReal=False)

@@ -87,7 +87,10 @@ class SgQueryEngine(object):
   '''
 
   def __del__(self):
-    self.shutdown()
+    try:
+      self.shutdown()
+    except:
+      pass
 
   def __enter__(self):
     self.__lock.acquire()
@@ -103,9 +106,9 @@ class SgQueryEngine(object):
     if connection == None:
       return '<SgQueryEngine>'
 
-    return '<SgQueryEngine(url:"%(url)s", login:"%(login)s">' % {
+    return '<SgQueryEngine(url:"%(url)s", script:"%(script)s">' % {
       'url': connection.url(),
-      'login': connection.login()
+      'script': connection.scriptName()
     }
 
   def __init__(self, sgConnection):
@@ -270,7 +273,7 @@ class SgQueryEngine(object):
             self._pendingQueries.append(q)
 
         # Un-lock the engine if the q was empty.
-        #if not self._qEvent.isSet():
+        # if not self._qEvent.isSet():
         self._qEvent.set()
 
         # Sort the field q list so that the largest queries are first.
@@ -472,9 +475,7 @@ def SgQueryEngineWorker(
 
       try:
         for fieldName, field in entity.fields(entityFields).items():
-          field._updateValue = result[fieldName]
-
-          field.setHasSyncUpdate(True)
+          field.setSyncUpdate(result[fieldName])
 
           field._SgField__isUpdatingEvent.set()
       finally:

@@ -75,9 +75,6 @@ class SgFieldCheckbox(ShotgunORM.SgField):
 
     return True
 
-  def returnType(self):
-    return self.RETURN_TYPE_CHECKBOX
-
   def _setValue(self, sgData):
     try:
       sgData = bool(sgData)
@@ -126,9 +123,6 @@ class SgFieldColor(ShotgunORM.SgField):
     self._value = sgData
 
     return True
-
-  def returnType(self):
-    return self.RETURN_TYPE_COLOR
 
   def _setValue(self, sgData):
     if sgData == None:
@@ -362,9 +356,6 @@ class SgFieldDate(ShotgunORM.SgField):
 
     return True
 
-  def returnType(self):
-    return self.RETURN_TYPE_DATE
-
   def _setValue(self, sgData):
     if sgData != None:
       if not isinstance(sgData, (str, unicode)):
@@ -397,9 +388,6 @@ class SgFieldDateTime(ShotgunORM.SgField):
     self._value = sgData
 
     return True
-
-  def returnType(self):
-    return self.RETURN_TYPE_DATE_TIME
 
   def _setValue(self, sgData):
     if sgData != None:
@@ -472,9 +460,6 @@ class SgFieldEntity(ShotgunORM.SgField):
     self._value = newValue
 
     return True
-
-  def returnType(self):
-    return self.RETURN_TYPE_ENTITY
 
   def _setValue(self, sgData):
     if sgData == None:
@@ -644,9 +629,6 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
     self._value = newValue
 
     return True
-
-  def returnType(self):
-    return self.RETURN_TYPE_MULTI_ENTITY
 
   def _setValue(self, sgData):
     if isinstance(sgData, (tuple, set)):
@@ -836,9 +818,6 @@ class SgFieldFloat(ShotgunORM.SgField):
 
     return True
 
-  def returnType(self):
-    return self.RETURN_TYPE_FLOAT
-
   def _setValue(self, sgData):
     if sgData != None:
       try:
@@ -871,9 +850,6 @@ class SgFieldInt(ShotgunORM.SgField):
     self._value = sgData
 
     return True
-
-  def returnType(self):
-    return self.RETURN_TYPE_INT
 
   def _setValue(self, sgData):
     if sgData != None:
@@ -927,9 +903,6 @@ class SgFieldSelectionList(ShotgunORM.SgField):
       val
     )
 
-  def returnType(self):
-    return self.RETURN_TYPE_LIST
-
   def _setValue(self, sgData):
     if sgData == None:
       result = self._value == sgData
@@ -982,9 +955,6 @@ class SgFieldSerializable(ShotgunORM.SgField):
     self._value = sgData
 
     return True
-
-  def returnType(self):
-    return self.RETURN_TYPE_SERIALIZABLE
 
   def _setValue(self, sgData):
     if sgData == None:
@@ -1183,9 +1153,6 @@ class SgFieldSummary(ShotgunORM.SgField):
     self._value = sgData
 
     return True
-
-  def returnType(self):
-    return self.RETURN_TYPE_SUMMARY
 
   def _toFieldData(self):
     result = self._value
@@ -1526,9 +1493,6 @@ class SgFieldTagList(ShotgunORM.SgField):
 
     return True
 
-  def returnType(self):
-    return self.RETURN_TYPE_TAG_LIST
-
   def _setValue(self, sgData):
     if isinstance(sgData, (tuple, set)):
       sgData = list(sgData)
@@ -1585,9 +1549,6 @@ class SgFieldText(ShotgunORM.SgField):
 
     return True
 
-  def returnType(self):
-    return self.RETURN_TYPE_TEXT
-
   def _setValue(self, sgData):
     if sgData != None:
       if not isinstance(sgData, (str, unicode)):
@@ -1631,9 +1592,6 @@ class SgFieldTimeCode(ShotgunORM.SgField):
 
     return True
 
-  def returnType(self):
-    return self.RETURN_TYPE_TIMECODE
-
   def _setValue(self, sgData):
     if sgData != None:
       try:
@@ -1674,7 +1632,7 @@ class SgFieldImage(SgFieldText):
   def _validate(self, forReal=False):
     result = super(SgFieldImage, self)._validate(forReal)
 
-    if forReal and self._value != None:
+    if result and forReal and self._value != None:
       search = self.REGEXP_EXPIRETIME.search(self._value)
 
       if search == None:
@@ -1746,6 +1704,15 @@ class SgFieldImage(SgFieldText):
 
     return img.replace('\\', '/').rsplit('/', 1)[-1]
 
+  def isCacheable(self):
+    '''
+    Returns False.
+
+    Image fields are not cachable since they have expire times.
+    '''
+
+    return False
+
   def isLinkExpired(self):
     '''
     Returns True if the image fields value has expired and can no longer be
@@ -1781,9 +1748,6 @@ class SgFieldImage(SgFieldText):
 
     if url != None and url != '':
       webbrowser.open(url)
-
-  def returnType(self):
-    return self.RETURN_TYPE_IMAGE
 
   def secondsTillExpired(self):
     '''
@@ -1961,9 +1925,6 @@ class SgFieldUrl(ShotgunORM.SgField):
 
     return self.__expireTime
 
-  def returnType(self):
-    return self.RETURN_TYPE_URL
-
   def secondsTillExpired(self):
     '''
     Returns the number of seconds till the link is expired.
@@ -2096,7 +2057,9 @@ class SgFieldID(SgFieldInt):
     return False
 
   def __init__(self, sgFieldSchemaInfo, sgEntity):
-    super(SgFieldID, self).__init__(None, None, sgFieldSchemaInfo, sgEntity)
+    super(SgFieldID, self).__init__(
+      'id', 'id', sgFieldSchemaInfo, sgEntity
+    )
 
     super(SgFieldID, self).setValid(True)
 
@@ -2171,7 +2134,9 @@ class SgFieldType(SgFieldText):
     return False
 
   def __init__(self, sgFieldSchemaInfo, sgEntity):
-    super(SgFieldType, self).__init__(None, None, sgFieldSchemaInfo, sgEntity)
+    super(SgFieldType, self).__init__(
+      'type', 'type', sgFieldSchemaInfo, sgEntity
+    )
 
     super(SgFieldType, self).setValid(True)
 

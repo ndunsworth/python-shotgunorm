@@ -30,6 +30,7 @@ __all__ = [
 ]
 
 # Python imports
+import atexit
 import copy
 import os
 import re
@@ -40,6 +41,15 @@ import webbrowser
 
 # This module imports
 import ShotgunORM
+
+SHUTTING_DOWN = False
+
+def sgorm_connection_atexit():
+  global SHUTTING_DOWN
+
+  SHUTTING_DOWN = True
+
+atexit.register(sgorm_connection_atexit)
 
 class SgConnectionMeta(type):
   '''
@@ -64,11 +74,11 @@ class SgConnectionMeta(type):
 
       classConnections = result.__connections__
 
-      login = result.login()
-      key = result.key()
+      scriptName = result._scriptName
+      scriptKey = result._scriptKey
 
       try:
-        ref = classConnections[urlLower][login][key]
+        ref = classConnections[urlLower][scriptName][scriptKey]
 
         refResult = ref()
 
@@ -81,16 +91,16 @@ class SgConnectionMeta(type):
 
       if not classConnections.has_key(urlLower):
         classConnections[urlLower] = {
-          login: {
-            key: resultWeak
+          scriptName: {
+            scriptKey: resultWeak
           }
         }
-      elif not classConnections[urlLower].has_key(login):
-        classConnections[urlLower][login] = {
-          key: resultWeak
+      elif not classConnections[urlLower].has_key(scriptName):
+        classConnections[urlLower][scriptName] = {
+          scriptKey: resultWeak
         }
       else:
-        classConnections[urlLower][login][key] = resultWeak
+        classConnections[urlLower][scriptName][scriptKey] = resultWeak
 
       allConnections = SgConnectionMeta.__connections__
 
@@ -122,16 +132,15 @@ class SgConnectionMeta(type):
 
     url = url.lower()
 
-    with SgConnectionMeta.__lock__:
-      connections = []
+    connections = []
 
-      for weakConnection in SgConnectionMeta.__connections__.get(url.lower(), {}).values():
-          connection = weakConnection
+    for weakConnection in cls.__connections__.get(url.lower(), {}).values():
+        connection = weakConnection
 
-          if connection:
-            connections.append(connection)
+        if connection:
+          connections.append(connection)
 
-      return connections
+    return connections
 
 class SgConnectionPriv(object):
   '''
@@ -142,16 +151,40 @@ class SgConnectionPriv(object):
 
   __metaclass__ = SgConnectionMeta
 
-  def __init__(self, url, login, key):
+  def __init__(
+    self,
+    url,
+    scriptName,
+    scriptkey,
+    datetimeToUtc=True,
+    httpProxy=None,
+    ensureASCII=True,
+    connect=False,
+    caCerts=None,
+    login=None,
+    password=None,
+    suAsLogin=None,
+    sessionToken=None,
+    authToken=None
+  ):
     self._url = str(url)
-    self._login = str(login)
-    self._key = str(key)
+    self._scriptName = str(scriptName)
+    self._scriptKey = str(scriptkey)
 
     self._connection = ShotgunORM.SHOTGUN_API.shotgun.Shotgun(
-      self._url,
-      self._login,
-      self._key,
-      connect=False
+       base_url=self._url,
+       script_name=self._scriptName,
+       api_key=self._scriptKey,
+       convert_datetimes_to_utc=datetimeToUtc,
+       http_proxy=httpProxy,
+       ensure_ascii=ensureASCII,
+       connect=connect,
+       ca_certs=caCerts,
+       login=login,
+       password=password,
+       sudo_as_login=suAsLogin,
+       session_token=sessionToken,
+       auth_token=authToken
     )
 
     self._facility = None
@@ -185,7 +218,9 @@ class SgConnectionPriv(object):
     filter_operator=None,
     limit=0,
     retired_only=False,
-    page=0
+    page=0,
+    include_archived_projects=True,
+    additional_filter_presets=None
   ):
     '''
     Calls the Shotgun Python API find function.
@@ -205,7 +240,9 @@ class SgConnectionPriv(object):
         filter_operator,
         limit,
         retired_only,
-        page
+        page,
+        include_archived_projects,
+        additional_filter_presets
       )
 
       return ShotgunORM.onSearchResult(
@@ -223,6 +260,8 @@ class SgConnectionPriv(object):
     order=None,
     filter_operator=None,
     retired_only=False,
+    include_archived_projects=True,
+    additional_filter_presets=None
   ):
     '''
     Calls the Shotgun Python API find_one function.
@@ -241,6 +280,8 @@ class SgConnectionPriv(object):
         order,
         filter_operator,
         retired_only,
+        include_archived_projects,
+        additional_filter_presets
       )
 
       return ShotgunORM.onSearchResult(
@@ -259,6 +300,30 @@ class SgConnectionPriv(object):
 
     with ShotgunORM.SHOTGUN_API_LOCK:
       return self.connection().revive(entityType, entityId)
+
+  def _sg_schema_entity_read(self, project_entity=None):
+    '''
+
+    '''
+
+    with ShotgunORM.SHOTGUN_API_LOCK:
+      return self.connection().schema_entity_read(project_entity)
+
+  def _sg_schema_field_read(self, entity_type, field_name=None, project_entity=None):
+    '''
+
+    '''
+
+    with ShotgunORM.SHOTGUN_API_LOCK:
+      return self.connection().schema_field_read(entity_type, field_name, project_entity)
+
+  def _sg_schema_read(self, project_entity=None):
+    '''
+
+    '''
+
+    with ShotgunORM.SHOTGUN_API_LOCK:
+      return self.connection().schema_read(project_entity)
 
   def _sg_summarize(
     self,
@@ -332,12 +397,12 @@ class SgConnectionPriv(object):
 
     return self._key
 
-  def login(self):
+  def scriptName(self):
     '''
-    Returns the Shotgun login for the connection.
+    Returns the Shotgun script name for the connection.
     '''
 
-    return self._login
+    return self._scriptName
 
   def url(self, openInBrowser=False):
     '''
@@ -362,10 +427,10 @@ class SgConnection(SgConnectionPriv):
   '''
 
   def __repr__(self):
-    return '<%s(url:"%s", login:"%s")>' % (
+    return '<%s(url:"%s", script:"%s")>' % (
       self.__class__.__name__,
       self.url(),
-      self.login()
+      self.scriptName()
     )
 
   #def __eq__(self, item):
@@ -383,8 +448,39 @@ class SgConnection(SgConnectionPriv):
   def __exit__(self, exc_type, exc_value, traceback):
     self.__lockCache.release()
 
-  def __init__(self, url, login, key, baseEntityClasses={}):
-    super(SgConnection, self).__init__(url, login, key)
+  def __init__(
+    self,
+    url,
+    scriptName,
+    scriptKey,
+    datetimeToUtc=True,
+    httpProxy=None,
+    ensureASCII=True,
+    connect=False,
+    caCerts=None,
+    login=None,
+    password=None,
+    suAsLogin=None,
+    sessionToken=None,
+    authToken=None,
+    baseEntityClasses={},
+    enableUndo=False
+  ):
+    super(SgConnection, self).__init__(
+      url,
+      scriptName,
+      scriptKey,
+      datetimeToUtc=datetimeToUtc,
+      httpProxy=httpProxy,
+      ensureASCII=ensureASCII,
+      connect=connect,
+      caCerts=caCerts,
+      login=login,
+      password=password,
+      suAsLogin=suAsLogin,
+      sessionToken=sessionToken,
+      authToken=authToken
+    )
 
     self.__lockCache = threading.RLock()
 
@@ -409,10 +505,23 @@ class SgConnection(SgConnectionPriv):
       baseClasses
     )
 
+    if enableUndo == True:
+      self.__undo = ShotgunORM.SgUndo(self)
+    else:
+      self.__undo = ShotgunORM.SgUndo(self, ShotgunORM.SgUndoStackRoot())
+
     self.__entityCache = {}
     self.__entityCaching = ShotgunORM.config.DEFAULT_CONNECTION_CACHING
 
     self.__currentUser = None
+
+  @classmethod
+  def siteConnections(cls, url):
+    '''
+    Returns all the active SgConnection objects for a given URL string.
+    '''
+
+    return cls.__metaclass__.connections(url)
 
   def _addEntity(self, sgEntity):
     '''
@@ -468,7 +577,7 @@ class SgConnection(SgConnectionPriv):
 
       # Return immediately if the Entity does not exist.
       if eId <= -1:
-        result = factory.createEntity(self, sgEntityType, sgData)
+        result = factory.createEntity(sgEntityType, sgData)
 
         ShotgunORM.onEntityCreate(result)
 
@@ -494,7 +603,7 @@ class SgConnection(SgConnectionPriv):
 
           tmpData.update(cacheData['cache'])
 
-          result = factory.createEntity(self, sgEntityType, tmpData)
+          result = factory.createEntity(sgEntityType, tmpData)
 
           result._SgEntity__caching = cacheData['cache_state']
 
@@ -523,7 +632,7 @@ class SgConnection(SgConnectionPriv):
 
             fieldObj.setHasSyncUpdate(True)
       else:
-        result = factory.createEntity(self, sgEntityType, sgData)
+        result = factory.createEntity(sgEntityType, sgData)
 
         self.__entityCache[sgEntityType][eId] = {
           'entity': weakref.ref(result),
@@ -656,8 +765,12 @@ class SgConnection(SgConnectionPriv):
       batchData.extend(entityBatchData)
       batchSize.append(len(entityBatchData))
 
+    undo_stack = self.undo()
+
+    undo_action = None
+
     try:
-      if sgDryRun:
+      if sgDryRun == True:
         sgResult = []
 
         for batchJob in batchData:
@@ -686,6 +799,8 @@ class SgConnection(SgConnectionPriv):
             sgResult.append(True)
       else:
         sgResult = self._sg_batch(batchData)
+
+        undo_action = ShotgunORM.SgUndoAction(batchData, sgResult)
 
       result = copy.deepcopy(sgResult)
     except Exception, e:
@@ -723,6 +838,20 @@ class SgConnection(SgConnectionPriv):
       raise exception
 
     return result
+
+  def addAsyncSearch(self, sgAsyncSearchResult):
+    '''
+    Add the SgAsyncSearchResult to the front of the async search queue.
+    '''
+
+    self.__asyncEngine.addToQueue(sgAsyncSearchResult)
+
+  def appendAsyncSearch(self, sgAsyncSearchResult):
+    '''
+    Add the SgAsyncSearchResult to the back of the async search queue.
+    '''
+
+    self.__asyncEngine.appendToQueue(sgAsyncSearchResult)
 
   def asyncEngine(self):
     '''
@@ -809,6 +938,11 @@ class SgConnection(SgConnectionPriv):
         Entity that will have its data cache.
     '''
 
+    global SHUTTING_DOWN
+
+    if SHUTTING_DOWN == True:
+      return
+
     with sgEntity:
       if not sgEntity.exists() or not sgEntity.isCaching():
         return
@@ -838,10 +972,7 @@ class SgConnection(SgConnectionPriv):
             if not field.isCacheable():
               continue
 
-            if field.hasSyncUpdate():
-              data[name] = copy.deepcopy(field._updateValue)
-            else:
-              data[name] = field.toFieldData()
+            data[name] = field.toFieldData()
 
           #data['id'] = sgEntity['id']
           #data['type'] = sgEntity['type']
@@ -946,17 +1077,20 @@ class SgConnection(SgConnectionPriv):
     '''
 
     if self.__currentUser == None:
-      user = os.getenv('USER', None)
+      username = os.getenv('USER', None)
 
-      if user == None:
-        user = os.getenv('USERNAME')
+      if username == None:
+        username = os.getenv('USERNAME')
 
-        if user == None:
+        if username == None:
           self.__currentUser = -1
 
           return None
 
-      user = self.user(user, sgFields)
+      user = self.findOne(
+        'HumanUser',
+        [['login', 'is', username]]
+      )
 
       if user == None:
         return None
@@ -1144,7 +1278,9 @@ class SgConnection(SgConnectionPriv):
     filter_operator=None,
     limit=0,
     retired_only=False,
-    page=0
+    page=0,
+    include_archived_projects=True,
+    additional_filter_presets=None
   ):
     '''
     Find entities.
@@ -1225,7 +1361,9 @@ class SgConnection(SgConnectionPriv):
       filter_operator=filter_operator,
       limit=limit,
       retired_only=retired_only,
-      page=page
+      page=page,
+      include_archived_projects=include_archived_projects,
+      additional_filter_presets=additional_filter_presets
     )
 
     if searchResult != None:
@@ -1247,7 +1385,9 @@ class SgConnection(SgConnectionPriv):
     filter_operator=None,
     limit=0,
     retired_only=False,
-    page=0
+    page=0,
+    include_archived_projects=True,
+    additional_filter_presets=None
   ):
     '''
     Performs an async find() search.
@@ -1263,7 +1403,9 @@ class SgConnection(SgConnectionPriv):
       filter_operator,
       limit,
       retired_only,
-      page
+      page,
+      include_archived_projects,
+      additional_filter_presets
     )
 
   def findIterator(
@@ -1276,6 +1418,8 @@ class SgConnection(SgConnectionPriv):
     limit=100,
     retired_only=False,
     page=1,
+    include_archived_projects=True,
+    additional_filter_presets=None,
     buffered=False
   ):
     '''
@@ -1289,7 +1433,6 @@ class SgConnection(SgConnectionPriv):
       iterClass = ShotgunORM.SgBufferedSearchIterator
     else:
       iterClass = ShotgunORM.SgSearchIterator
-    self,
 
     return iterClass(
       self,
@@ -1300,7 +1443,9 @@ class SgConnection(SgConnectionPriv):
       filter_operator,
       limit,
       retired_only,
-      page
+      page,
+      include_archived_projects,
+      additional_filter_presets
     )
 
   def findOne(
@@ -1311,6 +1456,8 @@ class SgConnection(SgConnectionPriv):
     order=None,
     filter_operator=None,
     retired_only=False,
+    include_archived_projects=True,
+    additional_filter_presets=None
   ):
     '''
     Find one entity. This is a wrapper for find() with a limit=1. This will also
@@ -1356,7 +1503,9 @@ class SgConnection(SgConnectionPriv):
       order=order,
       filter_operator=filter_operator,
       limit=1,
-      retired_only=retired_only
+      retired_only=retired_only,
+      include_archived_projects=include_archived_projects,
+      additional_filter_presets=additional_filter_presets
     )
 
     if len(searchResult) >= 1:
@@ -1372,6 +1521,8 @@ class SgConnection(SgConnectionPriv):
     order=None,
     filter_operator=None,
     retired_only=False,
+    include_archived_projects=True,
+    additional_filter_presets=None
   ):
     '''
     Performs an async findOne() search.
@@ -1388,6 +1539,8 @@ class SgConnection(SgConnectionPriv):
       0,
       retired_only,
       0,
+      include_archived_projects,
+      additional_filter_presets,
       isSingle=True
     )
 
@@ -1404,6 +1557,64 @@ class SgConnection(SgConnectionPriv):
     '''
 
     return self.__entityCaching
+
+  def isEntityVisibleToProject(self, sgEntity, sgProject):
+    '''
+    Returns True if the Shotgun Entity is visible.
+    '''
+
+    return True
+
+  def isFieldVisibleToProject(self, sgProject, sgEntity, sgField):
+    '''
+    Returns True if the Shotgun Entity field is visible for the
+    specified project.
+
+    Args:
+      * (SgEntity/str) sgProject:
+        Name of the project.
+
+      * (str) sgEntity:
+        Name of the Entity.
+
+      * (str) sgField:
+        Name of the field.
+    '''
+
+    schema = self.schema()
+
+    eInfo = None
+
+    eInfo = schema.entityInfo(sgEntity)
+
+    if eInfo == None:
+      return False
+
+    fInfo = eInfo.fieldInfo(sgField)
+
+    if fInfo == None:
+      return False
+
+    if not isinstance(sgProject, ShotgunORM.SgEntity):
+      sgProject = self.searchOne('Project', 'name == "%s"' % sgProject)
+
+    sgProject = sgProject.toEntityFieldData()
+
+    data = self._sg_schema_field_read(sgEntity, sgField, sgProject)
+
+    try:
+      return data['project']['visible']['value']
+    except KeyError:
+      return False
+    except:
+      raise
+
+  def isValid(self):
+    '''
+
+    '''
+
+    return self.schema().isInitialized()
 
   def project(self, sgProject, sgFields=None):
     '''
@@ -1520,6 +1731,10 @@ class SgConnection(SgConnectionPriv):
           sgResult = True
         else:
           sgResult = self._sg_revive(sgEntity.type, sgEntity['id'])
+
+          undo = self.undo()
+
+          undo.push(ShotgunORM.SgUndoAction(batchData, [sgResult]))
       except Exception, e:
         try:
           sgEntity.afterCommit(batchData, None, commitData, sgDryRun, e)
@@ -1563,7 +1778,9 @@ class SgConnection(SgConnectionPriv):
     order=None,
     limit=0,
     retired_only=False,
-    page=0
+    page=0,
+    include_archived_projects=True,
+    additional_filter_presets=None
   ):
     '''
     Uses a search string to find entities in Shotgun instead of a list.
@@ -1647,7 +1864,9 @@ class SgConnection(SgConnectionPriv):
       order=order,
       limit=limit,
       retired_only=retired_only,
-      page=page
+      page=page,
+      include_archived_projects=include_archived_projects,
+      additional_filter_presets=additional_filter_presets
     )
 
   def searchAsync(
@@ -1660,7 +1879,9 @@ class SgConnection(SgConnectionPriv):
     filter_operator=None,
     limit=100,
     retired_only=False,
-    page=1
+    page=1,
+    include_archived_projects=True,
+    additional_filter_presets=None
   ):
     '''
     Performs an async search().
@@ -1688,7 +1909,9 @@ class SgConnection(SgConnectionPriv):
       filter_operator,
       limit,
       retired_only,
-      page
+      page,
+      include_archived_projects,
+      additional_filter_presets
     )
 
   def searchIterator(
@@ -1702,6 +1925,8 @@ class SgConnection(SgConnectionPriv):
     limit=100,
     retired_only=False,
     page=1,
+    include_archived_projects=True,
+    additional_filter_presets=None,
     buffered=False
   ):
     '''
@@ -1737,7 +1962,9 @@ class SgConnection(SgConnectionPriv):
       filter_operator,
       limit,
       retired_only,
-      page
+      page,
+      include_archived_projects,
+      additional_filter_presets
     )
 
   def searchOne(
@@ -1747,7 +1974,9 @@ class SgConnection(SgConnectionPriv):
     sgFields=None,
     sgSearchArgs=[],
     order=None,
-    retired_only=False
+    retired_only=False,
+    include_archived_projects=True,
+    additional_filter_presets=None
   ):
     '''
     Same as search(...) but only returns a single Entity.
@@ -1782,7 +2011,9 @@ class SgConnection(SgConnectionPriv):
       sgSearchArgs,
       order=order,
       limit=1,
-      retired_only=retired_only
+      retired_only=retired_only,
+      include_archived_projects=include_archived_projects,
+      additional_filter_presets=additional_filter_presets
     )
 
     if len(result) >= 1:
@@ -1798,7 +2029,9 @@ class SgConnection(SgConnectionPriv):
     sgSearchArgs=[],
     order=None,
     filter_operator=None,
-    retired_only=False
+    retired_only=False,
+    include_archived_projects=True,
+    additional_filter_presets=None
   ):
     '''
     Performs an async searchOne().
@@ -1908,6 +2141,13 @@ class SgConnection(SgConnectionPriv):
 
     return self.connection().config.timeout_secs
 
+  def undo(self):
+    '''
+
+    '''
+
+    return self.__undo
+
   def user(self, sgUser, sgFields=None):
     '''
     Returns the HumanUser Entity belonging to the user "sgUser".
@@ -1932,7 +2172,7 @@ class SgConnection(SgConnectionPriv):
       sgFields
     )
 
-  def users(self, sgFields=None, sgActiveOnly=True):
+  def users(self, sgFields=None, sgActiveOnly=True, sortByLastName=False):
     '''
     Returns a list of HumanUser Entities
     Args:
@@ -1966,9 +2206,14 @@ class SgConnection(SgConnectionPriv):
         ]
       )
 
+    direction = 'asc'
+
+    if sortByLastName:
+      direction = 'desc'
+
     return self.find(
       'HumanUser',
       filters,
       sgFields,
-      order=[{'direction': 'asc', 'field_name': 'name'}]
+      order=[{'direction': direction, 'field_name': 'name'}]
     )
