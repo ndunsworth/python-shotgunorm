@@ -619,6 +619,8 @@ class SgField(object):
   RETURN_TYPE_TIMECODE = 16
   RETURN_TYPE_URL = 17
 
+  RETURN_TYPE_LINK_FIELD = 100
+
   # Custom return types should start at 201.
   RETURN_TYPE_RESERVED = 200
 
@@ -822,7 +824,11 @@ class SgField(object):
 
     parent = self.parentEntity()
 
-    if not self.isQueryable() or parent == None:
+    if (
+      self.isQueryable() == False or
+      parent == None or
+      parent.exists() == False
+    ):
       return None
 
     return [
@@ -1537,12 +1543,6 @@ class SgField(object):
   def toFieldData(self):
     '''
     Returns the value of the Entity field formated for Shotgun.
-
-    Note:
-      In a multi-threaded env isValid() may be True however another thread may
-      change / invalidate the field during the course of this function.  If
-      you absolutely want to grab a valid value lock the Entity / field down
-      before calling toFieldData.
     '''
 
     with self:
@@ -1760,6 +1760,7 @@ FIELD_RETURN_TYPES = {
   'entity_type': SgField.RETURN_TYPE_LIST,
   'float': SgField.RETURN_TYPE_FLOAT,
   'image': SgField.RETURN_TYPE_IMAGE,
+  'link_field': SgField.RETURN_TYPE_LINK_FIELD,
   'list': SgField.RETURN_TYPE_LIST,
   'multi_entity': SgField.RETURN_TYPE_MULTI_ENTITY,
   'password': SgField.RETURN_TYPE_TEXT,
@@ -1788,6 +1789,7 @@ FIELD_RETURN_TYPE_NAMES = {
   SgField.RETURN_TYPE_IMAGE: 'image',
   SgField.RETURN_TYPE_INT: 'number',
   SgField.RETURN_TYPE_LIST: 'list',
+  SgField.RETURN_TYPE_LINK_FIELD: 'link_field',
   SgField.RETURN_TYPE_MULTI_ENTITY: 'multi_entity',
   SgField.RETURN_TYPE_SERIALIZABLE: 'serializable',
   SgField.RETURN_TYPE_STATUS_LIST: 'status_list',
