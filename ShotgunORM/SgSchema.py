@@ -565,6 +565,19 @@ class SgSchema(object):
 
       return True
 
+  def hasEntityType(self, sgEntityType):
+    '''
+    Returns True if the schema contains a specific Entity type.
+    '''
+
+    if not self.isInitialized():
+      self.__buildEvent.wait(self.BUILD_EVENT_TIMEOUT)
+
+      if not self.isInitialized():
+        raise RuntimeError('schema has not been initialized')
+
+    return sgEntityType in self._schema
+
   def initialize(self, sgConnection, thread=True):
     '''
     Builds the schema if it has not previously been built.
