@@ -33,15 +33,13 @@ __all__ = [
 ]
 
 # Python imports
+from abc import abstractmethod
+
+import socket
 import threading
 
 # This module imports
 import ShotgunORM
-
-class DummyStream(object):
-  @staticmethod
-  def write(msg):
-    pass
 
 class SgEvent(object):
   '''
@@ -125,10 +123,8 @@ class SgEventFilterer(object):
 
     if len(self.__filters) > 0:
       for i in self.__filters:
-        if i.filter(sgEvent):
-          return True
-
-      return False
+        if i.filter(sgEvent) == False:
+          return False
 
     return True
 
@@ -230,8 +226,8 @@ class SgEventHandler(SgEventFilterer):
         Event to handle.
     '''
 
-    if self.filter(sgEvent):
-      with self:
+    with self:
+      if self.filter(sgEvent):
         try:
           self.processEvent(sgEvent)
 
@@ -243,6 +239,7 @@ class SgEventHandler(SgEventFilterer):
 
     return False
 
+  @abstractmethod
   def processEvent(self, sgEvent):
     '''
     Process the event.
@@ -303,6 +300,9 @@ class SgEventWatcher(SgEventFilterer):
     self.__connection = sgConnection
     self.__handlers = []
     self.__updateInterval = int(updateInterval)
+    self.__search_filters = ShotgunORM.SgEntitySearchFilters(
+      'EventLogEntry'
+    )
 
     if self.__updateInterval < self.UPDATE_INTERVAL_MIN:
       self.__updateInterval = self.UPDATE_INTERVAL_MIN
@@ -322,6 +322,19 @@ class SgEventWatcher(SgEventFilterer):
     }
 
     self.__monitorThread = None
+
+  def _workerFinished(self):
+    '''
+    Internal!
+    '''
+
+    self.__threadData['event'].clear()
+
+    if self.__lastEvent != None:
+      self.__threadData['start_at_id'] = self.__lastEvent['id'] + 1
+
+    self.__aborted = False
+    self.__running = False
 
   def aborted(self):
     '''
@@ -349,6 +362,13 @@ class SgEventWatcher(SgEventFilterer):
 
       self.__handlers = handlers
 
+  def afterShutdown(self):
+    '''
+
+    '''
+
+    pass
+
   def batchSize(self):
     '''
     The number of entries to retrieve per batch.
@@ -358,6 +378,13 @@ class SgEventWatcher(SgEventFilterer):
     '''
 
     return 250
+
+  def beforeStart(self):
+    '''
+
+    '''
+
+    pass
 
   def connection(self):
     '''
@@ -412,7 +439,7 @@ class SgEventWatcher(SgEventFilterer):
 
     sgEvent = SgEvent(self, sgEventLogEntry)
 
-    if len(self.__handlers) < 1 or not self.filter(sgEvent):
+    if self.filter(sgEvent) == False or len(self.__handlers) < 1:
       return False
 
     handled = 0
@@ -421,6 +448,7 @@ class SgEventWatcher(SgEventFilterer):
       try:
         handled += handler.handleEvent(sgEvent)
       except Exception, e:
+
         self.logger().error(str(e))
 
     self.__lastEvent = sgEventLogEntry
@@ -451,6 +479,13 @@ class SgEventWatcher(SgEventFilterer):
         result = False
 
     return result
+
+  def searchFilters(self):
+    '''
+
+    '''
+
+    return self.__search_filters.copy()
 
   def setBeginProcessingAt(self, idNumber):
     '''
@@ -484,6 +519,20 @@ class SgEventWatcher(SgEventFilterer):
 
       self.__threadData['start_at_id'] = idNumber
 
+  def setSearchFilters(self, sgSearchFilters):
+    '''
+
+    '''
+
+    if self.isRunning() == True:
+      raise RuntimeError(
+        'can not set EventLog search filters while watcher is running'
+      )
+
+    self.__search_filters = ShotgunORM.SgSearchFilters(
+      sgSearchFilters
+    )
+
   def setUpdateInterval(self, secs):
     '''
     Sets the update interval that Shotgun will be queried for new events.
@@ -512,6 +561,8 @@ class SgEventWatcher(SgEventFilterer):
       if self.isRunning():
         return
 
+      self.beforeStart()
+
       self.logger().debug('start')
 
       self.__running = True
@@ -529,25 +580,10 @@ class SgEventWatcher(SgEventFilterer):
 
       self.__monitorThread.start()
 
-  def _workerFinished(self):
-    '''
-    Internal!
-    '''
-
-    self.__threadData['event'].clear()
-
-    if self.__lastEvent != None:
-      self.__threadData['start_at_id'] = self.__lastEvent['id'] + 1
-
-    self.__aborted = False
-    self.__running = False
-
   def stop(self):
     '''
     Stops the event watcher, if not running returns immediately.
     '''
-
-    thread = None
 
     with self:
       if not self.isRunning():
@@ -561,7 +597,9 @@ class SgEventWatcher(SgEventFilterer):
 
       self.__threadData['event'].set()
 
-    thread.join()
+      thread.join()
+
+      self.afterShutdown()
 
   def updateInterval(self):
     '''
@@ -600,10 +638,8 @@ def SgEventWatcherWorker(monitor, threadData):
       )
 
       if lastEvent:
-        lastId = lastEvent['id']
-
         if lastId == monitor.LAST_EVENT:
-          lastId -= 1
+          lastId = lastEvent['id'] - 1
       else:
         lastId = -1
   else:
@@ -611,12 +647,11 @@ def SgEventWatcherWorker(monitor, threadData):
 
   order=[{'field_name':'id','direction':'asc'}]
   limit = threadData['batch_size']
-  eventBuffer = []
 
   while True:
     logger.debug(
       'retrieving events starting at id %(id)s' % {
-        'id': lastId + 1
+        'id': lastId
       }
     )
 
@@ -625,10 +660,10 @@ def SgEventWatcherWorker(monitor, threadData):
 
       return
 
-    e.wait(monitor.updateInterval())
-
     events = []
     page = 1
+
+    e.wait(monitor.updateInterval())
 
     while True:
       if monitor.aborted():
@@ -636,16 +671,23 @@ def SgEventWatcherWorker(monitor, threadData):
 
         return
 
+      search_filters = ShotgunORM.SgEntitySearchFilters(
+        'EventLogEntry',
+        [
+          [
+            'id',
+            'greater_than',
+            lastId
+          ]
+        ]
+      )
+
+      search_filters.appendFilter(monitor.searchFilters())
+
       try:
         eventBuffer = connection.find(
           'EventLogEntry',
-          [
-            [
-              'id',
-              'greater_than',
-              lastId
-            ]
-          ],
+          search_filters.toLogicalOp(connection).toFilter(),
           order=order,
           page=page,
           limit=limit
@@ -658,6 +700,12 @@ def SgEventWatcherWorker(monitor, threadData):
         logger.warn(str(e))
 
         continue
+
+      logger.debug(
+        'retrieved %(count)s events' % {
+          'count': len(events)
+        }
+      )
 
       events.extend(eventBuffer)
 
@@ -672,9 +720,3 @@ def SgEventWatcherWorker(monitor, threadData):
 
     if len(events) > 0:
       lastId = events[-1]['id']
-
-    logger.debug(
-      'retrieved %(count)s events' % {
-        'count': len(events)
-      }
-    )
