@@ -43,7 +43,7 @@ import webbrowser
 import ShotgunORM
 
 REGEXP_PARSE_FACILITY = re.compile(
-  r'(http(?:s?)://)([a-zA-Z\d]+)\.(shotgunstudio\.com.*)'
+  r'(http(?:s?)://)(\w+(?:-staging)?)\.(shotgunstudio\.com.*)'
 )
 
 def facilityNameFromUrl(url):
@@ -309,7 +309,7 @@ def printSerializable(obj, indent=0, indentSize=2, indentChar=' '):
     * (str) indentChar:
       Char used to represent an indent.
   '''
-  
+
   print formatSerializable(obj, indent, indentSize, indentChar)
 
 def sgApiInfo():
