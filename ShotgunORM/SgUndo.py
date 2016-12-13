@@ -27,7 +27,7 @@ class SgUndoAction(object):
     self.__state = self.UNDO
 
     self.__actions = copy.deepcopy(sgActions)
-    self.__results = copy.deepcopy(sgResult)
+    self.__results = copy.deepcopy(sgResults)
 
   def actions(self):
     '''
