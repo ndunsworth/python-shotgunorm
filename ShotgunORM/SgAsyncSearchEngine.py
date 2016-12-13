@@ -26,10 +26,14 @@
 
 __all__ = [
   'SgAsyncSearchEngine',
-  'SgAsyncSearchResult'
+  'SgAsyncResult',
+  'SgAsyncEntitySearchResult',
+  'SgAsyncTextSearchResult'
 ]
 
 # Python imports
+from abc import abstractmethod
+
 import copy
 import threading
 import weakref
@@ -100,16 +104,17 @@ class SgAsyncSearchEngine(object):
 
   def __addSearch(
     self,
-    sgEntityType,
-    sgFilters,
-    sgFields,
+    entity_type,
+    filters,
+    fields,
     order,
-    filterOperator,
+    filter_operator,
     limit,
     retired_only,
     page,
     include_archived_projects,
     additional_filter_presets,
+    sgQueryFieldTemplate,
     isSingle,
     searchPosition
   ):
@@ -119,21 +124,22 @@ class SgAsyncSearchEngine(object):
     This function does not obtain a lock!
     '''
 
-    searchParameters = {
-      'entity_type': sgEntityType,
-      'filters': sgFilters,
-      'fields': sgFields,
-      'order': order,
-      'filter_operator': filterOperator,
-      'limit': limit,
-      'retired_only': retired_only,
-      'page': page,
-      'include_archived_projects': include_archived_projects,
-      'additional_filter_presets': additional_filter_presets,
-      'single': isSingle
-    }
+    params = ShotgunORM.SgSearchParameters(
+      entity_type,
+      filters,
+      fields,
+      order,
+      filter_operator,
+      limit,
+      retired_only,
+      page,
+      include_archived_projects,
+      additional_filter_presets,
+      sgQueryFieldTemplate,
+      self.connection()
+    )
 
-    searchResult = SgAsyncSearchResult(searchParameters)
+    searchResult = SgAsyncEntitySearchResult(params, isSingle)
 
     self.__addSearchResult(searchResult, searchPosition)
 
@@ -158,95 +164,98 @@ class SgAsyncSearchEngine(object):
 
   def addSearchToQueue(
     self,
-    sgEntityType,
-    sgFilters=[],
-    sgFields=None,
+    entity_type,
+    filters=[],
+    fields=None,
     order=None,
-    filterOperator=None,
+    filter_operator=None,
     limit=0,
     retired_only=False,
     page=0,
     include_archived_projects=True,
     additional_filter_presets=None,
+    sgQueryFieldTemplate=None,
     isSingle=False
   ):
     '''
     Add the Shotgun search to the front of the async search queue.
 
-    Returns a SgAsyncSearchResult.
+    Returns a SgAsyncEntitySearchResult.
     '''
 
     with self:
       return self.__addSearch(
-        sgEntityType,
-        sgFilters,
-        sgFields,
+        entity_type,
+        filters,
+        fields,
         order,
-        filterOperator,
+        filter_operator,
         limit,
         retired_only,
         page,
         include_archived_projects,
         additional_filter_presets,
-        isSingle,
+        sgQueryFieldTemplate,
         SG_ASYNC_ADD_SEARCH
       )
 
-  def addToQueue(self, sgAsyncSearchResult):
+  def addToQueue(self, sgAsyncResult):
     '''
-    Add the SgAsyncSearchResult to the front of the async search queue.
+    Add the SgAsyncResult to the front of the async search queue.
     '''
 
     with self:
       self.__addSearchResult(
-        sgAsyncSearchResult,
+        sgAsyncResult,
         SG_ASYNC_ADD_SEARCH
       )
 
   def appendSearchToQueue(
     self,
-    sgEntityType,
-    sgFilters=[],
-    sgFields=None,
+    entity_type,
+    filters=[],
+    fields=None,
     order=None,
-    filterOperator=None,
+    filter_operator=None,
     limit=0,
     retired_only=False,
     page=0,
     include_archived_projects=True,
     additional_filter_presets=None,
+    sgQueryFieldTemplate=None,
     isSingle=False
   ):
     '''
     Add the Shotgun search to the back of the async search queue.
 
-    Returns a SgAsyncSearchResult.
+    Returns a SgAsyncEntitySearchResult.
     '''
 
     with self:
       return self.__addSearch(
-        sgEntityType,
-        sgFilters,
-        sgFields,
+        entity_type,
+        filters,
+        fields,
         order,
-        filterOperator,
+        filter_operator,
         limit,
         retired_only,
         page,
         include_archived_projects,
         additional_filter_presets,
+        sgQueryFieldTemplate,
         isSingle,
         SG_ASYNC_APPEND_SEARCH
       )
 
-  def appendToQueue(self, sgAsyncSearchResult):
+  def appendToQueue(self, sgAsyncResult):
     '''
-    Add the SgAsyncSearchResult to the back of the async search queue.
+    Add the SgAsyncResult to the back of the async search queue.
     '''
 
     with self:
       self.__addSearchResult(
-        sgAsyncSearchResult,
+        sgAsyncResult,
         SG_ASYNC_APPEND_SEARCH
       )
 
@@ -273,49 +282,96 @@ class SgAsyncSearchEngine(object):
 
     self.__engineThread.start()
 
-class SgAsyncSearchResult(object):
+class SgAsyncResult(object):
   '''
-  Class that represents an async Shotgun query.
+
   '''
+
+  BATCH_COMMIT = 0
+  ENTITY_SEARCH = 1
+  TEXT_SEARCH = 2
 
   def __call__(self, timeout=None):
     return self.tryValue(timeout)
 
-  def __init__(self, searchParameters):
-    self.__event = threading.Event()
+  def __init__(self):
     self._result = None
+
+    self.__event = threading.Event()
     self.__errorException = None
     self.__errorMessage = None
-    self.__searchParameters = searchParameters
+    self.__pending = False
+    self.__connection = None
 
     self.__event.clear()
 
-    if self.__searchParameters['single']:
-      del self.__searchParameters['page']
-      del self.__searchParameters['limit']
-
-  def _setResult(self, result, errorException=None, errorMessage=None):
+  def __setResult(
+    self,
+    result,
+    errorException=None,
+    errorMessage=None
+  ):
     '''
-    Internal function used to update the result with the data retrieved from
-    Shotgun by the async search engines worker thread.
+    Internal function used to update the result with the data retrieved
+    from Shotgun by the async search engines worker thread.
     '''
 
-    if isinstance(result, list):
-      self._result = list(result)
-    else:
-      self._result = result
+    self._result = result
 
     self.__errorException = errorException
     self.__errorMessage = errorMessage
+    self.__pending = False
 
     self.onResultSet()
 
     self.__event.set()
 
+  @abstractmethod
+  def _execute(self, sgConnection):
+    '''
+
+    '''
+
+    return None
+
+  def execute(self, sgConnection):
+    '''
+
+    '''
+
+    try:
+      result = self._execute(sgConnection)
+
+      self.__setResult(result)
+
+      self.__connection = weakref.ref(sgConnection)
+    except Exception, e:
+      self.__setResult(None, e, str(e))
+
+      ShotgunORM.LoggerAsyncSearchEngine.error(e)
+
+  @abstractmethod
+  def copy(self):
+    '''
+
+    '''
+
+    raise NotImplementedError()
+
+  def connection(self):
+    '''
+    Returns the Shotgun connection used to preform the search.
+    '''
+
+    if self.__connection == None:
+      return None
+    else:
+      return self.__connection()
+
   def errorException(self):
     '''
-    Returns the Exception object that was raised when the async search engine
-    performed the search.
+    Returns the Exception object that was raised when the async search
+    engine performed the search.
     '''
 
     return self.__errorException
@@ -334,64 +390,197 @@ class SgAsyncSearchResult(object):
 
     return self.__errorException != None
 
+  def isPending(self):
+    '''
+    Returns True if the result has yet to be processed.
+    '''
+
+    return self.__pending
+
   def isReady(self):
     '''
-    Returns True if the data for the search query has been retrieved from
-    Shotgun and a call to value() will not block.
+    Returns True if the data for the search query has been retrieved
+    from Shotgun and a call to value() will not block.
     '''
 
     return self.__event.isSet()
 
   def onResultSet(self):
     '''
-    Called when the async search engine has returned the search result and
-    value() will not block.
+    Called when the async search engine has returned the search result
+    and value() will not block.
 
-    Subclasses can implement this function to perform actions when the search
-    result is ready.
+    Subclasses can implement this function to perform actions when the
+    search result is ready.
     '''
 
     pass
 
-  def searchParameters(self):
-    '''
-    Returns a dict containing the search parameters used when querying Shotgun
-    to obtain the search results.
-    '''
-
-    return copy.deepcopy(self.__searchParameters)
-
   def tryValue(self, timeout=None):
     '''
-    Try and return the search results, if the async search engine has not yet
-    retrieved the results returns None.
+    Try and return the search results, if the async search engine has
+    not yet retrieved the results returns None.
 
 
     Args:
       * (int) timeout:
-        Time in seconds to wait should the results have not yet been retrieved.
+        Time in seconds to wait should the results have not yet been
+        retrieved.
     '''
 
     if self.__event.wait(timeout):
-      if isinstance(self._result, list):
-        return list(self._result)
-      else:
-        return self._result
+      return self._result
     else:
-      return False
+      return None
+
+  @abstractmethod
+  def type(self):
+    '''
+
+    '''
+
+    raise NotImplementedError()
 
   def value(self):
     '''
-    Return the search results, will block if the search is still pending in the
-    async search engine.
+    Return the search results, will block if the search is still pending
+    in the async search engine.
     '''
 
     self.__event.wait()
 
-    if isinstance(self._result, list):
-      return list(self._result)
+    return self._result
+
+class SgAsyncEntitySearchResult(SgAsyncResult):
+  '''
+  Class that represents an async Shotgun query.
+  '''
+
+  def __init__(self, sgSearchParameters, isSingle=False):
+    super(SgAsyncEntitySearchResult, self).__init__()
+
+    self._params = sgSearchParameters
+    self._single = bool(isSingle)
+
+  def _execute(self, sgConnection):
+    '''
+
+    '''
+
+    params = self._params.parameters()
+
+    if self.isSingle():
+      return sgConnection.findOne(**params)
     else:
-      return self._result
+      return sgConnection.find(**params)
+
+  def copy(self):
+    '''
+    Returns a copy of this SgAsyncEntitySearchResult.
+    '''
+
+    return SgAsyncEntitySearchResult(
+      self._params.copy(),
+      self._single
+    )
+
+  def isSingle(self):
+    '''
+
+    '''
+
+    return self._single
+
+  def parameters(self):
+    '''
+    Returns a dict containing the search parameters used when querying
+    Shotgun to obtain the search results.
+    '''
+
+    return self._params.copy()
+
+  def type(self):
+    '''
+    Returns the SgAsyncResult type ENTITY_SEARCH.
+    '''
+
+    return SgAsyncResult.ENTITY_SEARCH
+
+  def size(self):
+    '''
+
+    '''
+
+    self.__event.wait()
+
+    if isinstance(self.__result, list):
+      return len(self.__result)
+    else:
+      return 1
+
+class SgAsyncTextSearchResult(SgAsyncResult):
+  '''
+
+  '''
+
+  def __init__(self, text, entity_types, project_ids=None, limit=None):
+    super(SgAsyncTextSearchResult, self).__init__()
+
+    self._params = ShotgunORM.SgTextSearchParameters(
+      text,
+      entity_types,
+      project_ids,
+      limit
+    )
+
+  def _execute(self, sgConnection):
+    '''
+
+    '''
+
+    return sgConnection.textSearch(**self._params.parameters())
+
+  def copy(self):
+    '''
+    Returns a copy of this SgAsyncTextSearchResult.
+    '''
+
+    return SgAsyncTextSearchResult(**self._params.parameters())
+
+  def entityTypes(self):
+    '''
+    Returns a dict containing search type filters.
+    '''
+
+    return self._params.entityTypes()
+
+  def limit(self):
+    '''
+    Returns the search limit.
+    '''
+
+    return self._params.limit()
+
+  def projectIds(self):
+    '''
+    Returns a list of project ids
+    '''
+
+    return self._params.projectIds()
+
+  def text(self):
+    '''
+    Returns the search filter text.
+    '''
+
+    return self._params.text()
+
+  def type(self):
+    '''
+    Returns the SgAsyncResult type TEXT_SEARCH.
+    '''
+
+    return SgAsyncResult.TEXT_SEARCH
 
 def SgAsyncSearchEngineWorker(
   connection,
@@ -447,37 +636,14 @@ def SgAsyncSearchEngineWorker(
 
       return
 
+    search_type = sgAsyncSearch.type()
+
+    ShotgunORM.LoggerAsyncSearchEngine.debug('    * Executing')
+
     try:
-      ShotgunORM.LoggerAsyncSearchEngine.debug('    * Searching')
-
-      searchParams = sgAsyncSearch.searchParameters()
-
-      isSingle = searchParams['single']
-
-      del searchParams['single']
-
-      if isSingle:
-        searchResult = con.findOne(
-          **searchParams
-        )
-      else:
-        searchResult = con.find(
-          **searchParams
-        )
-
-      sgAsyncSearch._setResult(
-        searchResult
-      )
-
-      ShotgunORM.LoggerAsyncSearchEngine.debug('    * Searching complete!')
-    except Exception, e:
-      ShotgunORM.LoggerAsyncSearchEngine.error(e)
-
-      sgAsyncSearch._setResult(
-        None,
-        e,
-        str(e)
-      )
+      sgAsyncSearch.execute(con)
     finally:
       del sgAsyncSearch
       del con
+
+    ShotgunORM.LoggerAsyncSearchEngine.debug('    * Executing complete!')
