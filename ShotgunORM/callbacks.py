@@ -888,6 +888,9 @@ def onSearchResult(sgConnection, sgEntityType, sgFields, sgResults):
 
   cbs = ON_SEARCH_RESULT_CBS.get(sgEntityType, [])
 
+  if sgFields == None:
+    sgFields = []
+
   for i in cbs:
     try:
       updated = i['cb'](sgConnection, sgEntityType, list(sgFields), sgResults)
