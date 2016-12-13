@@ -34,6 +34,8 @@ __all__ = [
 import abc
 import copy
 
+from .SgSearchParameters import SgSearchParameters
+
 class SgAbstractSearchIterator(object):
   '''
   Abstract search iterator, base class for all search iterators.
@@ -64,39 +66,42 @@ class SgAbstractSearchIterator(object):
   def __repr__(self):
     return '<%s connection=%s, limit=%d, page=%d>' % (
       self.__class__.__name__,
-      self._connection,
-      self._limit,
-      self._page - 1
+      self.connection(),
+      self.limit(),
+      self.page() - 1
     )
 
   def __init__(
     self,
-    sgConnection,
-    sgEntityType,
-    sgFilters=[],
-    sgFields=None,
+    connection,
+    entity_type,
+    filters=[],
+    fields=None,
     order=None,
-    filterOperator=None,
+    filter_operator=None,
     limit=100,
     retired_only=False,
     page=1,
     include_archived_projects=True,
     additional_filter_presets=None
   ):
-    self._additional_filter_presets = copy.deepcopy(additional_filter_presets)
-    self._archived_projects = bool(include_archived_projects)
-    self._connection = sgConnection
-    self._entityType = sgEntityType
-    self._filter = copy.deepcopy(sgFilters)
-    self._fields = copy.deepcopy(sgFields)
-    self._order = copy.deepcopy(order)
-    self._filterOp = copy.deepcopy(filterOperator)
-    self._limit = min(500, int(limit))
-    self._retiredOnly = bool(retired_only)
-    self._page = max(1, int(page))
-    self._pageOrig = self._page
+    self._params = SgSearchParameters(
+      entity_type,
+      filters,
+      fields,
+      order,
+      filter_operator,
+      limit,
+      retired_only,
+      max(1, int(page)),
+      include_archived_projects,
+      additional_filter_presets,
+      connection
+    )
 
-    self._page -= 1
+    self._pageOrig = self.page()
+
+    self._params.setPage(self.page() - 1)
 
   @abc.abstractmethod
   def _advance(self):
@@ -116,7 +121,7 @@ class SgAbstractSearchIterator(object):
 
     if self.hasMore():
       if self._advance():
-        self._page += 1
+        self._params.setPage(self.page() + 1)
 
         return True
       else:
@@ -139,14 +144,14 @@ class SgAbstractSearchIterator(object):
     Returns the SgConnection the iterator is connected to.
     '''
 
-    return self._connection
+    return self._params.connection()
 
   def entityType(self):
     '''
     Returns the name of the Entity type the seach returns.
     '''
 
-    return self._entityType
+    return self._params.entityType()
 
   def fields(self):
     '''
@@ -154,31 +159,28 @@ class SgAbstractSearchIterator(object):
     Entity objects.
     '''
 
-    if self._fields == None:
-      return []
-    else:
-      return list(self._fields)
+    return self._params.fields()
 
   def filter(self):
     '''
     Returns the Shotgun search filter that is used by the iterator.
     '''
 
-    return copy.deepcopy(self._filter)
+    return self._params.copyFilters()
 
   def filterOperator(self):
     '''
     Returns the Shotgun search filter operator that is used by the iterator.
     '''
 
-    return copy.deepcopy(self._filterOp)
+    return self._params.filterOperator()
 
   def hasLess(self):
     '''
 
     '''
 
-    return self._page > self._pageOrig
+    return self.page() > self._pageOrig
 
   @abc.abstractmethod
   def hasMore(self):
@@ -203,21 +205,28 @@ class SgAbstractSearchIterator(object):
     Returns the number of Entities that are being returned per batch query.
     '''
 
-    return self._limit
+    return self._params.limit()
 
   def order(self):
     '''
     Returns the order filter of the search.
     '''
 
-    return copy.deepcopy(self._order)
+    return self._params.order()
 
   def page(self):
     '''
     Returns the page that advance() returned results from.
     '''
 
-    return self._page
+    return self._params.page()
+
+  def parameters(self):
+    '''
+
+    '''
+
+    return self._params.copy()
 
   def previous(self):
     '''
@@ -238,7 +247,7 @@ class SgAbstractSearchIterator(object):
 
     self._clear()
 
-    self._page = self._pageOrig - 1
+    self._params.setPage(self._pageOrig - 1)
 
     self._reset()
 
@@ -255,7 +264,7 @@ class SgAbstractSearchIterator(object):
     Returns the search argument value for returning retired Entities only.
     '''
 
-    return self._retiredOnly
+    return self._params.retiredOnly()
 
   @abc.abstractmethod
   def _rewind(self):
@@ -272,7 +281,7 @@ class SgAbstractSearchIterator(object):
 
     if self.hasLess():
       if self._rewind():
-        self._page -= 1
+        self._params.setPage(self.page() - 1)
 
         return True
       else:
@@ -281,6 +290,14 @@ class SgAbstractSearchIterator(object):
       self.reset()
 
       return False
+
+  @abc.abstractmethod
+  def size(self):
+    '''
+
+    '''
+
+    return 0
 
   def summarySize(self):
     '''
@@ -295,9 +312,9 @@ class SgAbstractSearchIterator(object):
       that will be produced.
     '''
 
-    return self._connection.summarize(
-      self._entityType,
-      self._filter,
+    return self.connection().summarize(
+      self.entityType(),
+      self.filter(),
       [
         {
           'field': 'id',
@@ -313,12 +330,12 @@ class SgSearchIterator(SgAbstractSearchIterator):
 
   def __init__(
     self,
-    sgConnection,
-    sgEntityType,
-    sgFilters=[],
-    sgFields=None,
+    connection,
+    entity_type,
+    filters=[],
+    fields=None,
     order=None,
-    filterOperator=None,
+    filter_operator=None,
     limit=100,
     retired_only=False,
     page=1,
@@ -326,12 +343,12 @@ class SgSearchIterator(SgAbstractSearchIterator):
     additional_filter_presets=None
   ):
     super(SgSearchIterator, self).__init__(
-      sgConnection,
-      sgEntityType,
-      sgFilters,
-      sgFields,
+      connection,
+      entity_type,
+      filters,
+      fields,
       order,
-      filterOperator,
+      filter_operator,
       limit,
       retired_only,
       page,
@@ -343,21 +360,16 @@ class SgSearchIterator(SgAbstractSearchIterator):
     self.__hasMore = True
 
   def _advance(self):
-    results = self._connection.find(
-      self._entityType,
-      self._filter,
-      self._fields,
-      self._order,
-      self._filterOp,
-      self._limit,
-      self._retiredOnly,
-      self._page + 1,
-      self._archived_projects,
-      self._additional_filter_presets
-    )
+    params = self._params.copy()
+
+    params.setPage(self.page() + 1)
+
+    results = self.connection().findSearchParameters(params)
+
+    limit = self.limit()
 
     self.__hasMore = (
-      self._limit != 0 and len(results) == self._limit
+      limit != 0 and len(results) == limit
     )
 
     self.__results = results
@@ -390,27 +402,26 @@ class SgSearchIterator(SgAbstractSearchIterator):
     '''
 
     '''
+    params = self._params.copy()
 
-    results = self._connection.find(
-      self._entityType,
-      self._filter,
-      self._fields,
-      self._order,
-      self._filterOp,
-      self._limit,
-      self._retiredOnly,
-      self._page - 1,
-      self._archived_projects,
-      self._additional_filter_presets
-    )
+    params.setPage(self.page() - 1)
 
-    self.__hasMore = (
-      self._limit != 0 and len(results) == self._limit
-    )
+    results = self.connection().findSearchParameters(params)
+
+    limit = self.limit()
+
+    self.__hasMore = (limit != 0 and len(results) == limit)
 
     self.__results = results
 
     return True
+
+  def size(self):
+    '''
+
+    '''
+
+    return len(self.__results)
 
 class SgBufferedSearchIterator(SgAbstractSearchIterator):
   '''
@@ -421,12 +432,12 @@ class SgBufferedSearchIterator(SgAbstractSearchIterator):
 
   def __init__(
     self,
-    sgConnection,
-    sgEntityType,
-    sgFilters=[],
-    sgFields=None,
+    connection,
+    entity_type,
+    filters=[],
+    fields=None,
     order=None,
-    filterOperator=None,
+    filter_operator=None,
     limit=100,
     retired_only=False,
     page=1,
@@ -434,12 +445,12 @@ class SgBufferedSearchIterator(SgAbstractSearchIterator):
     additional_filter_presets=None
   ):
     super(SgBufferedSearchIterator, self).__init__(
-      sgConnection,
-      sgEntityType,
-      sgFilters,
-      sgFields,
+      connection,
+      entity_type,
+      filters,
+      fields,
       order,
-      filterOperator,
+      filter_operator,
       limit,
       retired_only,
       page,
@@ -449,18 +460,12 @@ class SgBufferedSearchIterator(SgAbstractSearchIterator):
 
     self.__prevResult = None
     self.__currentResult = None
-    self.__nextResult = self.createAsyncResult(
-      self._entityType,
-      self.filter(),
-      self.fields(),
-      self.order(),
-      self.filterOperator(),
-      self._limit,
-      self._retiredOnly,
-      self._page + 1,
-      self._archived_projects,
-      self._additional_filter_presets
-    )
+
+    params = self._params.copy()
+
+    params.setPage(self.page() + 1)
+
+    self.__nextResult = self.createAsyncResult(params)
 
   def _advance(self):
     self.__prevResult = self.__currentResult
@@ -473,61 +478,31 @@ class SgBufferedSearchIterator(SgAbstractSearchIterator):
 
       return False
 
-    if len(results) == self._limit:
-      self.__nextResult = self.createAsyncResult(
-        self._entityType,
-        self.filter(),
-        self.fields(),
-        self.order(),
-        self.filterOperator(),
-        self._limit,
-        self._retiredOnly,
-        self._page + 2,
-        self._archived_projects,
-        self._additional_filter_presets
-      )
+    if len(results) == self.limit():
+      params = self._params.copy()
+
+      params.setPage(self.page() + 2)
+
+      self.__nextResult = self.createAsyncResult(params)
     else:
       self.__nextResult = None
 
     return True
 
-  def createAsyncResult(
-    self,
-    sgEntityType,
-    sgFilters=[],
-    sgFields=None,
-    order=None,
-    filterOperator=None,
-    limit=0,
-    retired_only=False,
-    page=1,
-    include_archived_projects=True,
-    additional_filter_presets=None
-  ):
+  def createAsyncResult(self, params):
     '''
-    Returns a new SgAsyncSearchResult used by advance.
+    Returns a new SgAsyncEntitySearchResult used by advance.
 
-    Subclasses can implement this function to return there own custom class of
-    SgAsyncSearchResult.
+    Subclasses can implement this function to return there own custom
+    class of SgAsyncEntitySearchResult.
     '''
 
-    return self._connection.findAsync(
-      sgEntityType,
-      sgFilters,
-      sgFields,
-      order,
-      filterOperator,
-      limit,
-      retired_only,
-      page,
-      include_archived_projects,
-      additional_filter_presets
-    )
+    return self.connection().findSearchParametersAsync(params)
 
   def hasMore(self):
     '''
-    Returns True if there are possibly more results that can be returned from
-    Shotgun.
+    Returns True if there are possibly more results that can be returned
+    from Shotgun.
     '''
 
     return self.__nextResult != None
@@ -545,18 +520,12 @@ class SgBufferedSearchIterator(SgAbstractSearchIterator):
   def _reset(self):
     self.__prevResult = None
     self.__currentResult = None
-    self.__nextResult = self.createAsyncResult(
-      self._entityType,
-      self.filter(),
-      self.fields(),
-      self.order(),
-      self.filterOperator(),
-      self._limit,
-      self._retiredOnly,
-      self._page + 1,
-      self._archived_projects,
-      self._additional_filter_presets
-    )
+
+    params = self._params.copy()
+
+    params.setPage(self.page() + 1)
+
+    self.__nextResult = self.createAsyncResult(params)
 
   def results(self):
     '''
@@ -576,20 +545,23 @@ class SgBufferedSearchIterator(SgAbstractSearchIterator):
     self.__nextResult = self.__currentResult
     self.__currentResult = self.__prevResult
 
-    if self._page != self._pageOrig:
-      self.__prevResult = self.createAsyncResult(
-        self._entityType,
-        self.filter(),
-        self.fields(),
-        self.order(),
-        self.filterOperator(),
-        self._limit,
-        self._retiredOnly,
-        self._page - 2,
-        self._archived_projects,
-        self._additional_filter_presets
-      )
+    if self.page() != self._pageOrig:
+      params = self._params.copy()
+
+      params.setPage(self.page() - 2)
+
+      self.__prevResult = self.createAsyncResult(params)
     else:
       self.__prevResult = None
 
     return True
+
+  def size(self):
+    '''
+
+    '''
+
+    if self.__currentResult == None:
+      return 0
+    else:
+      return self.__currentResult.size()
