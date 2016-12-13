@@ -414,6 +414,35 @@ class SgFieldDateTime(ShotgunORM.SgField):
   def _Value(self):
     return self._toFieldData()
 
+  def toString(self, fmt=''):
+    '''
+
+    '''
+
+    value = self.value()
+
+    if value == None:
+      return ''
+    else:
+      return value.strftime(fmt)
+
+  def toPrettyString(self):
+    '''
+
+    '''
+
+    value = self.value()
+
+    if value == None:
+      return ''
+
+    delta = (datetime.datetime.now(value.tzinfo) - value).days
+
+    if delta < 7:
+      return value.strftime('%a at %I:%M:%S ') + value.strftime('%p').lower()
+    else:
+      return value.strftime('%b %d %Y at %I:%M:%S ') + value.strftime('%p').lower()
+
 class SgFieldEntity(ShotgunORM.SgField):
   '''
   Entity field that stores a link to another Entity.
@@ -576,6 +605,23 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
   Example: [Entity01, Entity02, ...]
   '''
 
+  def __init__(
+    self,
+    name,
+    label=None,
+    sgFieldSchemaInfo=None,
+    sgEntity=None
+  ):
+    super(SgFieldEntityMulti, self).__init__(
+      name,
+      label,
+      sgFieldSchemaInfo,
+      sgEntity
+    )
+
+    self._add_entities = []
+    self._remove_entities = []
+
   ##############################################################################
   #
   # IMPORTANT!!!!
@@ -589,7 +635,7 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
     if isinstance(sgData, (tuple, set)):
       sgData = list(sgData)
 
-    if sgData in [None, []]:
+    if sgData == None or len(sgData) <= 0:
       result = self._value in [None, []]
 
       if result:
@@ -630,7 +676,19 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
 
     return True
 
+  def _invalidate(self):
+    '''
+    Subclass portion of SgField.invalidate().
+    '''
+
+    self._add_entities = []
+    self._remove_entities = []
+
   def _setValue(self, sgData):
+    if len(self._add_entities) > 0 or len(self._remove_entities) > 0:
+      self._add_entities = []
+      self._remove_entities = []
+
     if isinstance(sgData, (tuple, set)):
       sgData = list(sgData)
 
@@ -701,15 +759,306 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
     return True
 
   def _toFieldData(self):
+    '''
+
+    '''
+
     if self._value == None:
       return None
 
-    result = []
+    result = copy.deepcopy(self._value)
 
-    for i in self._value:
-      result.append(dict(i))
+    if self.hasPendingAdds() == True:
+      for add_item in self._add_entities:
+        append = True
+        add_type = add_item['type']
+        add_id = add_item['id']
+
+        for entity in result:
+          if entity['type'] == add_type and entity['id'] == add_id:
+            append = False
+
+            break
+
+        if append == True:
+          result.append({'type': add_type, 'id': add_id})
+    elif self.hasPendingRemoves() == True:
+      for rem_item in self._remove_entities:
+        rem_type = rem_item['type']
+        rem_id = rem_item['id']
+
+        index = -1
+        n = 0
+
+        for entity in result:
+          if entity['type'] == rem_type and entity['id'] == rem_id:
+            index = n
+
+            break
+
+          n += 1
+
+        if index > -1:
+          del result[index]
 
     return result
+
+  def _updateValueWithUpdates(self):
+    '''
+
+    '''
+
+    self._value = self.toFieldData()
+
+  def add(self, sgEntity):
+    '''
+
+    '''
+
+    parent = self.parentEntity()
+
+    if parent == None:
+      raise RuntimeError(
+        'cant append to a multi-entity field that has no parent'
+      )
+
+    if parent.exists() == False:
+      raise RuntimeError(
+        'cant append to a multi-entity field whos parent doesnt yet exist'
+      )
+
+    entities = None
+
+    if isinstance(sgEntity, ShotgunORM.SgEntity):
+      if self.isValidValueType(sgEntity) == False:
+        raise ValueError(
+          'Entity type %s not a valid value type supported by this field %s' % (
+            e.type,
+            self
+          )
+        )
+
+      entities = [sgEntity.toEntityFieldData()]
+    elif isinstance(sgEntity, (list, tuple)):
+      if len(sgEntity) <= 0:
+        return False
+
+      entities = []
+
+      for e in set(sgEntity):
+        if self.isValidValueType(e) == False:
+          raise ValueError(
+            'Entity type %s not a valid value type supported by this field %s' % (
+              e.type,
+              self
+            )
+          )
+
+        entities.append(e.toEntityFieldData())
+    else:
+      raise TypeError('invalid arg %s' % sgEntity)
+
+    with self:
+      if self.hasPendingRemoves() == True:
+        raise RuntimeError(
+          'field %s has pending removes can not add appends until commited' % self
+        )
+
+      update_commit = False
+
+      if len(self._add_entities) <= 0 and self.hasCommit() == True:
+        if self._value == None or len(self._value) <= 0:
+          self._value = entities
+        else:
+          cur_entities = list(self._value)
+
+          for e in entities:
+            if e not in cur_entities:
+              self._value.append(e)
+
+              update_commit = True
+
+        if update_commit == True:
+          self.setHasCommit(True)
+
+        return update_commit
+
+      cur_entities = list(self._add_entities)
+
+      for e in entities:
+        if e not in cur_entities:
+          self._add_entities.append(e)
+
+          update_commit = True
+
+      if update_commit == True:
+        self.setHasCommit(True)
+
+      return update_commit
+
+  def _clearPendingUpdates(self):
+    '''
+
+    '''
+
+    self._add_entities = []
+    self._remove_entities = []
+
+  def clearPendingUpdates(self):
+    '''
+    Clears the field of any pending adds or removes.
+    '''
+
+    with self:
+      self._clearPendingUpdates()
+
+      self.setHasCommit(False)
+
+  def hasPendingAdds(self):
+    '''
+    Returns True if the field has pending adds.
+    '''
+
+    return len(self._add_entities) > 0
+
+  def hasPendingRemoves(self):
+    '''
+    Returns True if the field has pending removes.
+    '''
+
+    return len(self._remove_entities) > 0
+
+  def hasPendingUpdates(self):
+    '''
+    Returns True if hasPendingAdds or hasPendingRemoves.
+    '''
+
+    return (
+      self.hasPendingAdds() == True or
+      self.hasPendingRemoves() == True
+    )
+
+  def isValidValueType(self, sgEntityType):
+    '''
+    Returns True if the Entity type is assignable to this field.
+    '''
+
+    if isinstance(sgEntityType, ShotgunORM.SgEntity):
+      sgEntityType = sgEntityType.type
+
+    valueTypes = self.valueTypes()
+
+    if valueTypes == None:
+      return True
+    else:
+      return sgEntityType in valueTypes
+
+  def pendingAdds(self):
+    '''
+
+    '''
+
+    return copy.deepcopy(self._add_entities)
+
+  def pendingRemoves(self):
+    '''
+
+    '''
+
+    return copy.deepcopy(self._remove_entities)
+
+  def remove(self, sgEntity):
+    '''
+
+    '''
+
+    parent = self.parentEntity()
+
+    if parent == None:
+      raise RuntimeError(
+        'cant remove from a multi-entity field that has no parent'
+      )
+
+    if parent.exists() == False:
+      raise RuntimeError(
+        'cant remove from a multi-entity field whos parent doesnt yet exist'
+      )
+
+    entities = None
+
+    if isinstance(sgEntity, ShotgunORM.SgEntity):
+      if self.isValidValueType(sgEntity) == False:
+        raise ValueError(
+          'Entity type %s not a valid value type supported by this field %s' % (
+            e.type,
+            self
+          )
+        )
+
+      entities = [sgEntity.toEntityFieldData()]
+    elif isinstance(sgEntity, (list, tuple)):
+      if len(sgEntity) <= 0:
+        return False
+
+      entities = []
+
+      for e in set(sgEntity):
+        if self.isValidValueType(e) == False:
+          raise ValueError(
+            'Entity type %s not a valid value type supported by this field %s' % (
+              e.type,
+              self
+            )
+          )
+
+        entities.append(e.toEntityFieldData())
+    else:
+      raise TypeError('invalid arg %s' % sgEntity)
+
+    with self:
+      if self.hasPendingAdds() == True:
+        raise RuntimeError(
+          'field %s has pending adds can not add removes until commited' % self
+        )
+
+      update_commit = False
+
+      if len(self._remove_entities) <= 0 and self.hasCommit() == True:
+        if self._value != None and len(self._value) > 0:
+
+          for e in entities:
+            if e in self._value:
+              index = self._value.find(e)
+
+              if index > -1:
+                del self._value[index]
+
+                update_commit = True
+
+        if update_commit == True:
+          self.setHasCommit(True)
+
+        return update_commit
+
+      cur_entities = list(self._remove_entities)
+
+      for e in entities:
+        if e not in cur_entities:
+          self._remove_entities.append(e)
+
+          update_commit = True
+
+      if update_commit == True:
+        self.setHasCommit(True)
+
+      return update_commit
+
+  def _Value(self):
+    '''
+
+    '''
+
+    return self.toFieldData()
 
   def value(self, sgSyncFields=None):
     '''
@@ -717,19 +1066,19 @@ class SgFieldEntityMulti(ShotgunORM.SgField):
 
     Args:
       * (dict) sgSyncFields:
-        Dict of entity types and field names to populate the returned Entities
-        with.
+        Dict of entity types and field names to populate the returned
+        Entities with.
     '''
 
     result = super(SgFieldEntityMulti, self).value()
 
-    if result in [None, []]:
+    if result == None or len(result) <= 0:
       return []
 
     parent = self.parentEntity()
 
     if parent == None:
-      return copy.deepcopy(result)
+      return result
 
     connection = parent.connection()
     schema = connection.schema()
@@ -1039,7 +1388,6 @@ class SgFieldSummary(ShotgunORM.SgField):
         result.append(logicalOp)
       else:
         newValues = []
-
         cInfo = info.fieldInfo(c['path'])
         cType = cInfo.returnType()
 
@@ -1101,7 +1449,7 @@ class SgFieldSummary(ShotgunORM.SgField):
         ########################################################################
         elif cType in [ShotgunORM.SgField.RETURN_TYPE_ENTITY, ShotgunORM.SgField.RETURN_TYPE_MULTI_ENTITY]:
           for v in c['values']:
-            if v['name'] == 'Current %s' % parent.type:
+            if v['name'] == 'Current %s' % parent.type or v['name'] == 'Current Entity':
               newValues.append(parent.toEntityFieldData())
             elif v['name'] == 'Me':
               login = os.getenv('USERNAME')
@@ -1119,7 +1467,8 @@ class SgFieldSummary(ShotgunORM.SgField):
 
         c['values'] = newValues
 
-        del c['active']
+        if 'active' in c:
+          del c['active']
 
         result.append(c)
 
@@ -1644,7 +1993,8 @@ class SgFieldImage(SgFieldText):
           }
         )
       else:
-        self.__expireTime = int(search.group(1))
+        # Minus 30 seconds from expire time for padding
+        self.__expireTime = int(search.group(1)) - 30
 
     return result
 
@@ -1886,6 +2236,8 @@ class SgFieldUrl(ShotgunORM.SgField):
       result['content_type'] = sgData.get('content_type', None)
     except Exception, e:
       ShotgunORM.LoggerField.warn(e)
+
+      raise
 
       raise TypeError('%s invalid sgData dict "%s"' % (self, sgData))
 
