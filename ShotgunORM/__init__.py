@@ -33,20 +33,33 @@ __all__ = [
   'SHOTGUN_API_LOCK',
   'SgAbstractSearchIterator',
   'SgApiInfo',
+  'SgAsyncResult',
   'SgAsyncSearchEngine',
-  'SgAsyncSearchResult',
+  'SgAsyncEntitySearchResult',
+  'SgAsyncTextSearchResult',
   'SgBufferedSearchIterator',
   'SgConnection',
   'SgConnectionMeta',
   'SgEntity',
   'SgEntityClassFactory',
   'SgEntitySchemaInfo',
+  'SgEntitySearchFilters',
   'SgField',
   'SgFieldSchemaInfo',
+  'SgLocialOp',
+  'SgLocialOpCondition',
   'SgQueryEngine',
   'SgSchema',
+  'SgScriptCredentials',
   'SgScriptField',
+  'SgSearchFilter',
+  'SgSearchFilters',
+  'SgSearchFilterBasic',
+  'SgSearchFilterLogicalOp',
+  'SgSearchParameters',
   'SgSearchIterator',
+  'SgSite',
+  'SgTextSearchParameters',
   'parseFromLogicalOp',
   'parseToLogicalOp',
   'config'
@@ -70,11 +83,11 @@ SHOTGUN_API_LOCK = threading.RLock()
 
 del threading
 
-################################################################################
+########################################################################
 #
 # Import Loggers
 #
-################################################################################
+########################################################################
 
 import SgLogger
 
@@ -84,11 +97,11 @@ del SgLogger
 
 from SgLogger import *
 
-################################################################################
+########################################################################
 #
 # Import utils
 #
-################################################################################
+########################################################################
 
 import utils
 
@@ -98,20 +111,36 @@ del utils
 
 from utils import *
 
-################################################################################
+########################################################################
 #
 # Import schema, connection and engine related classes
 #
-################################################################################
+########################################################################
 
 from SgApiInfo import SgApiInfo
+from SgSite import SgSite
 from SgServerInfo import SgServerInfo
+from SgScriptCredentials import SgScriptCredentials
 from SgConnection import SgConnection, SgConnectionMeta
 from SgEntityClassFactory import SgEntityClassFactory
-from SgAsyncSearchEngine import SgAsyncSearchEngine, SgAsyncSearchResult
+from SgAsyncSearchEngine import SgAsyncSearchEngine, SgAsyncResult, SgAsyncEntitySearchResult, SgAsyncTextSearchResult
 from SgQueryEngine import SgQueryEngine
 from SgSchema import SgSchema
-from SgSearchIterator import SgAbstractSearchIterator, SgBufferedSearchIterator, SgSearchIterator
+
+from SgSearchParameters import (
+  SgEntitySearchFilters,
+  SgSearchFilters,
+  SgSearchFilterBasic,
+  SgSearchFilterLogicalOp,
+  SgSearchParameters,
+  SgTextSearchParameters
+)
+
+from SgSearchIterator import (
+  SgAbstractSearchIterator,
+  SgBufferedSearchIterator,
+  SgSearchIterator
+)
 
 import SgUndo
 
@@ -121,11 +150,11 @@ del SgUndo
 
 from .SgUndo import *
 
-################################################################################
+########################################################################
 #
 # Import Entities and fields
 #
-################################################################################
+########################################################################
 
 from SgEntity import SgEntity, SgEntitySchemaInfo
 from SgField import SgField, SgFieldSchemaInfo
@@ -139,11 +168,11 @@ del SgFields
 
 from SgFields import *
 
-################################################################################
+########################################################################
 #
 # Import scripting engine and script fields
 #
-################################################################################
+########################################################################
 
 from SgScriptField import SgScriptField
 
@@ -155,13 +184,20 @@ del SgScriptFields
 
 from SgScriptFields import *
 
-from SgScriptEngine import convertToLogicalOp, parseFromLogicalOp, parseToLogicalOp
+from SgScriptEngine import (
+  SgLogicalOp,
+  SgLogicalOpCondition,
+  convertToLogicalOp,
+  convertToLogicalOpCond,
+  parseFromLogicalOp,
+  parseToLogicalOp
+)
 
-################################################################################
+########################################################################
 #
 # Import event monitor
 #
-################################################################################
+########################################################################
 
 import SgEventWatcher
 
@@ -179,11 +215,27 @@ del SgEventWatchers
 
 from SgEventWatchers import *
 
-################################################################################
+from . import SgEventFilters
+
+__all__.extend(SgEventFilters.__all__)
+
+from .SgEventFilters import *
+
+del SgEventFilters
+
+from . import SgEventHandlers
+
+__all__.extend(SgEventHandlers.__all__)
+
+from .SgEventHandlers import *
+
+del SgEventHandlers
+
+########################################################################
 #
 # Import callbacks
 #
-################################################################################
+########################################################################
 
 import callbacks
 
@@ -193,11 +245,11 @@ del callbacks
 
 from callbacks import *
 
-################################################################################
+########################################################################
 #
 # Import the user configuration
 #
-################################################################################
+########################################################################
 
 import config
 
