@@ -28,6 +28,7 @@ __all__ = [
   'SgEntryTypeFilter',
   'SgEntryTypeEventHandler',
   'SgFileEventHandler',
+  'SgProjectFilter',
   'SgStreamEventHandler',
   'SgUDPBroadcastEventHandler',
 ]
@@ -40,11 +41,11 @@ import sys
 # This module imports
 import ShotgunORM
 
-################################################################################
+########################################################################
 #
 # Filters
 #
-################################################################################
+########################################################################
 
 class SgEntryTypeFilter(ShotgunORM.SgEventFilter):
   '''
@@ -74,11 +75,33 @@ class SgEntryTypeFilter(ShotgunORM.SgEventFilter):
 
     return sgEvent.type() in self.__eventTypes
 
-################################################################################
+class SgProjectFilter(ShotgunORM.SgEventFilter):
+  '''
+  Event filter class that filters events for a specific project.
+  '''
+
+  def __init__(self, project):
+    self._project = project
+
+  def filter(self, sgEvent):
+    '''
+    Returns True if the events project matches the filters project.
+    '''
+
+    return self._project == sgEvent.project
+
+  def project(self):
+    '''
+
+    '''
+
+    return self._project
+
+########################################################################
 #
 # Handlers
 #
-################################################################################
+########################################################################
 
 class SgEntryTypeEventHandler(ShotgunORM.SgEventHandler):
   '''
@@ -126,7 +149,11 @@ class SgStreamEventHandler(ShotgunORM.SgEventHandler):
         Event to build message for.
     '''
 
-    return ''
+    return (
+      ShotgunORM.formatSerializable(
+        sgEvent.event().fieldValues()
+      ) + '\n'
+    )
 
   def processEvent(self, sgEvent):
     '''
@@ -137,7 +164,7 @@ class SgStreamEventHandler(ShotgunORM.SgEventHandler):
         Event to process.
     '''
 
-    self.writeMsg(self, self.Message(sgEvent))
+    self.writeMessage(self.formatMessage(sgEvent))
 
   def writeMessage(self, msg):
     '''
@@ -154,6 +181,11 @@ class SgStreamEventHandler(ShotgunORM.SgEventHandler):
       raise
     except:
       raise
+
+class DummyStream(object):
+  @staticmethod
+  def write(msg):
+    pass
 
 class SgFileEventHandler(SgStreamEventHandler):
   '''
@@ -219,7 +251,7 @@ class SgFileEventHandler(SgStreamEventHandler):
         Event to process.
     '''
 
-    self.writeMsg(self, self.Message(sgEvent))
+    self.writeMessage(self, self.formatMessage(sgEvent))
 
 class SgUDPBroadcastEventHandler(ShotgunORM.SgEventHandler):
   '''
