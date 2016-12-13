@@ -298,6 +298,42 @@ class SgEntity(object):
   # Populated by SgEntity.registerDefaultEntityClass().
   __defaultentityclasses__ = {}
 
+  __entity_name_fields__ = {
+   'AppWelcome': 'name',
+   'Asset': 'code',
+   'Banner': 'name',
+   'Camera': 'code',
+   'ClientUser': 'name',
+   'CustomThreadedEntity02': 'code',
+   'CustomThreadedEntity05': 'code',
+   'Cut': 'code',
+   'CutItem': 'code',
+   'Department': 'code',
+   'Element': 'code',
+   'FilesystemLocation': 'code',
+   'Group': 'code',
+   'HumanUser': 'name',
+   'Icon': 'name',
+   'LocalStorage': 'code',
+   'MocapTake': 'code',
+   'Page': 'name',
+   'PermissionRuleSet': 'code',
+   'Phase': 'code',
+   'PipelineConfiguration': 'code',
+   'Playlist': 'code',
+   'Project': 'code',
+   'PublishedFile': 'code',
+   'PublishedFileType': 'code',
+   'RvLicense': 'code',
+   'Sequence': 'code',
+   'Shot': 'code',
+   'Status': 'code',
+   'Step': 'code',
+   'Task': 'content',
+   'TaskTemplate': 'code',
+   'Version': 'code'
+  }
+
   @classmethod
   def defaultEntityClass(cls, sgEntityType):
     '''
@@ -320,12 +356,24 @@ class SgEntity(object):
     return dict(cls.__defaultentityclasses__)
 
   @classmethod
+  def entityNameField(cls, sgEntityType):
+    '''
+
+    '''
+
+    return cls.__entity_name_fields__.get(sgEntityType, None)
+
+  @classmethod
   def find(self, *args, **kwargs):
     '''
 
     '''
 
-    return self.__sg_connection__().find(self.__sg_entity_name__, *args, **kwargs)
+    return self.__sg_connection__().find(
+      self.__sg_entity_name__,
+      *args,
+      **kwargs
+    )
 
   @classmethod
   def findAsync(self, *args, **kwargs):
@@ -333,7 +381,11 @@ class SgEntity(object):
 
     '''
 
-    return self.__sg_connection__().findAsync(self.__sg_entity_name__, *args, **kwargs)
+    return self.__sg_connection__().findAsync(
+      self.__sg_entity_name__,
+      *args,
+      **kwargs
+    )
 
   @classmethod
   def findIterator(self, *args, **kwargs):
@@ -341,7 +393,11 @@ class SgEntity(object):
 
     '''
 
-    return self.__sg_connection__().findIterator(self.__sg_entity_name__, *args, **kwargs)
+    return self.__sg_connection__().findIterator(
+      self.__sg_entity_name__,
+      *args,
+      **kwargs
+    )
 
   @classmethod
   def findOne(self, *args, **kwargs):
@@ -349,7 +405,11 @@ class SgEntity(object):
 
     '''
 
-    return self.__sg_connection__().findOne(self.__sg_entity_name__, *args, **kwargs)
+    return self.__sg_connection__().findOne(
+      self.__sg_entity_name__,
+      *args,
+      **kwargs
+    )
 
   @classmethod
   def findOneAsync(self, *args, **kwargs):
@@ -357,7 +417,11 @@ class SgEntity(object):
 
     '''
 
-    return self.__sg_connection__().findOneAsync(self.__sg_entity_name__, *args, **kwargs)
+    return self.__sg_connection__().findOneAsync(
+      self.__sg_entity_name__,
+      *args,
+      **kwargs
+    )
 
   @classmethod
   def registerDefaultEntityClass(cls, sgEntityCls, sgEntityTypes):
@@ -385,12 +449,24 @@ class SgEntity(object):
       cls.__defaultentityclasses__[e] = sgEntityCls
 
   @classmethod
+  def registerEntityNameField(cls, sgEntityType, fieldName):
+    '''
+
+    '''
+
+    cls.__entity_name_fields__[sgEntityType] = fieldName
+
+  @classmethod
   def search(self, *args, **kwargs):
     '''
 
     '''
 
-    return self.__sg_connection__().search(self.__sg_entity_name__, *args, **kwargs)
+    return self.__sg_connection__().search(
+      self.__sg_entity_name__,
+      *args,
+      **kwargs
+    )
 
   @classmethod
   def searchAsync(self, *args, **kwargs):
@@ -398,7 +474,11 @@ class SgEntity(object):
 
     '''
 
-    return self.__sg_connection__().searchAsync(self.__sg_entity_name__, *args, **kwargs)
+    return self.__sg_connection__().searchAsync(
+      self.__sg_entity_name__,
+      *args,
+      **kwargs
+    )
 
   @classmethod
   def searchIterator(self, *args, **kwargs):
@@ -406,7 +486,11 @@ class SgEntity(object):
 
     '''
 
-    return self.__sg_connection__().searchIterator(self.__sg_entity_name__, *args, **kwargs)
+    return self.__sg_connection__().searchIterator(
+      self.__sg_entity_name__,
+      *args,
+      **kwargs
+    )
 
   @classmethod
   def searchOne(self, *args, **kwargs):
@@ -414,7 +498,11 @@ class SgEntity(object):
 
     '''
 
-    return self.__sg_connection__().searchOne(self.__sg_entity_name__, *args, **kwargs)
+    return self.__sg_connection__().searchOne(
+      self.__sg_entity_name__,
+      *args,
+      **kwargs
+    )
 
   @classmethod
   def searchOneAsync(self, *args, **kwargs):
@@ -422,7 +510,11 @@ class SgEntity(object):
 
     '''
 
-    return self.__sg_connection__().searchOneAsync(self.__sg_entity_name__, *args, **kwargs)
+    return self.__sg_connection__().searchOneAsync(
+      self.__sg_entity_name__,
+      *args,
+      **kwargs
+    )
 
   def __getattribute__(self, item):
     try:
@@ -467,8 +559,10 @@ class SgEntity(object):
 
   def __eq__(self, item):
     if isinstance(item, SgEntity):
-      return self.type == item.type and self['id'] == item['id'] and \
-        self.connection().url().lower() == item.connection().url().lower()
+      return (
+        self.type == item.type and self['id'] == item['id'] and
+        self.isFromSameSite(item)
+      )
     elif isinstance(item, int):
       return self.id == item
     elif isinstance(item, str):
@@ -518,7 +612,10 @@ class SgEntity(object):
     global SHUTTING_DOWN
 
     if SHUTTING_DOWN == False:
-      self.connection().cacheEntity(self)
+      connection = self.connection()
+
+      if connection != None:
+        connection.cacheEntity(self)
 
   def __dir__(self):
     if ShotgunORM.config.ENTITY_DIR_INCLUDE_FIELDS:
@@ -709,6 +806,17 @@ class SgEntity(object):
           pass
         elif commitType in ['create', 'update']:
           fieldNames = batch['data'].keys()
+
+          if not sgDryRun:
+            for field in self.fields(
+              fieldNames,
+              [ShotgunORM.SgField.RETURN_TYPE_MULTI_ENTITY]
+            ).values():
+              if field.hasPendingUpdates() == True:
+                if field.isValid() == True:
+                  field._updateValueWithUpdates()
+
+                field._clearPendingUpdates()
 
           for field in self.fields(fieldNames).values():
             field.setIsCommitting(False)
@@ -1291,6 +1399,14 @@ class SgEntity(object):
 
     return result
 
+  def fieldsInvalidate(self, sgFields=None, sgReturnTypes=None):
+    '''
+
+    '''
+
+    for field in self.fields(sgFields, sgReturnTypes).values():
+      field.invalidate()
+
   def fieldsInvalid(self, sgFields=None, sgReturnTypes=None, excludeWithSyncUpdate=True):
     '''
     Returns a list of field names that are not valid.
@@ -1444,9 +1560,9 @@ class SgEntity(object):
     '''
 
     if (
-      not self.exists() or
+      self.exists() == False or
       sgUser['type'] != 'HumanUser' or
-      not sgUser.exists()
+      sgUser.exists() == False
     ):
       return False
 
@@ -1460,7 +1576,7 @@ class SgEntity(object):
     Returns a list of user Entities that are following this Entity.
     '''
 
-    if not self.exists():
+    if self.exists() == False:
       return []
 
     connection = self.connection()
@@ -1486,6 +1602,13 @@ class SgEntity(object):
 
     return result
 
+  def hasNameField(self):
+    '''
+    Returns True if the Entity has a field that represents a name.
+    '''
+
+    return SgEntity.entityNameField(self.type) != None
+
   def hasField(self, sgField):
     '''
     Returns True if the Entity contains the field specified.
@@ -1507,11 +1630,26 @@ class SgEntity(object):
     '''
 
     # Bail early if the Entity does not have an ID or it is marked for deletion.
-    if not self.exists() or self.isMarkedForDeletion():
+    if self.exists() == False or self.isMarkedForDeletion():
       return True
 
     for field in self.fields().values():
       if field.hasCommit():
+        return True
+
+    return False
+
+  def hasMultiEntityUpdates(self, sgFields=None):
+    '''
+    Returns True if multi-entity fields contain pending add/remove
+    updates.
+    '''
+
+    for field in self.fields(
+      sgFields,
+      [ShotgunORM.SgField.RETURN_TYPE_MULTI_ENTITY]
+    ).values():
+      if field.hasPendingUpdates() == True:
         return True
 
     return False
@@ -1525,10 +1663,10 @@ class SgEntity(object):
 
   def isCaching(self):
     '''
-    Returns True if the Entity will save its field values in the connections
-    cache.
+    Returns True if the Entity will save its field values in the
+    connections cache.
 
-    Default returns the connections isCaching() state unless the Entity has
+    Default returns the connections isCaching() state unless the Entity
     has caching disabled by calling SgEntity.disableCaching().
     '''
 
@@ -1546,15 +1684,27 @@ class SgEntity(object):
 
   def isCustom(self):
     '''
-    Returns True if the Entity is a custom Shotgun entity, example CustomEntity01.
+    Returns True if the Entity is a custom Shotgun entity, example
+    CustomEntity01.
     '''
 
     return self.schemaInfo().isCustom()
 
+  def isFromSameSite(self, other):
+    '''
+    Returns True if this Entity belongs to the same Shotgun site as
+    other.
+    '''
+
+    if not isinstance(other, SgEntity):
+      raise ValueError('arg is not an SgEntity')
+
+    return self.connection().url() == other.connection().url()
+
   def isMarkedForDeletion(self):
     '''
-    Returns True if the Entity has been marked for deletion but has not yet
-    pushed the commit to Shotgun.
+    Returns True if the Entity has been marked for deletion but has not
+    yet pushed the commit to Shotgun.
     '''
 
     return self._markedForDeletion
@@ -1796,12 +1946,29 @@ class SgEntity(object):
         }
       )
     else:
+      multi_entity_update_modes = {}
+
+      for name, field in self.fields(
+        sgFields,
+        sgReturnTypes=[
+          ShotgunORM.SgField.RETURN_TYPE_MULTI_ENTITY
+        ]
+      ).items():
+        if field.hasPendingAdds() == True:
+          multi_entity_update_modes[name] = 'add'
+        elif field.hasPendingRemoves() == True:
+          multi_entity_update_modes[name] = 'remove'
+
+      if len(multi_entity_update_modes) <= 0:
+        multi_entity_update_modes = None
+
       result.append(
         {
           'request_type': 'update',
           'entity_type': self.type,
           'entity_id': self['id'],
-          'data': data
+          'data': data,
+          'multi_entity_update_modes': multi_entity_update_modes
         }
       )
 
@@ -1885,7 +2052,19 @@ class SgEntity(object):
 
     for fieldName, field in self.fields(sgFields).items():
       if field.hasCommit() and field.isCommittable():
-        result[fieldName] = field.toFieldData()
+        if (
+          field.returnType() == ShotgunORM.SgField.RETURN_TYPE_MULTI_ENTITY and
+          (
+            field.hasPendingAdds() == True or
+            field.hasPendingRemoves() == True
+          )
+        ):
+          if field.hasPendingAdds() == True:
+            result[fieldName] = field.pendingAdds()
+          else:
+            result[fieldName] = field.pendingRemoves()
+        else:
+          result[fieldName] = field.toFieldData()
 
     return result
 
