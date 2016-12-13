@@ -41,7 +41,13 @@ class SgVersion(ShotgunORM.SgEntity):
 
   REGEXP_VER = re.compile(r'([_.]v)(\d+)(s(\d+))?$')
 
-  def _changeVersion(self, value, sgFields=None, doSub=False, valueIsVersion=False, ignoreProject=False):
+  def _changeVersion(
+    self,
+    value,
+    sgFields=None,
+    doSub=False, valueIsVersion=False,
+    ignoreProject=False
+  ):
     self.sync(
       ['code', 'project'],
       ignoreValid=True,
