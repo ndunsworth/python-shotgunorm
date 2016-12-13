@@ -26,8 +26,11 @@
 
 __all__ = [
   'convertToLogicalOp',
+  'convertToLogicalOpCond',
   'parseLogicalOp',
-  'parseSearchExp'
+  'parseSearchExp',
+  'SgLogicalOp',
+  'SgLogicalOpCondition'
 ]
 
 # Python imports
@@ -405,6 +408,68 @@ def buildSearchExpFilters(sgEntityFieldInfos, sgArgs, sgSearchExpSpans):
 
   return logicalOp
 
+def convertToLogicalOpCond(sgEntityInfo, sgFilter):
+  '''
+
+  '''
+
+  field = sgFilter[0]
+  info = sgEntityInfo.fieldInfo(field)
+
+  if info == None:
+    raise SgScriptError('invalid field name %s' % field)
+
+  return_type = info.returnType()
+
+  relation = sgFilter[1]
+
+  try:
+    script_field = SCRIPT_FIELDS[return_type]
+  except KeyError:
+    raise SgScriptError(
+      'field "%s" contains no scriptfield operator' % field
+    )
+
+  script_func_info = LOG_TO_ORM_LOOKUP2.get(relation, None)
+
+  if script_func_info == None:
+    raise SgScriptError('invalid relation %s' % relation)
+
+  script_func = getattr(script_field, script_func_info[0])
+
+  values = sgFilter[2]
+
+  try:
+    expr_result = None
+
+    if script_func_info[2] == True:
+      if not isinstance(values, (list, tuple)) or len(values) != 2:
+        raise SgScriptError(
+          'invalid args for multi-arg operator, %s' % values
+        )
+
+      expr_result = script_func(*values)
+    else:
+      expr_result = script_func(values)
+  except Exception as e:
+    raise SgScriptError('%s %s' % (i, e))
+
+  log_cond = {
+    'path' : field,
+    'relation' : None,
+    'values' : expr_result['value']
+  }
+
+  if not isinstance(log_cond['values'], (list, tuple)):
+    log_cond['values'] = [log_cond['values']]
+
+  if script_func_info[1] == 'neop':
+    log_cond['relation'] = expr_result['neop']
+  else:
+    log_cond['relation'] = expr_result['op']
+
+  return log_cond
+
 def convertToLogicalOp(sgEntityInfo, sgSearchFilters, operator='and'):
   '''
 
@@ -413,70 +478,341 @@ def convertToLogicalOp(sgEntityInfo, sgSearchFilters, operator='and'):
   if sgSearchFilters == None or len(sgSearchFilters) <= 0:
     return []
 
+  if isinstance(sgSearchFilters[0], dict):
+    return sgSearchFilters
+
   conditions = []
 
   for i in sgSearchFilters:
-    field = i[0]
-    info = sgEntityInfo.fieldInfo(field)
-
-    if info == None:
-      raise SgScriptError('invalid field name %s' % field)
-
-    return_type = info.returnType()
-
-    relation = i[1]
-
-    try:
-      script_field = SCRIPT_FIELDS[return_type]
-    except KeyError:
-      raise SgScriptError(
-        'field "%s" contains no scriptfield operator' % field
-      )
-
-    script_func_info = LOG_TO_ORM_LOOKUP2.get(relation, None)
-
-    if script_func_info == None:
-      raise SgScriptError('invalid relation %s' % relation)
-
-    script_func = getattr(script_field, script_func_info[0])
-
-    values = i[2]
-
-    try:
-      expr_result = None
-
-      if script_func_info[2] == True:
-        if not isinstance(values, (list, tuple)) or len(values) != 2:
-          raise SgScriptError(
-            'invalid args for multi-arg operator, %s' % values
-          )
-
-        expr_result = script_func(*values)
-      else:
-        expr_result = script_func(values)
-    except Exception as e:
-      raise SgScriptError('%s %s' % (i, e))
-
-    log_cond = {
-      'path' : field,
-      'relation' : None,
-      'values' : expr_result['value']
-    }
-
-    if not isinstance(log_cond['values'], (list, tuple)):
-      log_cond['values'] = [log_cond['values']]
-
-    if script_func_info[1] == 'neop':
-      log_cond['relation'] = expr_result['neop']
-    else:
-      log_cond['relation'] = expr_result['op']
-
-    conditions.append(log_cond)
+    conditions.append(convertToLogicalOpCond(sgEntityInfo, i))
 
   return {
     'conditions': conditions,
     'logical_operator': operator
   }
+
+class SgLogicalOpCondition(object):
+  '''
+
+  '''
+
+  def __repr__(self):
+    return '<SgLogicalOpCondition(path: "%s", relation: "%s")>' % (
+      self._path,
+      self._relation
+    )
+
+  def __eq__(self, condition):
+    if not isinstance(condition, SgLogicalOpCondition):
+      return False
+
+    return (
+      self._path == condition._path and
+      self._relation == condition._relation and
+      self._values == condition._values
+    )
+
+  def __init__(self, path, relation, values):
+    self._path = path
+    self._relation = relation
+    self._values = copy.deepcopy(values)
+
+  def copy(self):
+    '''
+    Returns a copy of the logical op condition.
+    '''
+
+    return SgLogicalOpCondition(
+      self._path,
+      self._relation,
+      self.values()
+    )
+
+  def isEmpty(self):
+    '''
+    Returns True if the values are empty.
+    '''
+
+    return self._values == None or len(self._values) <= 0
+
+  def path(self):
+    '''
+    Returns the logical op condition path.
+    '''
+
+    return self._path
+
+  def relation(self):
+    '''
+    Returns the logical op condition relation.
+    '''
+
+    return self._relation
+
+  def values(self):
+    '''
+    Returns the logical op condition values.
+    '''
+
+    return copy.deepcopy(self._values)
+
+  def setPath(self, path):
+    '''
+    Sets the logical op condition path.
+    '''
+
+    self._path = path
+
+  def setRelation(self, relation):
+    '''
+    Sets the logical op condition relation.
+    '''
+
+    self._relation = relation
+
+  def setValues(self, values):
+    '''
+    Sets the logical op condition values.
+    '''
+
+    self._values = copy.deepcopy(values)
+
+  def swap(self, other):
+    '''
+    Swaps the values between this and other.
+    '''
+
+    if not isinstance(other, SgLogicalOpCondition):
+      raise TypeError('other must be of type SgLogicalOpCondition')
+
+    if id(other) == id(self):
+      return
+
+    path = self._path
+    relation = self._relation
+    values = self._values
+
+    self._path = other._path
+    self._relation = other._relation
+    self._values = other._values
+
+    other._path = path
+    other._relation = relation
+    other._values = values
+
+  def toFilter(self):
+    '''
+    Returns a dict containing the logical op condtion.
+    '''
+
+    return {
+      'path': self._path,
+      'relation': self._relation,
+      'values': self.values()
+    }
+
+class SgLogicalOp(object):
+  '''
+
+  '''
+
+  def __repr__(self):
+    return '<SgLogicalOp("%s")>' % self._operator
+
+  def __iter__(self, *args):
+    return self._conditions.__iter__(*args)
+
+  def __eq__(self, condition):
+    if not isinstance(condition, SgLogicalOp):
+      return False
+
+    return (
+      self._operator == condition._operator and
+      self._conditions == condition._conditions
+    )
+
+  def __init__(self, conditions=[], operator='and'):
+    self._operator = 'and'
+    self._conditions = []
+
+    if isinstance(conditions, SgLogicalOp):
+      self._operator = conditions._operator
+
+      for cond in conditions._conditions:
+        self._conditions.append(cond.copy())
+    elif isinstance(conditions, dict):
+      self.set(conditions['conditions'], conditions['logical_operator'])
+    else:
+      self.set(conditions, operator)
+
+  def addCondition(self, condition):
+    '''
+    Adds the condition to the head of the conditions.
+    '''
+
+    if not isinstance(condition, (SgLogicalOp, SgLogicalOpCondition)):
+      raise TypeError(
+        'condition must be of type(s) SgLogicalOp, SgLogicalOpCondition'
+      )
+
+    if condition.isEmpty() == False:
+      self._conditions.insert(0, condition)
+
+  def appendCondition(self, condition):
+    '''
+    Appends the condition to the end of the conditions.
+    '''
+
+    if not isinstance(condition, (SgLogicalOp, SgLogicalOpCondition)):
+      raise TypeError(
+        'condition must be of type(s) SgLogicalOp, SgLogicalOpCondition'
+      )
+
+    if condition.isEmpty() == False:
+      self._conditions.append(condition)
+
+  def clear(self):
+    '''
+    Clears the logical op of all conditions.
+    '''
+
+    self._conditions = []
+
+  def conditions(self):
+    '''
+    Returns a list of the conditions.
+    '''
+
+    return list(self._conditions)
+
+  def copy(self):
+    '''
+    Returns a copy of this logical operator.
+    '''
+
+    result = SgLogicalOp([], self._operator)
+
+    for i in self._conditions:
+      result.appendCondition(i.copy())
+
+    return result
+
+  def isEmpty(self):
+    '''
+    Returns True if the condition list is empty.
+    '''
+
+    return len(self._conditions) <= 0
+
+  def operator(self):
+    '''
+    Returns the operator, "and"/"or"
+    '''
+
+    return self._operator
+
+  def popCondition(self, index):
+    '''
+    Pops the condition at index and returns it.
+    '''
+
+    return self._conditions.pop(index)
+
+  def removeCondition(self, index):
+    '''
+    Removes the condition at index.
+    '''
+
+    del self._conditions[index]
+
+  def set(self, conditions, operator):
+    '''
+    Sets the condition.
+    '''
+
+    self.setConditions(conditions)
+    self.setOperator(operator)
+
+  def setConditions(self, conditions):
+    '''
+    Sets the conditions.
+    '''
+
+    new_conditions = []
+
+    for cond in conditions:
+      new_cond = None
+
+      if isinstance(cond, (SgLogicalOp, SgLogicalOpCondition)):
+        new_cond = cond.copy()
+      else:
+        if 'conditions' in cond:
+          new_cond = SgLogicalOp(
+            cond['conditions'],
+            cond['logical_operator']
+          )
+        else:
+          new_cond = SgLogicalOpCondition(
+            cond['path'],
+            cond['relation'],
+            cond['values']
+          )
+
+      if new_cond.isEmpty() == False:
+        new_conditions.append(new_cond)
+
+    self._conditions = new_conditions
+
+  def setOperator(self, operator):
+    '''
+    Sets the condition operator.
+    '''
+
+    if operator != 'and' and operator != 'or':
+      raise ValueError('invalid operator %s' % operator)
+
+    if operator == 'and':
+      self._operator = 'and'
+    else:
+      self._operator = 'or'
+
+  def swap(self, other):
+    '''
+    Swaps the values between this and other.
+    '''
+
+    if not isinstance(other, SgLogicalOp):
+      raise TypeError('other must be of type SgLogicalOp')
+
+    if id(other) == id(self):
+      return
+
+    operator = self._operator
+    conditions = self._conditions
+
+    self._operator = other._operator
+    self._conditions = other._conditions
+
+    other._operator = operator
+    other._conditions = conditions
+
+  def toFilter(self):
+    '''
+    Returns a dictionary formated as a Shotgun logical op.
+    '''
+
+    conditions = []
+
+    result = {
+      'conditions': conditions,
+      'logical_operator': self._operator
+    }
+
+    for cond in self._conditions:
+      if cond.isEmpty() == False:
+        conditions.append(cond.toFilter())
+
+    return result
 
 def parseToLogicalOp(sgEntityInfo, sgSearchExp, sgArgs=[]):
   '''
