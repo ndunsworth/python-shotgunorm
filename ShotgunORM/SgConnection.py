@@ -42,6 +42,8 @@ import webbrowser
 # This module imports
 import ShotgunORM
 
+from .SgSite import SgSite
+
 SHUTTING_DOWN = False
 
 def sgorm_connection_atexit():
@@ -142,7 +144,7 @@ class SgConnectionMeta(type):
 
     return connections
 
-class SgConnectionPriv(object):
+class SgConnectionPriv(SgSite):
   '''
   Private base class for Shotgun connections.
 
@@ -167,12 +169,12 @@ class SgConnectionPriv(object):
     sessionToken=None,
     authToken=None
   ):
-    self._url = str(url)
+    super(SgConnectionPriv, self).__init__(url)
     self._scriptName = str(scriptName)
     self._scriptKey = str(scriptkey)
 
     self._connection = ShotgunORM.SHOTGUN_API.shotgun.Shotgun(
-       base_url=self._url,
+       base_url=self.url().lower(),
        script_name=self._scriptName,
        api_key=self._scriptKey,
        convert_datetimes_to_utc=datetimeToUtc,
@@ -186,8 +188,6 @@ class SgConnectionPriv(object):
        session_token=sessionToken,
        auth_token=authToken
     )
-
-    self._facility = None
 
   def _sg_batch(self, requests):
     '''
@@ -291,6 +291,14 @@ class SgConnectionPriv(object):
         [result]
       )[0]
 
+  def _sg_note_thread_read(self, note_id, entity_fields=None):
+    '''
+
+    '''
+
+    with ShotgunORM.SHOTGUN_API_LOCK:
+      return self.connection().note_thread_read(note_id, entity_fields)
+
   def _sg_revive(self, entityType, entityId):
     '''
     Calls the Shotgun Python API revive function.
@@ -350,6 +358,44 @@ class SgConnectionPriv(object):
         include_archived_projects
       )
 
+  def _sg_text_search(
+    self,
+    text,
+    entity_types,
+    project_ids=None,
+    limit=None
+  ):
+    '''
+
+    '''
+
+    with ShotgunORM.SHOTGUN_API_LOCK:
+      return self.connection().text_search(
+        text,
+        entity_types,
+        project_ids,
+        limit
+      )
+
+  def _sg_update(
+    self,
+    entity_type,
+    entity_id,
+    data,
+    multi_entity_update_modes=None
+  ):
+    '''
+
+    '''
+
+    with ShotgunORM.SHOTGUN_API_LOCK:
+      return self.connection().update(
+        entity_type,
+        entity_id,
+        data,
+        multi_entity_update_modes
+      )
+
   def connect(self):
     '''
     Connects to the Shotgun db.
@@ -378,10 +424,7 @@ class SgConnectionPriv(object):
     Returns the facility name from the Shotgun url.
     '''
 
-    if self._facility == None:
-      self._facility = ShotgunORM.facilityNameFromUrl(self._url)
-
-    return self._facility
+    return self.name()
 
   def isConnected(self):
     '''
@@ -403,20 +446,6 @@ class SgConnectionPriv(object):
     '''
 
     return self._scriptName
-
-  def url(self, openInBrowser=False):
-    '''
-    Returns the Shotgun url for the connection.
-
-    Args:
-      * (bool) openInBrowser:
-        When True opens the URl in the operating systems default web-browser.
-    '''
-
-    if openInBrowser:
-      webbrowser.open(self._url)
-
-    return self._url
 
 class SgConnection(SgConnectionPriv):
   '''
@@ -447,6 +476,36 @@ class SgConnection(SgConnectionPriv):
 
   def __exit__(self, exc_type, exc_value, traceback):
     self.__lockCache.release()
+
+  def __getattribute__(self, item):
+    try:
+      return super(SgConnection, self).__getattribute__(item)
+    except AttributeError, e:
+      if (
+        isinstance(item, str) and
+        ' ' not in item and
+        self.__schema.hasEntityType(item)
+      ):
+        return self._factory.entityClass(
+          self.__schema.entityApiName(item)
+        )
+      else:
+        raise
+    except:
+      raise
+
+  # def __dir__(self):
+    # entity_names = []
+
+    # for i in self.__schema.entityTypes():
+      # if ' ' not in i:
+        # entity_names.append(i)
+
+    # return sorted(
+      # dir(type(self)) +
+      # self.__dict__.keys() +
+      # entity_names
+    # )
 
   def __init__(
     self,
@@ -499,7 +558,7 @@ class SgConnection(SgConnectionPriv):
 
     self.__qEngine = ShotgunORM.SgQueryEngine(self)
     self.__asyncEngine = ShotgunORM.SgAsyncSearchEngine(self)
-    self.__schema = ShotgunORM.SgSchema.createSchema(self._url)
+    self.__schema = ShotgunORM.SgSchema.createSchema(self.url())
     self._factory = ShotgunORM.SgEntityClassFactory(
       self,
       baseClasses
@@ -655,64 +714,6 @@ class SgConnection(SgConnectionPriv):
 
       return result
 
-  def _flattenFilters(self, sgFilters):
-    '''
-    Internal function used to flatten Shotgun filter lists.  This will convert
-    SgEntity objects into their equivalent Shotgun search pattern.
-
-    Example:
-    myProj = myConnection.findOne('Project', [['id', 'is', 65]])
-    randomAsset = myConnection.findOne('Asset', [['project', 'is', myProj]])
-
-    sgFilters becomes [['project', 'is', {'type': 'Project', 'id': 65}]]
-    '''
-
-    def flattenDict(obj):
-      result = {}
-
-      for key, value in obj.items():
-        if isinstance(value, ShotgunORM.SgEntity):
-          result[key] = value.toEntityFieldData()
-        elif isinstance(value, ShotgunORM.SgField):
-          result[key] = value.toFieldData()
-        elif isinstance(value, (list, set, tuple)):
-          result[key] = flattenList(value)
-        elif isinstance(value, dict):
-          result[key] = flattenDict(value)
-        else:
-          result[key] = value
-
-      return result
-
-    def flattenList(obj):
-      result = []
-
-      for i in obj:
-        if isinstance(i, ShotgunORM.SgEntity):
-          result.append(i.toEntityFieldData())
-        elif isinstance(i, ShotgunORM.SgField):
-          result.append(i.toFieldData())
-        elif isinstance(i, (list, set, tuple)):
-          result.append(flattenList(i))
-        elif isinstance(i, dict):
-          result.append(flattenDict(i))
-        else:
-          result.append(i)
-
-      return result
-
-    if sgFilters == None or sgFilters == []:
-      return []
-
-    if isinstance(sgFilters, int):
-      return [['id', 'is', sgFilters]]
-    elif isinstance(sgFilters, (list, set, tuple)):
-      return flattenList(sgFilters)
-    elif isinstance(sgFilters, dict):
-      return flattenDict(sgFilters)
-    else:
-      return sgFilters
-
   def _batch(self, requests, sgDryRun):
     def undoEntities(batchConfigs, exception):
       if len(batchConfigs) <= 0:
@@ -839,19 +840,19 @@ class SgConnection(SgConnectionPriv):
 
     return result
 
-  def addAsyncSearch(self, sgAsyncSearchResult):
+  def addAsyncSearch(self, sgAsyncSearch):
     '''
-    Add the SgAsyncSearchResult to the front of the async search queue.
-    '''
-
-    self.__asyncEngine.addToQueue(sgAsyncSearchResult)
-
-  def appendAsyncSearch(self, sgAsyncSearchResult):
-    '''
-    Add the SgAsyncSearchResult to the back of the async search queue.
+    Add the SgAsyncSearch to the front of the async search queue.
     '''
 
-    self.__asyncEngine.appendToQueue(sgAsyncSearchResult)
+    self.__asyncEngine.addToQueue(sgAsyncSearch)
+
+  def appendAsyncSearch(self, sgAsyncSearch):
+    '''
+    Add the SgAsyncSearch to the back of the async search queue.
+    '''
+
+    self.__asyncEngine.appendToQueue(sgAsyncSearch)
 
   def asyncEngine(self):
     '''
@@ -969,10 +970,10 @@ class SgConnection(SgConnectionPriv):
 
         with sgEntity:
           for name, field in sgEntity.fields().items():
-            if not field.isCacheable():
+            if field.isCacheable() == False:
               continue
 
-            data[name] = field.toFieldData()
+              data[name] = field.toFieldData()
 
           #data['id'] = sgEntity['id']
           #data['type'] = sgEntity['type']
@@ -1146,11 +1147,13 @@ class SgConnection(SgConnectionPriv):
       '    * sgCommit: %(sgCommit)s', {'sgCommit': sgCommit}
     )
 
-    factory = self.classFactory()
+    schema = self.schema()
+
+    sgEntityType = schema.entityApiName(sgEntityType)
 
     numberOfEntities = max(1, numberOfEntities)
 
-    sgData = self._flattenFilters(sgData)
+    sgData = ShotgunORM.SgSearchFilterBasic.flattenFilters(sgData)
 
     if numberOfEntities == 1:
       newEntity = self._createEntity(sgEntityType, sgData)
@@ -1206,7 +1209,12 @@ class SgConnection(SgConnectionPriv):
 
       return sgResult[0]
 
-  def defaultEntityQueryFields(self, sgEntityType):
+  def defaultEntityQueryFields(
+    self,
+    sgEntityType,
+    sgFieldQueryTemplate=None,
+    sgFieldQueryTemplateFallback=None
+  ):
     '''
     Returns the default query fields.
 
@@ -1215,12 +1223,18 @@ class SgConnection(SgConnectionPriv):
         Entity type.
     '''
 
+    if sgFieldQueryTemplate == None:
+      sgFieldQueryTemplate = self.fieldQueryTemplate()
+
+    if sgFieldQueryTemplateFallback == None:
+      sgFieldQueryTemplateFallback = self.fieldQueryTemplateFallback()
+
     schema = self.schema()
 
     result = schema.defaultEntityQueryFields(
-      self.fieldQueryTemplate(),
+      sgFieldQueryTemplate,
       schema.entityApiName(sgEntityType),
-      self.fieldQueryTemplateFallback()
+      sgFieldQueryTemplateFallback
     )
 
     if result == set(['all']):
@@ -1280,7 +1294,8 @@ class SgConnection(SgConnectionPriv):
     retired_only=False,
     page=0,
     include_archived_projects=True,
-    additional_filter_presets=None
+    additional_filter_presets=None,
+    sgQueryFieldTemplate=None
   ):
     '''
     Find entities.
@@ -1317,25 +1332,28 @@ class SgConnection(SgConnectionPriv):
     schema = self.schema()
 
     entity_type = schema.entityApiName(entity_type)
-    filters = self._flattenFilters(filters)
+    filters = ShotgunORM.SgSearchFilterBasic.flattenFilters(filters)
 
     if fields == None:
-      fields = self.defaultEntityQueryFields(entity_type)
+      fields = self.defaultEntityQueryFields(
+        entity_type,
+        sgQueryFieldTemplate
+      )
     else:
       if isinstance(fields, str):
         fields = [fields]
 
       fields = set(fields)
 
-      if 'default' in fields:
+      if 'all' in fields:
+        fields = schema.entityInfo(entity_type).fieldNames()
+      elif 'default' in fields:
         fields.discard('default')
 
-        fields.update(self.defaultEntityQueryFields(entity_type))
-
-      if 'all' in fields:
-        fields.discard('all')
-
-        fields.update(schema.entityInfo(entity_type).fieldNames())
+        fields.update(
+          self.defaultEntityQueryFields(entity_type),
+          sgQueryFieldTemplate
+        )
 
     ShotgunORM.LoggerConnection.debug(
       '%(sgConnection)s.find(...)', {'sgConnection': self}
@@ -1351,6 +1369,10 @@ class SgConnection(SgConnectionPriv):
 
     ShotgunORM.LoggerConnection.debug(
       '    * fields: %(sgFields)s', {'sgFields': fields}
+    )
+
+    ShotgunORM.LoggerConnection.debug(
+      '    * queryFieldTemplate: %(sgQueryFieldTemplate)s', {'sgQueryFieldTemplate': sgQueryFieldTemplate}
     )
 
     searchResult = self._sg_find(
@@ -1387,7 +1409,8 @@ class SgConnection(SgConnectionPriv):
     retired_only=False,
     page=0,
     include_archived_projects=True,
-    additional_filter_presets=None
+    additional_filter_presets=None,
+    sgQueryFieldTemplate=None
   ):
     '''
     Performs an async find() search.
@@ -1405,7 +1428,8 @@ class SgConnection(SgConnectionPriv):
       retired_only,
       page,
       include_archived_projects,
-      additional_filter_presets
+      additional_filter_presets,
+      sgQueryFieldTemplate
     )
 
   def findIterator(
@@ -1420,7 +1444,8 @@ class SgConnection(SgConnectionPriv):
     page=1,
     include_archived_projects=True,
     additional_filter_presets=None,
-    buffered=False
+    buffered=False,
+    sgQueryFieldTemplate=None
   ):
     '''
     Returns a SgSearchIterator which is used to iterate over the search filter
@@ -1445,7 +1470,8 @@ class SgConnection(SgConnectionPriv):
       retired_only,
       page,
       include_archived_projects,
-      additional_filter_presets
+      additional_filter_presets,
+      sgQueryFieldTemplate
     )
 
   def findOne(
@@ -1457,7 +1483,8 @@ class SgConnection(SgConnectionPriv):
     filter_operator=None,
     retired_only=False,
     include_archived_projects=True,
-    additional_filter_presets=None
+    additional_filter_presets=None,
+    sgQueryFieldTemplate=None
   ):
     '''
     Find one entity. This is a wrapper for find() with a limit=1. This will also
@@ -1505,7 +1532,8 @@ class SgConnection(SgConnectionPriv):
       limit=1,
       retired_only=retired_only,
       include_archived_projects=include_archived_projects,
-      additional_filter_presets=additional_filter_presets
+      additional_filter_presets=additional_filter_presets,
+      sgQueryFieldTemplate=sgQueryFieldTemplate
     )
 
     if len(searchResult) >= 1:
@@ -1522,7 +1550,8 @@ class SgConnection(SgConnectionPriv):
     filter_operator=None,
     retired_only=False,
     include_archived_projects=True,
-    additional_filter_presets=None
+    additional_filter_presets=None,
+    sgQueryFieldTemplate=None
   ):
     '''
     Performs an async findOne() search.
@@ -1541,8 +1570,51 @@ class SgConnection(SgConnectionPriv):
       0,
       include_archived_projects,
       additional_filter_presets,
+      sgQueryFieldTemplate,
       isSingle=True
     )
+
+  def findOneSearchParameters(self, sgSearchParameters):
+    '''
+
+    '''
+
+    return self.findOne(**sgSearchParameters.parameters())
+
+  def findOneSearchParametersAsync(self, sgSearchParameters):
+    '''
+
+    '''
+
+    return self.findOneAsync(**sgSearchParameters.parameters())
+
+  def findSearchParameters(self, sgSearchParameters):
+    '''
+
+    '''
+
+    return self.find(**sgSearchParameters.parameters())
+
+  def findSearchParametersIterator(
+    self,
+    sgSearchParameters,
+    buffered=False
+  ):
+    '''
+
+    '''
+
+    return self.findIterator(
+      buffered=buffered,
+      **sgSearchParameters.parameters()
+    )
+
+  def findSearchParametersAsync(self, sgSearchParameters):
+    '''
+
+    '''
+
+    return self.findAsync(**sgSearchParameters.parameters())
 
   def info(self):
     '''
@@ -1780,7 +1852,8 @@ class SgConnection(SgConnectionPriv):
     retired_only=False,
     page=0,
     include_archived_projects=True,
-    additional_filter_presets=None
+    additional_filter_presets=None,
+    sgQueryFieldTemplate=None
   ):
     '''
     Uses a search string to find entities in Shotgun instead of a list.
@@ -1842,7 +1915,7 @@ class SgConnection(SgConnectionPriv):
       sgSearchArgs
     )
 
-    filters = self._flattenFilters(filters)
+    filters = ShotgunORM.SgSearchFilterBasic.flattenFilters(filters)
 
     if sgFields == None:
       sgFields = self.defaultEntityQueryFields(entity_type)
@@ -1866,7 +1939,8 @@ class SgConnection(SgConnectionPriv):
       retired_only=retired_only,
       page=page,
       include_archived_projects=include_archived_projects,
-      additional_filter_presets=additional_filter_presets
+      additional_filter_presets=additional_filter_presets,
+      sgQueryFieldTemplate=sgQueryFieldTemplate
     )
 
   def searchAsync(
@@ -1881,7 +1955,8 @@ class SgConnection(SgConnectionPriv):
     retired_only=False,
     page=1,
     include_archived_projects=True,
-    additional_filter_presets=None
+    additional_filter_presets=None,
+    sgQueryFieldTemplate=None
   ):
     '''
     Performs an async search().
@@ -1899,7 +1974,7 @@ class SgConnection(SgConnectionPriv):
       sgSearchArgs
     )
 
-    sgFilters = self._flattenFilters(sgFilters)
+    sgFilters = ShotgunORM.SgSearchFilterBasic.flattenFilters(sgFilters)
 
     return self.__asyncEngine.appendSearchToQueue(
       sgEntityType,
@@ -1911,7 +1986,8 @@ class SgConnection(SgConnectionPriv):
       retired_only,
       page,
       include_archived_projects,
-      additional_filter_presets
+      additional_filter_presets,
+      sgQueryFieldTemplate
     )
 
   def searchIterator(
@@ -1927,6 +2003,7 @@ class SgConnection(SgConnectionPriv):
     page=1,
     include_archived_projects=True,
     additional_filter_presets=None,
+    sgQueryFieldTemplate=None,
     buffered=False
   ):
     '''
@@ -1944,7 +2021,7 @@ class SgConnection(SgConnectionPriv):
       sgSearchArgs
     )
 
-    sgFilters = self._flattenFilters(sgFilters)
+    sgFilters = ShotgunORM.SgSearchFilterBasic.flattenFilters(sgFilters)
 
     iterClass = None
 
@@ -1964,7 +2041,8 @@ class SgConnection(SgConnectionPriv):
       retired_only,
       page,
       include_archived_projects,
-      additional_filter_presets
+      additional_filter_presets,
+      sgQueryFieldTemplate
     )
 
   def searchOne(
@@ -1976,7 +2054,8 @@ class SgConnection(SgConnectionPriv):
     order=None,
     retired_only=False,
     include_archived_projects=True,
-    additional_filter_presets=None
+    additional_filter_presets=None,
+    sgQueryFieldTemplate=None
   ):
     '''
     Same as search(...) but only returns a single Entity.
@@ -2013,7 +2092,8 @@ class SgConnection(SgConnectionPriv):
       limit=1,
       retired_only=retired_only,
       include_archived_projects=include_archived_projects,
-      additional_filter_presets=additional_filter_presets
+      additional_filter_presets=additional_filter_presets,
+      sgQueryFieldTemplate=sgQueryFieldTemplate
     )
 
     if len(result) >= 1:
@@ -2031,7 +2111,8 @@ class SgConnection(SgConnectionPriv):
     filter_operator=None,
     retired_only=False,
     include_archived_projects=True,
-    additional_filter_presets=None
+    additional_filter_presets=None,
+    sgQueryFieldTemplate=None
   ):
     '''
     Performs an async searchOne().
@@ -2049,7 +2130,7 @@ class SgConnection(SgConnectionPriv):
       sgSearchArgs
     )
 
-    sgFilters = self._flattenFilters(sgFilters)
+    sgFilters = ShotgunORM.SgSearchFilterBasic.flattenFilters(sgFilters)
 
     return self.__asyncEngine.appendSearchToQueue(
       sgEntityType,
@@ -2060,6 +2141,7 @@ class SgConnection(SgConnectionPriv):
       0,
       retired_only,
       0,
+      sgQueryFieldTemplate,
       isSingle=True
     )
 
@@ -2132,6 +2214,114 @@ class SgConnection(SgConnectionPriv):
       grouping,
       include_archived_projects
     )
+
+  def textSearch(
+    self,
+    text,
+    entity_types,
+    project_ids=None,
+    limit=None,
+    backgroundSync=False
+  ):
+    '''
+
+
+    '''
+
+    schema = self.schema()
+
+    e_types = {}
+
+    for e_type, e_filter in entity_types.items():
+      e_type = schema.entityApiName(e_type)
+
+      if e_filter == None:
+        e_filter = []
+      else:
+        e_filter = ShotgunORM.SgSearchFilterBasic.flattenFilters(e_filter)
+
+      e_types[e_type] = e_filter
+
+    search = self._sg_text_search(text, e_types, project_ids, limit)
+
+    matches = []
+
+    result = {
+      'matches': matches,
+      'terms': text
+    }
+
+    projects = {}
+    sync_fields = {
+      'Project': None
+    }
+
+    if backgroundSync == True:
+      sync_fields['Project'] = self.defaultEntityQueryFields('Project')
+
+    q_eng = self.queryEngine()
+
+    schema = self.schema()
+
+    q_eng.block()
+
+    try:
+      for match in search['matches']:
+        data = {
+          'image': match['image'],
+          'name': match['name'],
+          'project': None,
+          'status': match['status']
+        }
+
+        e_type = match['type']
+        e_id = match['id']
+
+        proj_id = match['project_id']
+
+        if proj_id != None:
+          proj = projects.get(proj_id, None)
+
+          if proj == None:
+            proj = self._createEntity(
+              'Project',
+              {'id': proj_id, 'type': 'Project'},
+              sync_fields['Project']
+            )
+
+          projects[proj_id] = proj
+
+          data['project'] = proj
+
+        e_sync_fields = None
+
+        if backgroundSync == True:
+          if e_type not in sync_fields:
+            e_sync_fields = self.defaultEntityQueryFields(e_type)
+
+            sync_fields[e_type] = e_sync_fields
+          else:
+            e_sync_fields = sync_fields[e_type]
+
+        e_field_data = {
+          'id': e_id,
+          'type': e_type
+        }
+
+        if schema.entityInfo(e_type).hasField('image'):
+          e_field_data['image'] = data['image']
+
+        data['entity'] = self._createEntity(
+          e_type,
+          e_field_data,
+          e_sync_fields
+        )
+
+        matches.append(data)
+    finally:
+      q_eng.unblock()
+
+    return result
 
   def timeout(self):
     '''
